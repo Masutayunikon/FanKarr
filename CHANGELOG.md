@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.6](https://github.com/Masutayunikon/FanKarr/compare/v1.0.5...v1.0.6) (2026-03-10)
+
+
+### Bug Fixes
+
+* remove user creation in entrypoint.sh ([92d9fa6](https://github.com/Masutayunikon/FanKarr/commit/92d9fa6b01f1e2de1ceb13528afd309b21f9d4cb))
+
 ## [1.0.5](https://github.com/Masutayunikon/FanKarr/compare/v1.0.4...v1.0.5) (2026-03-10)
 
 
