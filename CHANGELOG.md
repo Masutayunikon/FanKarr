@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/Masutayunikon/FanKarr/compare/v1.0.0...v1.0.1) (2026-03-10)
+
+
+### Bug Fixes
+
+* docker errors ([2702764](https://github.com/Masutayunikon/FanKarr/commit/27027642eb55b75adb04446a88e5007e88f75948))
+
 ## 1.0.0 (2026-03-10)
 
 
