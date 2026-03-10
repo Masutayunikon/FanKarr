@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.5](https://github.com/Masutayunikon/FanKarr/compare/v1.0.4...v1.0.5) (2026-03-10)
+
+
+### Bug Fixes
+
+* add user permissions when the scripts is launched ([501bbfc](https://github.com/Masutayunikon/FanKarr/commit/501bbfcf18c236f7ac382c50d90482b1f51244c1))
+
 ## [1.0.4](https://github.com/Masutayunikon/FanKarr/compare/v1.0.3...v1.0.4) (2026-03-10)
 
 
