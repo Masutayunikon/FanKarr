@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.4](https://github.com/Masutayunikon/FanKarr/compare/v1.0.3...v1.0.4) (2026-03-10)
+
+
+### Bug Fixes
+
+* add log for debug ([6876c5e](https://github.com/Masutayunikon/FanKarr/commit/6876c5ee6c7734e664a6da4e4bc721cc7c5abdf7))
+* add log for debug ([d8cdeae](https://github.com/Masutayunikon/FanKarr/commit/d8cdeae675bc73b5842d18d01eff9d5bb0e0a7e8))
+
 ## [1.0.3](https://github.com/Masutayunikon/FanKarr/compare/v1.0.2...v1.0.3) (2026-03-10)
 
 
