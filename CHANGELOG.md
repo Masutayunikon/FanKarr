@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2](https://github.com/Masutayunikon/FanKarr/compare/v1.0.1...v1.0.2) (2026-03-10)
+
+
+### Bug Fixes
+
+* organize use torrent hash and not name ([61901f9](https://github.com/Masutayunikon/FanKarr/commit/61901f9014a759e2950311cd96266ea8201fa902))
+
 ## [1.0.1](https://github.com/Masutayunikon/FanKarr/compare/v1.0.0...v1.0.1) (2026-03-10)
 
 
