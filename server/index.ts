@@ -19,7 +19,7 @@ const PORT = 3001
 const FANKAI_API    = 'https://metadata.fankai.fr'
 const TORRENTS_PATH = path.join(process.cwd(), 'data', 'torrent_final.json')
 const GITHUB_RAW_URL = process.env.GITHUB_RAW_URL
-    ?? 'https://raw.githubusercontent.com/CHANGE_ME/fankarr-scraper/main/data/torrent_final.json'
+    ?? 'https://raw.githubusercontent.com/masutayunikon/fankarr-scraper/main/data/torrent_final.json'
 
 app.use(express.json())
 app.use(cookieParser())

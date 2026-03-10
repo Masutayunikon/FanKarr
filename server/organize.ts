@@ -1,248 +1,312 @@
-/**
- * Organizer
- * =========
- * Déplace ou hardlinke les fichiers téléchargés vers la médiathèque Jellyfin.
- * Incrémental : skip les fichiers déjà organisés.
- *
- * Structure dest :
- *   mediaPath / serie_title / Saison 001 / filename.mkv
- */
-
-import fs   from 'fs'
+import express from 'express'
+import cookieParser from 'cookie-parser'
+import fs from 'fs'
 import path from 'path'
-import { readSettings } from './settings.js'
+import { authStatus, authSetup, authLogin, authLogout, requireAuth } from './auth.js'
+import { readSettings, writeSettings } from './settings.js'
+import {
+    registerDriver, getDriver, getAvailableClients,
+    listClients, addClient, removeClient, getClient,
+    sanitizeClient, dispatchDownload, dispatchList
+} from './torrent-clients/index.js'
+import qbittorrentDriver from './torrent-clients/qbittorrent.js'
+import { organizeTorrent, autoOrganizeAll } from './organize.js'
 
-const TORRENTS_PATH  = path.join(process.cwd(), 'data', 'torrent_final.json')
-const ORGANIZED_PATH = path.join(process.cwd(), 'data', 'organized.json')
+registerDriver(qbittorrentDriver)
 
-// ─── Organized log ────────────────────────────────────────────
+const app = express()
+const PORT = 3001
+const FANKAI_API    = 'https://metadata.fankai.fr'
+const TORRENTS_PATH = path.join(process.cwd(), 'data', 'torrent_final.json')
+const GITHUB_RAW_URL = process.env.GITHUB_RAW_URL
+    ?? 'https://raw.githubusercontent.com/CHANGE_ME/fankarr-scraper/main/data/torrent_final.json'
 
-function loadOrganized(): Record<string, Record<string, string>> {
-    try {
-        if (!fs.existsSync(ORGANIZED_PATH)) return {}
-        return JSON.parse(fs.readFileSync(ORGANIZED_PATH, 'utf-8'))
-    } catch { return {} }
+app.use(express.json())
+app.use(cookieParser())
+
+// ── Static frontend (prod) ─────────────────────────────────────
+const PUBLIC_PATH = path.join(process.cwd(), 'public')
+if (fs.existsSync(PUBLIC_PATH)) {
+    app.use(express.static(PUBLIC_PATH))
 }
 
-function saveOrganized(data: Record<string, Record<string, string>>) {
-    fs.writeFileSync(ORGANIZED_PATH, JSON.stringify(data, null, 2), 'utf-8')
-}
+// ── Auth ───────────────────────────────────────────────────────
+app.get('/api/auth/status', authStatus)
+app.post('/api/auth/setup',  authSetup)
+app.post('/api/auth/login',  authLogin)
+app.post('/api/auth/logout', authLogout)
 
-function markOrganized(hash: string, filename: string) {
-    const data = loadOrganized()
-    if (!data[hash]) data[hash] = {}
-    data[hash][filename] = new Date().toISOString()
-    saveOrganized(data)
-}
+// ── Settings ───────────────────────────────────────────────────
+app.get('/api/settings', requireAuth, (_req, res) => {
+    res.json(readSettings())
+})
+app.post('/api/settings', requireAuth, (req, res) => {
+    const { mediaPath, completePath, organizeMode, category } = req.body
+    res.json(writeSettings({ mediaPath, completePath, organizeMode, category }))
+})
 
-function isOrganized(hash: string, filename: string): boolean {
-    const data = loadOrganized()
-    return !!data[hash]?.[filename]
-}
+// ── Torrent clients ────────────────────────────────────────────
+app.get('/api/torrent-clients/available', requireAuth, (_req, res) => {
+    res.json(getAvailableClients())
+})
+app.get('/api/torrent-clients', requireAuth, (_req, res) => {
+    res.json(listClients().map((c: any) => sanitizeClient(c)))
+})
+app.post('/api/torrent-clients', requireAuth, (req, res) => {
+    const { name, type, config } = req.body
+    if (!name || !type || !config) { res.status(400).json({ error: 'name, type et config requis' }); return }
+    if (!getDriver(type))          { res.status(400).json({ error: `Type inconnu : ${type}` });      return }
+    res.json(sanitizeClient(addClient(name, type, config)))
+})
+app.delete('/api/torrent-clients/:uuid', requireAuth, (req, res) => {
+    const ok = removeClient(String(req.params.uuid))
+    if (!ok) res.status(404).json({ error: 'Client introuvable' })
+    else     res.json({ ok: true })
+})
+app.post('/api/torrent-clients/test-config', requireAuth, async (req, res) => {
+    const { type, config } = req.body
+    if (!type || !config) { res.status(400).json({ error: 'type et config requis' }); return }
+    const driver = getDriver(type)
+    if (!driver) { res.status(400).json({ error: `Type inconnu : ${type}` }); return }
+    res.json(await driver.test(config))
+})
+app.post('/api/torrent-clients/:uuid/test', requireAuth, async (req, res) => {
+    const client = getClient(String(req.params.uuid))
+    if (!client) { res.status(404).json({ error: 'Client introuvable' }); return }
+    const driver = getDriver(client.type)
+    if (!driver) { res.status(400).json({ error: 'Driver introuvable' }); return }
+    res.json(await driver.test(client.config))
+})
+app.get('/api/torrent-clients/:uuid/healthcheck', requireAuth, async (req, res) => {
+    const client = getClient(String(req.params.uuid))
+    if (!client) { res.status(404).json({ error: 'Client introuvable' }); return }
+    const driver = getDriver(client.type)
+    if (!driver) { res.status(400).json({ error: 'Driver introuvable' }); return }
+    res.json(await driver.healthcheck(client.config))
+})
 
-// ─── Torrent lookup ───────────────────────────────────────────
-
+// ── Helpers ────────────────────────────────────────────────────
 function readTorrents(): any[] {
     try {
         if (!fs.existsSync(TORRENTS_PATH)) return []
         return JSON.parse(fs.readFileSync(TORRENTS_PATH, 'utf-8'))
     } catch { return [] }
 }
-
-function findTorrentByName(name: string): any | null {
-    const torrents = readTorrents()
-    return torrents.find(t => t.raw === name) ?? null
+async function fankaiGet(endpoint: string): Promise<any> {
+    const res = await fetch(`${FANKAI_API}${endpoint}`)
+    if (!res.ok) throw new Error(`Fankai API ${res.status}: ${endpoint}`)
+    return res.json()
 }
-
-// ─── Filesystem ops ───────────────────────────────────────────
-
-function ensureDir(dir: string) {
-    fs.mkdirSync(dir, { recursive: true })
-}
-
-function seasonFolder(n: number): string {
-    return `Saison ${String(n).padStart(3, '0')}`
-}
-
-function tryHardlink(src: string, dest: string): boolean {
-    try {
-        fs.linkSync(src, dest)
-        return true
-    } catch {
-        return false
-    }
-}
-
-function copyFile(src: string, dest: string) {
-    fs.copyFileSync(src, dest)
-}
-
-// ─── Résultat d'organisation ──────────────────────────────────
-
-export interface OrganizeResult {
-    total   : number
-    skipped : number
-    done    : number
-    errors  : { file: string; error: string }[]
-}
-
-// ─── Organise un torrent ──────────────────────────────────────
-
-export async function organizeTorrent(
-    hash    : string,
-    name    : string,  // nom du dossier torrent dans completePath
-    savePath: string   // save_path retourné par qBittorrent
-): Promise<OrganizeResult> {
-    const settings = readSettings()
-    const { mediaPath, completePath, organizeMode } = settings
-
-    const result: OrganizeResult = { total: 0, skipped: 0, done: 0, errors: [] }
-
-    // Trouver le torrent dans torrent_final.json
-    const torrent = findTorrentByName(name)
-    if (!torrent) {
-        throw new Error(`Torrent introuvable dans torrent_final.json : "${name}"`)
-    }
-
-    const serieTitle  = torrent.serie_title || torrent.show_title || name
-    const torrentFiles: any[] = torrent.torrent_files ?? []
-
-    if (torrentFiles.length === 0) {
-        throw new Error(`Aucun fichier trouvé dans le torrent "${name}"`)
-    }
-
-    // Résoudre season_number par episode_id
-    const epSeasonMap = new Map<number, number>()
-    for (const ep of torrent.resolved_episodes ?? []) {
-        if (ep.filename) {
-            epSeasonMap.set(ep.episode_number, ep.season_number)
-        }
-    }
-    // Map filename → season_number
-    const filenameSeasonMap = new Map<string, number>()
-    for (const ep of torrent.resolved_episodes ?? []) {
-        if (ep.filename && ep.season_number !== undefined) {
-            filenameSeasonMap.set(ep.filename, ep.season_number)
-        }
-    }
-
-    result.total = torrentFiles.length
-
-    for (const tf of torrentFiles) {
-        const filename = tf.filename
-        const filePath: string[] = tf.path  // ex: ["Saga 1 - ...", "file.mkv"]
-
-        // Skip si déjà organisé
-        if (isOrganized(hash, filename)) {
-            result.skipped++
-            continue
-        }
-
-        // Construire le chemin source
-        // save_path peut déjà contenir le nom du dossier ou pas selon le client
-        const torrentDir = path.join(savePath, name)
-        const torrentDirAlt = savePath  // au cas où save_path inclut déjà le nom
-
-        // Chemin source = dossier torrent + sous-dossiers + fichier
-        const subPath = filePath.length > 1
-            ? path.join(...filePath.slice(0, -1), filename)
-            : filename
-
-        let src = path.join(torrentDir, subPath)
-        if (!fs.existsSync(src)) {
-            // Fallback: save_path sans le nom du torrent
-            src = path.join(torrentDirAlt, subPath)
-        }
-        if (!fs.existsSync(src)) {
-            // Fallback: fichier directement dans save_path/name
-            src = path.join(torrentDir, filename)
-        }
-        if (!fs.existsSync(src)) {
-            result.errors.push({ file: filename, error: `Source introuvable : ${src}` })
-            continue
-        }
-
-        // Déterminer la saison
-        let seasonNum = filenameSeasonMap.get(filename)
-        if (seasonNum === undefined) {
-            // Fallback : season_number = 1
-            seasonNum = 1
-        }
-
-        // Construire le chemin destination
-        const destDir = path.join(mediaPath, serieTitle, seasonFolder(seasonNum))
-        const dest    = path.join(destDir, filename)
-
-        // Skip si dest existe déjà
-        if (fs.existsSync(dest)) {
-            markOrganized(hash, filename)
-            result.skipped++
-            continue
-        }
-
-        try {
-            ensureDir(destDir)
-
-            if (organizeMode === 'hardlink') {
-                const ok = tryHardlink(src, dest)
-                if (!ok) {
-                    // Hardlink impossible (filesystems différents) → copy
-                    console.warn(`[organize] hardlink échoué pour ${filename}, fallback copy`)
-                    copyFile(src, dest)
-                }
-            } else {
-                // move = copy + delete source
-                copyFile(src, dest)
-                fs.unlinkSync(src)
-            }
-
-            markOrganized(hash, filename)
-            result.done++
-            console.log(`[organize] ${organizeMode} ${filename} → ${dest}`)
-        } catch (err) {
-            result.errors.push({
-                file : filename,
-                error: err instanceof Error ? err.message : 'Erreur inconnue'
-            })
-        }
-    }
-
-    return result
-}
-
-// ─── Auto-organise polling ────────────────────────────────────
-// Appelé depuis index.ts au démarrage, toutes les 30s
-// Détecte les torrents "seeding" non encore organisés
-
-export async function autoOrganizeAll(
-    listFn: () => Promise<any[]>
-): Promise<void> {
-    let torrents: any[]
-    try {
-        torrents = await listFn()
-    } catch { return }
-
-    const organized = loadOrganized()
-
+function indexBySerie(torrents: any[]): Map<number, any[]> {
+    const map = new Map<number, any[]>()
     for (const t of torrents) {
-        if (t.state !== 'seeding') continue
+        if (!t.serie_id) continue
+        if (!map.has(t.serie_id)) map.set(t.serie_id, [])
+        map.get(t.serie_id)!.push(t)
+    }
+    return map
+}
 
-        // Vérifier si tous les fichiers sont déjà organisés
-        const torrent = findTorrentByName(t.name)
-        if (!torrent) continue
+// ── Series ─────────────────────────────────────────────────────
+app.get('/api/series', requireAuth, async (_req, res) => {
+    try {
+        const [apiData, torrents] = await Promise.all([fankaiGet('/series'), Promise.resolve(readTorrents())])
+        const byId = indexBySerie(torrents)
+        const seriesList = Array.isArray(apiData) ? apiData : (apiData.series ?? [])
+        res.json({ series: seriesList.map((serie: any) => ({
+                ...serie,
+                torrent_count: byId.get(serie.id)?.length ?? 0,
+                has_torrents : byId.has(serie.id)
+            }))})
+    } catch (err) {
+        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
+    }
+})
 
-        const files: any[] = torrent.torrent_files ?? []
-        if (files.length === 0) continue
+app.get('/api/series/:id', requireAuth, async (req, res) => {
+    const id = Number(req.params.id)
+    try {
+        const [serie, seasonsData] = await Promise.all([fankaiGet(`/series/${id}`), fankaiGet(`/series/${id}/seasons`)])
+        const seasons = Array.isArray(seasonsData) ? seasonsData : (seasonsData.seasons ?? [])
+        const seasonsWithEpisodes = await Promise.all(seasons.map(async (season: any) => {
+            const epsData = await fankaiGet(`/seasons/${season.id}/episodes`)
+            return { ...season, episodes: Array.isArray(epsData) ? epsData : (epsData.episodes ?? []) }
+        }))
 
-        const allDone = files.every(f => organized[t.hash]?.[f.filename])
-        if (allDone) continue
+        const torrents = readTorrents().filter(t => t.serie_id === id)
+        const allSeasonIds = new Set<number>(seasonsWithEpisodes.filter((s: any) => s.season_number !== 0).map((s: any) => s.id))
+        const availableEpisodeIds  = new Set<number>()
+        const episodeTorrentMap: Record<number, any> = {}
+        const seasonTorrentMap : Record<number, any> = {}
+        const integraleTorrents: any[] = []
+        const packEpisodesTorrents: any[] = []
 
-        console.log(`[organize] Auto-organisation : ${t.name}`)
+        for (const t of torrents) {
+            const ref = { torrent_url: t.torrent_url, magnet: t.magnet, type: t.type, raw: t.raw }
+            for (const ep of t.resolved_episodes ?? []) {
+                availableEpisodeIds.add(ep.episode_id)
+                if (t.type === 'episode') episodeTorrentMap[ep.episode_id] = ref
+            }
+            if (t.type === 'pack_saison') {
+                const rs: any[] = t.resolved_seasons ?? []
+                if (rs.length > 1) {
+                    packEpisodesTorrents.push(t)
+                } else {
+                    const sids = rs.length > 0 ? rs.map((r: any) => r.season_id) : [t.season_id]
+                    for (const sid of sids) { if (sid) seasonTorrentMap[sid] = ref }
+                }
+            } else if (t.type === 'pack_integrale') {
+                integraleTorrents.push(t)
+            } else if (t.type === 'pack_episodes') {
+                packEpisodesTorrents.push(t)
+            }
+        }
+
+        let promotedIntegrale: any = null
+        if (integraleTorrents.length === 0 && allSeasonIds.size > 0) {
+            for (const t of torrents.filter(t => t.type === 'pack_saison')) {
+                const rs: any[] = t.resolved_seasons ?? []
+                const tIds = new Set<number>(rs.length > 0 ? rs.map((r: any) => r.season_id) : t.season_id ? [t.season_id] : [])
+                if ([...allSeasonIds].every(sid => tIds.has(sid))) { promotedIntegrale = t; break }
+            }
+        }
+
+        if (integraleTorrents.length > 0 || promotedIntegrale) {
+            for (const key of Object.keys(seasonTorrentMap)) delete seasonTorrentMap[Number(key)]
+            if (promotedIntegrale) {
+                const idx = packEpisodesTorrents.indexOf(promotedIntegrale)
+                if (idx !== -1) packEpisodesTorrents.splice(idx, 1)
+            }
+        }
+
+        function packEpisodesLabel(t: any): string {
+            const eps: any[] = t.resolved_episodes ?? []
+            if (!eps.length) return t.raw
+            const bySeason = new Map<number, number[]>()
+            for (const ep of eps) {
+                const sn = ep.season_number ?? 0
+                if (!bySeason.has(sn)) bySeason.set(sn, [])
+                bySeason.get(sn)!.push(ep.episode_number)
+            }
+            return [...bySeason.entries()].sort(([a], [b]) => a - b).map(([sn, nums]) => {
+                const s = nums.sort((a, b) => a - b)
+                const label = sn === 0 ? 'S0' : `S${sn}`
+                return s[0] === s[s.length-1] ? `${label} Ep ${s[0]}` : `${label} Eps ${s[0]}-${s[s.length-1]}`
+            }).join(' · ')
+        }
+
+        const enrichedSeasons = seasonsWithEpisodes.map((season: any) => ({
+            ...season,
+            torrent: seasonTorrentMap[season.id] ?? null,
+            episodes: season.episodes.map((ep: any) => ({
+                ...ep,
+                available: availableEpisodeIds.has(ep.id),
+                torrent  : episodeTorrentMap[ep.id] ?? null
+            }))
+        }))
+
+        const heroBundles: any[] = [
+            ...integraleTorrents.map(t => ({ label: 'Intégrale', torrent_url: t.torrent_url, magnet: t.magnet, raw: t.raw })),
+            ...(promotedIntegrale ? [{ label: 'Intégrale', torrent_url: promotedIntegrale.torrent_url, magnet: promotedIntegrale.magnet, raw: promotedIntegrale.raw }] : []),
+            ...packEpisodesTorrents.map(t => ({ label: packEpisodesLabel(t), torrent_url: t.torrent_url, magnet: t.magnet, raw: t.raw }))
+        ]
+
+        res.json({ serie, seasons: enrichedSeasons, torrents_integrale: heroBundles })
+    } catch (err) {
+        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
+    }
+})
+
+// ── Download ───────────────────────────────────────────────────
+app.post('/api/download', requireAuth, async (req, res) => {
+    const url = req.body.torrent_url ?? req.body.magnet
+    if (!url) { res.status(400).json({ error: 'torrent_url ou magnet requis' }); return }
+    const results = await dispatchDownload(url)
+    res.status(results.every((r: any) => r.ok) ? 200 : 207).json({ results })
+})
+
+// ── Downloads — liste torrents Fankai ──────────────────────────
+app.get('/api/downloads', requireAuth, async (_req, res) => {
+    try {
+        const { category } = readSettings()
+        const torrents = await dispatchList(category ?? 'fankai')
+        res.json(torrents)
+    } catch (err) {
+        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
+    }
+})
+
+// ── Organize ───────────────────────────────────────────────────
+app.post('/api/organize', requireAuth, async (req, res) => {
+    const { hash, name, save_path } = req.body
+    if (!hash || !name || !save_path) {
+        res.status(400).json({ error: 'hash, name et save_path requis' })
+        return
+    }
+    try {
+        const result = await organizeTorrent(hash, name, save_path)
+        res.json(result)
+    } catch (err) {
+        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
+    }
+})
+
+// ── Torrents status ────────────────────────────────────────────
+app.get('/api/torrents/status', requireAuth, (_req, res) => {
+    try {
+        if (!fs.existsSync(TORRENTS_PATH)) { res.json({ exists: false, count: 0, empty: true }); return }
+        const raw = fs.readFileSync(TORRENTS_PATH, 'utf-8').trim()
+        if (!raw || raw === '[]') { res.json({ exists: true, count: 0, empty: true }); return }
+        const data = JSON.parse(raw)
+        const count = Array.isArray(data) ? data.length : 0
+        res.json({ exists: true, count, empty: count === 0 })
+    } catch { res.json({ exists: false, count: 0, empty: true }) }
+})
+
+// ── Update torrent_final.json ──────────────────────────────────
+app.post('/api/update', requireAuth, async (_req, res) => {
+    try {
+        const response = await fetch(GITHUB_RAW_URL)
+        if (!response.ok) throw new Error(`GitHub a répondu ${response.status}`)
+        const data = await response.json() as unknown[]
+        if (!Array.isArray(data)) throw new Error('Format invalide')
+        fs.mkdirSync(path.dirname(TORRENTS_PATH), { recursive: true })
+        fs.writeFileSync(TORRENTS_PATH, JSON.stringify(data, null, 2), 'utf-8')
+        res.json({ ok: true, count: data.length })
+    } catch (err) {
+        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
+    }
+})
+
+// ── SPA fallback (prod) — doit être après toutes les routes API ─
+if (fs.existsSync(PUBLIC_PATH)) {
+    app.get('*path', (_req, res) => {
+        res.sendFile(path.join(PUBLIC_PATH, 'index.html'))
+    })
+}
+
+// ── Start ──────────────────────────────────────────────────────
+app.listen(PORT, () => {
+    try {
+        const data  = JSON.parse(fs.readFileSync(TORRENTS_PATH, 'utf-8'))
+        const count = Array.isArray(data) ? data.length : 0
+        if (count === 0) console.warn('[fankarr] ⚠ torrent_final.json est vide')
+        else console.log(`[fankarr] ${count} torrents chargés`)
+    } catch { console.warn('[fankarr] ⚠ torrent_final.json introuvable ou illisible') }
+    console.log(`[fankarr] Serveur sur http://localhost:${PORT}`)
+
+    // Auto-organise toutes les 30s
+    const autoOrganize = async () => {
         try {
-            const result = await organizeTorrent(t.hash, t.name, t.save_path)
-            console.log(`[organize] ${t.name} → ${result.done} fichiers, ${result.skipped} skippés, ${result.errors.length} erreurs`)
+            const { category } = readSettings()
+            await autoOrganizeAll(() => dispatchList(category ?? 'fankai'))
         } catch (err) {
-            console.error(`[organize] Erreur pour ${t.name}:`, err)
+            console.error('[organize] Erreur auto-organise:', err)
         }
     }
-}
+    // Premier run 30s après démarrage, puis toutes les 30s
+    setTimeout(() => {
+        autoOrganize()
+        setInterval(autoOrganize, 30_000)
+    }, 30_000)
+})
