@@ -65,6 +65,25 @@ function findTorrentByHash(hash: string): any | null {
     } catch { return null }
 }
 
+// ─── Dossiers exclus (bonus, musique, images) ────────────────
+
+const EXCLUDED_FOLDERS = new Set([
+    'endings', 'ending', 'openings', 'opening', 'ost', 'artworks', 'artwork',
+    'bonus', 'extras', 'extra', 'specials', 'special', 'ncop', 'nced',
+    'images', 'image', 'scans', 'scan', 'soundtrack', 'music',
+])
+
+function isInExcludedFolder(filePath: string[]): boolean {
+    for (const folder of filePath.slice(0, -1)) {
+        const f = folder.toLowerCase().trim()
+        if (EXCLUDED_FOLDERS.has(f)) return true
+        for (const excl of EXCLUDED_FOLDERS) {
+            if (f.startsWith(excl)) return true
+        }
+    }
+    return false
+}
+
 // ─── Filesystem ops ───────────────────────────────────────────
 
 function seasonFolder(n: number): string {
@@ -143,6 +162,13 @@ async function organizeTorrent(hash: string, name: string, savePath: string) {
     for (const tf of torrentFiles) {
         const filename = tf.filename
         const filePath: string[] = tf.path
+
+        // Skip les fichiers dans des dossiers bonus/musique/images
+        if (isInExcludedFolder(filePath)) {
+            log(`[organize] skip bonus: ${filename}`)
+            result.skipped++
+            continue
+        }
 
         if (isOrganized(hash, filename)) { result.skipped++; continue }
 
