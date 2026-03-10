@@ -15,13 +15,17 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 RUN pnpm run build
 
 # ── Production ─────────────────────────────────────────────────
-FROM base
+FROM node:20-slim
+RUN apt-get update && apt-get install -y gosu && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
 COPY --from=prod-deps /app/node_modules /app/node_modules
 COPY --from=build /app/dist/server /app/dist/server
 COPY --from=build /app/dist/client /app/public
-
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 RUN mkdir -p /app/data
 
 EXPOSE 3001
 ENV NODE_ENV=production
-CMD ["node", "dist/server/index.js"]
+ENTRYPOINT ["/entrypoint.sh"]
