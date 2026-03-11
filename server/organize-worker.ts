@@ -196,7 +196,9 @@ async function organizeTorrent(hash: string, name: string, savePath: string) {
 
         const seasonNum = filenameSeasonMap.get(filename) ?? 1
         const destDir   = path.join(mediaPath, serieTitle, seasonFolder(seasonNum))
-        const dest      = path.join(destDir, filename)
+        const resolvedEp = torrent.resolved_episodes?.find((e: any) => e.filename === filename)
+        const destName   = resolvedEp?.original_filename ?? filename
+        const dest       = path.join(destDir, destName)
 
         if (fs.existsSync(dest)) {
             markOrganized(hash, filename)
