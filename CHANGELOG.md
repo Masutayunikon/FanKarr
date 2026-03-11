@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.4.0](https://github.com/Masutayunikon/FanKarr/compare/v1.3.0...v1.4.0) (2026-03-11)
+
+
+### Features
+
+* add README.md ([4eb487a](https://github.com/Masutayunikon/FanKarr/commit/4eb487a96beed8c82cb19d9a9b63c3b69d841386))
+* **organize:** scan initial mediaPath + logs fichier centralisés ([807f786](https://github.com/Masutayunikon/FanKarr/commit/807f786b038579ca9d7cd136998f759cecae2255))
+
+
+### Bug Fixes
+
+* title readme align ([8ba3b37](https://github.com/Masutayunikon/FanKarr/commit/8ba3b370d1e2cd1565f9c2453be8706e3c198243))
+
 ## [1.3.0](https://github.com/Masutayunikon/FanKarr/compare/v1.2.0...v1.3.0) (2026-03-11)
 
 
