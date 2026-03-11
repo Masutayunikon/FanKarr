@@ -3,9 +3,9 @@ import path from 'path'
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
 import type { Request, Response, NextFunction } from 'express'
+import { JWT_SECRET } from './secret.js'
 
 const DATA_PATH = path.join(process.cwd(), 'data', 'auth.json')
-const JWT_SECRET = process.env.JWT_SECRET || 'fankarr-secret-change-me'
 const SALT_ROUNDS = 10
 
 interface AuthData {
@@ -63,7 +63,7 @@ export function authSetup(req: Request, res: Response): void {
     const passwordHash = bcrypt.hashSync(password, SALT_ROUNDS)
     writeAuth({ username, passwordHash })
 
-    const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: '30d' })
+    const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: '1d' })
     res.cookie('fankarr_token', token, { httpOnly: true, sameSite: 'lax' })
     res.json({ success: true })
 }
@@ -87,7 +87,7 @@ export function authLogin(req: Request, res: Response): void {
         return
     }
 
-    const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: '30d' })
+    const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: '1d' })
     res.cookie('fankarr_token', token, { httpOnly: true, sameSite: 'lax' })
     res.json({ success: true })
 }

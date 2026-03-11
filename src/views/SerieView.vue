@@ -273,7 +273,7 @@ async function download(key: string, torrent_url: string | null, magnet: string 
   downloading.value = key
   const result = await store.download(torrent_url, magnet)
   downloading.value = null
-  if (result.success) showToast('success', 'Ajouté à qBittorrent !')
+  if (result.success) showToast('success', 'Téléchargement lancé')
   else showToast('error', result.error ?? 'Erreur inconnue')
 }
 
