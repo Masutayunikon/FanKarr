@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/Masutayunikon/FanKarr/compare/v1.4.1...v1.5.0) (2026-03-11)
+
+
+### Features
+
+* **auth:** génération automatique du JWT secret au démarrage ([eaa52e9](https://github.com/Masutayunikon/FanKarr/commit/eaa52e90900ff0e198beae190d7ad0298a702482))
+
 ## [1.4.1](https://github.com/Masutayunikon/FanKarr/compare/v1.4.0...v1.4.1) (2026-03-11)
 
 
