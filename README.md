@@ -17,7 +17,7 @@ Inspiré de Radarr/Sonarr — interface dédiée aux éditions Kai & Yabai
 
 ---
 
-[image — page catalogue avec les affiches des séries, badges ORGANISÉ/EN COURS sur certaines affiches, barre de filtre en haut]
+![Catalogue](.github/images/catalog.png)
 
 > Vue catalogue : toutes les séries Fankai avec leur état d'organisation. Les badges indiquent si les fichiers sont déjà présents dans votre médiathèque Jellyfin.
 
@@ -38,19 +38,19 @@ Inspiré de Radarr/Sonarr — interface dédiée aux éditions Kai & Yabai
 
 ---
 
-[image — page détail d'une série, liste des épisodes avec badges "dispo" / "✓ organisé", header de saison avec compteur "8/12 organisés"]
+![Serie](.github/images/serie.png)
 
 > Vue série : détail des épisodes avec leur état de disponibilité torrent et d'organisation dans Jellyfin.
 
 ---
 
-[image — page téléchargements avec badges NON ORGANISÉ / EN COURS (3/8) / ORGANISÉ (12/12), badge rouge "2 ERREURS" avec tooltip ouvert montrant la liste des fichiers en erreur]
+![Download](.github/images/download.png)
 
 > Vue téléchargements : suivi en temps réel de l'organisation avec détail des erreurs au survol.
 
 ---
 
-[image — page logs avec table, filtres niveau INFO/WARN/ERROR, taille du fichier affichée, bouton EFFACER]
+![Logs](.github/images/log.png)
 
 > Page logs : historique complet des événements avec filtres et gestion de la taille.
 
@@ -140,7 +140,11 @@ Le mode **hardlink** est recommandé si vos dossiers `complete` et `media` sont 
 
 ## Runtipi
 
-Fankarr est disponible comme app [Runtipi](https://runtipi.io) via le store communautaire. L'installation se fait en un clic depuis l'interface Runtipi.
+Fankarr est disponible dans l'appstore personnalisé. Pour l'installer :
+
+1. Dans Runtipi, aller dans **Paramètres → App Stores**
+2. Ajouter l'URL : `https://github.com/Masutayunikon/runtipi-appstore`
+3. Fankarr apparaît dans le catalogue → **Installer**
 
 ---
 

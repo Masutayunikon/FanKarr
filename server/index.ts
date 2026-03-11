@@ -10,7 +10,7 @@ import {
     sanitizeClient, dispatchDownload, dispatchList
 } from './torrent-clients/index.js'
 import qbittorrentDriver from './torrent-clients/qbittorrent.js'
-import { organizeTorrent, autoOrganizeAll } from './organize.js'
+import { organizeTorrent, autoOrganizeAll, scanMediaPath } from './organize.js'
 import { logger, readLogs, clearLogs, logsFileSize } from './logger.js'
 
 registerDriver(qbittorrentDriver)
@@ -475,6 +475,13 @@ app.listen(PORT, () => {
         else console.log(`[fankarr] ${count} torrents chargés`)
     } catch { console.warn('[fankarr] ⚠ torrent_final.json introuvable ou illisible') }
     console.log(`[fankarr] Serveur sur http://localhost:${PORT}`)
+
+    // Scan initial du mediaPath pour reconnaître les fichiers déjà présents
+    const ORGANIZED_PATH = path.join(process.cwd(), 'data', 'organized.json')
+    const { mediaPath } = readSettings()
+    scanMediaPath(mediaPath, TORRENTS_PATH, ORGANIZED_PATH).catch(err =>
+        logger.error('organize', `scanMediaPath échoué: ${err}`)
+    )
 
     // Auto-organise toutes les 30s
     const autoOrganize = async () => {
