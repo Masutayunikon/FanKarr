@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/Masutayunikon/FanKarr/compare/v1.2.0...v1.3.0) (2026-03-11)
+
+
+### Features
+
+* **serie:** badges état organisation sur épisodes et saisons ([4d3a6bd](https://github.com/Masutayunikon/FanKarr/commit/4d3a6bd276907f793452429d62693fafc1d804db))
+
 ## [1.2.0](https://github.com/Masutayunikon/FanKarr/compare/v1.1.0...v1.2.0) (2026-03-11)
 
 
