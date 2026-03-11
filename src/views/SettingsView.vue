@@ -87,20 +87,34 @@
 
         <!-- Dossier complétion -->
         <div>
-          <label class="text-[10px] text-[#5a7a94] tracking-widest block mb-1.5">DOSSIER COMPLÉTION</label>
-          <input v-model="form.completePath"
-                 class="w-full bg-[#121920] border border-[#1e2d3d] text-white px-3 py-2.5 text-sm outline-none focus:border-[#e8513a] transition-colors"
+          <div class="flex items-center gap-2 mb-1.5">
+            <label class="text-[10px] text-[#5a7a94] tracking-widest">DOSSIER COMPLÉTION</label>
+            <span v-if="isDocker" class="text-[9px] tracking-widest text-[#3a8fe8] border border-[#3a8fe8]/40 px-1.5 py-0.5">DOCKER</span>
+          </div>
+          <input v-model="form.completePath" :disabled="isDocker"
+                 class="w-full bg-[#121920] border border-[#1e2d3d] text-sm px-3 py-2.5 outline-none transition-colors"
+                 :class="isDocker ? 'text-[#5a7a94] cursor-not-allowed opacity-60' : 'text-white focus:border-[#e8513a]'"
                  placeholder="/downloads/complete"/>
-          <p class="text-[10px] text-[#5a7a94] mt-1.5">Dossier de complétion de qBittorrent (monté dans Docker)</p>
+          <p class="text-[10px] text-[#5a7a94] mt-1.5">
+            <span v-if="isDocker">Défini par le volume Docker — non modifiable ici</span>
+            <span v-else>Dossier de complétion de qBittorrent</span>
+          </p>
         </div>
 
         <!-- Dossier Jellyfin -->
         <div>
-          <label class="text-[10px] text-[#5a7a94] tracking-widest block mb-1.5">DOSSIER JELLYFIN</label>
-          <input v-model="form.mediaPath"
-                 class="w-full bg-[#121920] border border-[#1e2d3d] text-white px-3 py-2.5 text-sm outline-none focus:border-[#e8513a] transition-colors"
+          <div class="flex items-center gap-2 mb-1.5">
+            <label class="text-[10px] text-[#5a7a94] tracking-widest">DOSSIER JELLYFIN</label>
+            <span v-if="isDocker" class="text-[9px] tracking-widest text-[#3a8fe8] border border-[#3a8fe8]/40 px-1.5 py-0.5">DOCKER</span>
+          </div>
+          <input v-model="form.mediaPath" :disabled="isDocker"
+                 class="w-full bg-[#121920] border border-[#1e2d3d] text-sm px-3 py-2.5 outline-none transition-colors"
+                 :class="isDocker ? 'text-[#5a7a94] cursor-not-allowed opacity-60' : 'text-white focus:border-[#e8513a]'"
                  placeholder="/media/Kai"/>
-          <p class="text-[10px] text-[#5a7a94] mt-1.5">Dossier racine de la bibliothèque Fankai dans Jellyfin</p>
+          <p class="text-[10px] text-[#5a7a94] mt-1.5">
+            <span v-if="isDocker">Défini par le volume Docker — non modifiable ici</span>
+            <span v-else>Dossier racine de la bibliothèque Fankai dans Jellyfin</span>
+          </p>
         </div>
 
         <!-- Mode organisation -->
@@ -215,8 +229,9 @@ const form = ref({
   organizeMode: 'hardlink' as 'hardlink' | 'move',
 })
 
-const saving   = ref(false)
-const updating = ref(false)
+const saving    = ref(false)
+const updating  = ref(false)
+const isDocker  = ref(false)
 const torrentsStatus = ref({ exists: false, count: 0, empty: true })
 
 const clients          = ref<any[]>([])
@@ -244,18 +259,20 @@ function clientLabel(type: string): string {
 
 // ── Init ───────────────────────────────────────────────────────
 onMounted(async () => {
-  const [settingsRes, statusRes, clientsRes, availRes] = await Promise.all([
+  const [settingsRes, statusRes, clientsRes, availRes, systemRes] = await Promise.all([
     fetch('/api/settings',                  { credentials: 'include' }),
     fetch('/api/torrents/status',           { credentials: 'include' }),
     fetch('/api/torrent-clients',           { credentials: 'include' }),
     fetch('/api/torrent-clients/available', { credentials: 'include' }),
+    fetch('/api/system',                    { credentials: 'include' }),
   ])
   if (settingsRes.ok) Object.assign(form.value, await settingsRes.json())
   if (statusRes.ok)   torrentsStatus.value = await statusRes.json()
   if (clientsRes.ok)  clients.value        = await clientsRes.json()
   if (availRes.ok)    availableClients.value = await availRes.json()
+  if (systemRes.ok)   isDocker.value = (await systemRes.json()).isDocker
 
-  for (const c of clients.value) refreshHealth(c.uuid)
+  for (const c of clients.value) await refreshHealth(c.uuid)
 })
 
 // ── Healthcheck ────────────────────────────────────────────────
@@ -345,7 +362,7 @@ async function saveClient() {
     if (res.ok) {
       const client = await res.json()
       clients.value.push(client)
-      refreshHealth(client.uuid)
+      await refreshHealth(client.uuid)
       closeModal()
       toast('Client enregistré ✓', 'success')
     } else {

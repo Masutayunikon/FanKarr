@@ -103,16 +103,25 @@
             </span>
           </div>
 
-          <!-- Bouton organiser si complété -->
-          <button v-if="t.state === 'seeding'"
-                  @click="organize(t)"
-                  :disabled="organizing[t.hash]"
-                  class="text-[10px] tracking-widest px-3 py-1 border transition-colors cursor-pointer"
-                  :class="organized[t.hash]
-                ? 'border-green-500/40 text-green-500'
-                : 'border-[#1e2d3d] text-[#5a7a94] hover:border-[#e8513a] hover:text-[#e8513a]'">
-            {{ organized[t.hash] ? 'ORGANISÉ ✓' : organizing[t.hash] ? '...' : 'ORGANISER' }}
-          </button>
+          <!-- Badge organisation -->
+          <div v-if="t.state === 'seeding'" class="flex items-center gap-2">
+            <!-- Badge statut -->
+            <span class="text-[9px] tracking-widest px-2 py-0.5 border"
+                  :class="t.organizeState === 'done'    ? 'border-green-500/40 text-green-500' :
+                        t.organizeState === 'partial'  ? 'border-yellow-500/40 text-yellow-500' :
+                                                         'border-[#1e2d3d] text-[#5a7a94]'">
+              {{ t.organizeState === 'done'    ? `ORGANISÉ (${t.organizeProgress?.done}/${t.organizeProgress?.total})` :
+                t.organizeState === 'partial' ? `EN COURS (${t.organizeProgress?.done}/${t.organizeProgress?.total})` :
+                    'NON ORGANISÉ' }}
+            </span>
+            <!-- Bouton organiser si pas encore fait -->
+            <button v-if="t.organizeState !== 'done'"
+                    @click="organize(t)"
+                    :disabled="organizing[t.hash]"
+                    class="text-[9px] tracking-widest px-3 py-1 border transition-colors cursor-pointer border-[#1e2d3d] text-[#5a7a94] hover:border-[#e8513a] hover:text-[#e8513a] disabled:opacity-50">
+              {{ organizing[t.hash] ? '...' : 'ORGANISER' }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -130,7 +139,6 @@ const loading    = ref(true)
 const polling    = ref(true)
 const noClients  = ref(false)
 const organizing = ref<Record<string, boolean>>({})
-const organized  = ref<Record<string, boolean>>({})
 
 let pollInterval: ReturnType<typeof setInterval> | null = null
 

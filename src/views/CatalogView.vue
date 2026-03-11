@@ -8,14 +8,20 @@
           <span class="text-zinc-100">Fan</span><span class="text-orange-500">karr</span>
         </span>
         <div class="flex items-center gap-2">
+          <!-- Icône downloads avec badge -->
           <router-link to="/downloads"
-                       class="p-2 rounded-lg text-zinc-500 hover:text-zinc-100 hover:bg-white/5 transition relative">
+                       class="relative p-2 rounded-lg text-zinc-500 hover:text-zinc-100 hover:bg-white/5 transition"
+          >
             <svg width="18" height="18" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
             </svg>
-            <!-- Badge si téléchargements actifs -->
+            <!-- Badge compteur -->
             <span v-if="activeDownloads > 0"
-                  class="absolute top-1 right-1 w-2 h-2 bg-[#e8513a] rounded-full"/>
+                  class="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 bg-orange-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1 leading-none">
+              {{ activeDownloads }}
+            </span>
           </router-link>
           <router-link
               to="/settings"
@@ -148,19 +154,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSeriesStore } from '@/stores/series'
 import { useAuthStore } from '@/stores/auth'
-
-defineOptions({ name: 'CatalogView' })
+import { useToast } from '@/composables/useToast'
 
 const store = useSeriesStore()
 const auth = useAuthStore()
 const router = useRouter()
+const { add: toast } = useToast()
 
 const search = ref('')
 const activeFilter = ref('all')
+const activeDownloads = ref(0)
 
 const filters = [
   { label: 'Toutes', value: 'all' },
@@ -181,10 +188,52 @@ const filtered = computed(() => {
 
 async function handleLogout() {
   await auth.logout()
-  router.push('/auth')
+  await router.push('/auth')
+}
+
+// ── Polling downloads actifs + notifications organisation ──────
+let dlInterval: ReturnType<typeof setInterval> | null = null
+const seenNotifs = new Set<string>()
+
+async function fetchActiveDownloads() {
+  try {
+    const res = await fetch('/api/downloads', { credentials: 'include' })
+    if (!res.ok) return
+    const torrents = await res.json()
+    activeDownloads.value = torrents.filter((t: any) => t.state === 'downloading').length
+  } catch {}
+}
+
+async function fetchOrganizeNotifs() {
+  try {
+    const res = await fetch('/api/organize/recent', { credentials: 'include' })
+    if (!res.ok) return
+    const notifs: any[] = await res.json()
+    for (const n of notifs) {
+      const key = `${n.hash}-${n.at}`
+      if (seenNotifs.has(key)) continue
+      seenNotifs.add(key)
+      if (n.done > 0) {
+        const msg = n.errors > 0
+            ? `${n.name} — ${n.done} fichier(s) organisé(s), ${n.errors} erreur(s)`
+            : `${n.name} — ${n.done} fichier(s) organisé(s) ✓`
+        toast(msg, n.errors > 0 ? 'error' : 'success')
+      }
+    }
+  } catch {}
 }
 
 onMounted(() => {
   if (store.series.length === 0) store.fetchSeries()
+  fetchActiveDownloads()
+  fetchOrganizeNotifs()
+  dlInterval = setInterval(() => {
+    fetchActiveDownloads()
+    fetchOrganizeNotifs()
+  }, 10000)
+})
+
+onUnmounted(() => {
+  if (dlInterval) clearInterval(dlInterval)
 })
 </script>

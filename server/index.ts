@@ -230,13 +230,69 @@ app.get('/api/downloads', requireAuth, async (_req, res) => {
     try {
         const { category } = readSettings()
         const torrents = await dispatchList(category ?? 'fankai')
-        res.json(torrents)
+
+        // Enrichir avec l'état d'organisation
+        let organized: Record<string, Record<string, string>> = {}
+        try {
+            const orgPath = path.join(process.cwd(), 'data', 'organized.json')
+            if (fs.existsSync(orgPath))
+                organized = JSON.parse(fs.readFileSync(orgPath, 'utf-8'))
+        } catch {}
+
+        let torrentFinal: any[] = []
+        try {
+            const tfPath = path.join(process.cwd(), 'data', 'torrent_final.json')
+            if (fs.existsSync(tfPath))
+                torrentFinal = JSON.parse(fs.readFileSync(tfPath, 'utf-8'))
+        } catch {}
+
+        const enriched = torrents.map((t: any) => {
+            const orgFiles  = organized[t.hash] ?? {}
+            const meta      = torrentFinal.find((m: any) =>
+                m.infohash?.toLowerCase() === t.hash?.toLowerCase()
+            )
+            const totalFiles = (meta?.torrent_files?.length ?? 0) || 1
+            const doneFiles  = Object.keys(orgFiles).length
+            let organizeState: 'none' | 'partial' | 'done' = 'none'
+            if (doneFiles >= totalFiles) organizeState = 'done'
+            else if (doneFiles > 0)      organizeState = 'partial'
+            return { ...t, organizeState, organizeProgress: { done: doneFiles, total: totalFiles } }
+        })
+
+        res.json(enriched)
     } catch (err) {
         res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
     }
 })
 
-// ── Organize ───────────────────────────────────────────────────
+// ── Résultats d'organisation récents (pour notifications frontend) ──
+interface OrganizeNotif {
+    hash    : string
+    name    : string
+    done    : number
+    skipped : number
+    errors  : number
+    at      : string
+}
+const recentOrganized: OrganizeNotif[] = []
+const MAX_NOTIFS = 20
+
+function pushNotif(n: OrganizeNotif) {
+    recentOrganized.unshift(n)
+    if (recentOrganized.length > MAX_NOTIFS) recentOrganized.pop()
+}
+
+app.get('/api/organize/recent', requireAuth, (_req, res) => {
+    res.json(recentOrganized)
+})
+
+// Vider les notifs lues
+app.post('/api/organize/recent/clear', requireAuth, (_req, res) => {
+    recentOrganized.length = 0
+    res.json({ ok: true })
+})
+
+
 app.post('/api/organize', requireAuth, async (req, res) => {
     const { hash, name, save_path } = req.body
     if (!hash || !name || !save_path) {
@@ -252,6 +308,12 @@ app.post('/api/organize', requireAuth, async (req, res) => {
 })
 
 // ── Torrents status ────────────────────────────────────────────
+// ── System info ────────────────────────────────────────────────
+app.get('/api/system', requireAuth, (_req, res) => {
+    const isDocker = fs.existsSync('/.dockerenv')
+    res.json({ isDocker })
+})
+
 app.get('/api/torrents/status', requireAuth, (_req, res) => {
     try {
         if (!fs.existsSync(TORRENTS_PATH)) { res.json({ exists: false, count: 0, empty: true }); return }
@@ -299,7 +361,14 @@ app.listen(PORT, () => {
     const autoOrganize = async () => {
         try {
             const { category } = readSettings()
-            await autoOrganizeAll(() => dispatchList(category ?? 'fankai'))
+            await autoOrganizeAll(
+                () => dispatchList(category ?? 'fankai'),
+                (result) => {
+                    if (result.done > 0 || result.errors > 0) {
+                        pushNotif({ ...result, at: new Date().toISOString() })
+                    }
+                }
+            )
         } catch (err) {
             console.error('[organize] Erreur auto-organise:', err)
         }
