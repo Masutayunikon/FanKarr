@@ -1,6 +1,7 @@
+<div align="center">
+
 # Fankarr
 
-<div align="center">
 
 ![Version](https://img.shields.io/github/v/release/masutayunikon/fankarr?style=flat-square&color=e8513a&label=version)
 ![Docker Image Size](https://img.shields.io/docker/image-size/masutayunikon/fankarr/latest?style=flat-square&color=1e2d3d&label=image)
