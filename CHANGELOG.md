@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.0](https://github.com/Masutayunikon/FanKarr/compare/v1.0.6...v1.1.0) (2026-03-10)
+
+
+### Features
+
+* make the organizer threaded to not consumme api main thread ([14c0e56](https://github.com/Masutayunikon/FanKarr/commit/14c0e567525e179da82c6b58d9886cc3d544a98d))
+
+
+### Bug Fixes
+
+* skip excluded folders ([edf806d](https://github.com/Masutayunikon/FanKarr/commit/edf806d9bc48d4de1c3609a4b0405442305d546e))
+
 ## [1.0.6](https://github.com/Masutayunikon/FanKarr/compare/v1.0.5...v1.0.6) (2026-03-10)
 
 
