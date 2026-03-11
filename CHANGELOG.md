@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/Masutayunikon/FanKarr/compare/v1.5.0...v1.6.0) (2026-03-11)
+
+
+### Features
+
+* add favicon ([dc4a2d4](https://github.com/Masutayunikon/FanKarr/commit/dc4a2d48f5c0cddd8e431ce33a69fc9146143fb6))
+
 ## [1.5.0](https://github.com/Masutayunikon/FanKarr/compare/v1.4.1...v1.5.0) (2026-03-11)
 
 
