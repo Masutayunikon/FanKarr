@@ -27,14 +27,14 @@
       <!-- Hero -->
       <div class="relative">
         <div v-if="data.serie.fanart_image" class="absolute inset-0 h-72 overflow-hidden pointer-events-none">
-          <img :src="data.serie.fanart_image" class="w-full h-full object-cover opacity-20" alt="fanart image"/>
+          <img :src="data.serie.fanart_image" class="w-full h-full object-cover opacity-20" />
           <div class="absolute inset-0 bg-gradient-to-b from-transparent to-zinc-950" />
         </div>
 
         <div class="relative max-w-7xl mx-auto px-6 pt-8 pb-10 flex gap-8">
           <!-- Poster -->
           <div class="shrink-0 w-36 rounded-xl overflow-hidden border border-white/10 shadow-2xl hidden sm:block">
-            <img v-if="data.serie.poster_image" :src="data.serie.poster_image" class="w-full h-full object-cover" alt="poster image"/>
+            <img v-if="data.serie.poster_image" :src="data.serie.poster_image" class="w-full h-full object-cover" />
             <div v-else class="w-full aspect-[2/3] bg-zinc-900 flex items-center justify-center text-zinc-700">
               <svg width="28" height="28" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
                 <rect x="2" y="2" width="20" height="20" rx="2"/><path d="m9 9 6 6M15 9l-6 6"/>
@@ -108,6 +108,15 @@
                 <p class="text-xs text-zinc-600 mt-0.5">
                   {{ season.episodes.length }} épisode{{ season.episodes.length > 1 ? 's' : '' }}
                   · {{ seasonAvailableCount(season) }}/{{ season.episodes.length }} dispo
+                  <span v-if="season.organized_state !== 'none'"
+                        class="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium"
+                        :class="season.organized_state === 'complete'
+                        ? 'bg-green-500/10 text-green-400'
+                        : 'bg-yellow-500/10 text-yellow-500'">
+                    {{ season.organized_state === 'complete'
+                      ? `✓ ${season.organized_count} organisé${season.organized_count > 1 ? 's' : ''}`
+                      : `${season.organized_count}/${seasonAvailableCount(season)} organisés` }}
+                  </span>
                 </p>
               </div>
             </div>
@@ -135,7 +144,7 @@
             >
               <!-- Thumbnail -->
               <div class="shrink-0 w-24 aspect-video rounded-lg overflow-hidden bg-zinc-800 hidden sm:block">
-                <img v-if="ep.thumb_image" :src="ep.thumb_image" class="w-full h-full object-cover" loading="lazy" alt="thumb image"/>
+                <img v-if="ep.thumb_image" :src="ep.thumb_image" class="w-full h-full object-cover" loading="lazy" />
                 <div v-else class="w-full h-full flex items-center justify-center text-zinc-700 text-xs font-mono">
                   {{ season.season_number === 0 ? 'SP' : `E${ep.episode_number}` }}
                 </div>
@@ -156,10 +165,16 @@
               </div>
 
               <!-- Bouton épisode (type episode uniquement) -->
-              <div class="shrink-0">
+              <div class="shrink-0 flex items-center gap-2">
+                <!-- Badge organisé -->
+                <span v-if="ep.organized"
+                      class="text-[10px] px-2 py-0.5 rounded-full border bg-green-500/10 text-green-400 border-green-500/20">
+                  ✓ organisé
+                </span>
+
                 <!-- Badge dispo/indispo basé sur available (episode résolu dans un torrent) -->
                 <span
-                    class="inline-block text-[10px] px-2 py-0.5 rounded-full border mr-2"
+                    class="inline-block text-[10px] px-2 py-0.5 rounded-full border"
                     :class="ep.available
                     ? 'bg-green-500/10 text-green-400 border-green-500/20'
                     : 'bg-white/5 text-zinc-600 border-white/8'"

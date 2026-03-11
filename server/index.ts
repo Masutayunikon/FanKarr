@@ -253,15 +253,55 @@ app.get('/api/series/:id', requireAuth, async (req, res) => {
             }).join(' · ')
         }
 
-        const enrichedSeasons = seasonsWithEpisodes.map((season: any) => ({
-            ...season,
-            torrent: seasonTorrentMap[season.id] ?? null,
-            episodes: season.episodes.map((ep: any) => ({
+        // Charger organized.json pour les badges d'état
+        let organized: Record<string, Record<string, string>> = {}
+        try {
+            const orgPath = path.join(process.cwd(), 'data', 'organized.json')
+            if (fs.existsSync(orgPath))
+                organized = JSON.parse(fs.readFileSync(orgPath, 'utf-8'))
+        } catch {}
+
+        // Construire un set des episode_id organisés
+        // On croise resolved_episodes de chaque torrent avec organized.json
+        const organizedEpisodeIds = new Set<number>()
+        for (const t of torrents) {
+            const hash  = t.infohash?.toLowerCase()
+            const files = t.torrent_files ?? []
+            const orgFiles = organized[hash] ?? {}
+            if (Object.keys(orgFiles).length === 0) continue
+            // Au moins un fichier organisé pour ce torrent → on marque les épisodes résolus
+            for (const ep of t.resolved_episodes ?? []) {
+                // Vérifier si le fichier de cet épisode est organisé
+                const epFile = files.find((f: any) =>
+                    f.episode_ids?.includes(ep.episode_id) || f.episode_number === ep.episode_number
+                )
+                if (epFile ? orgFiles[epFile.filename] : Object.keys(orgFiles).length > 0) {
+                    organizedEpisodeIds.add(ep.episode_id)
+                }
+            }
+        }
+
+        const enrichedSeasons = seasonsWithEpisodes.map((season: any) => {
+            const eps = season.episodes.map((ep: any) => ({
                 ...ep,
-                available: availableEpisodeIds.has(ep.id),
-                torrent  : episodeTorrentMap[ep.id] ?? null
+                available : availableEpisodeIds.has(ep.id),
+                torrent   : episodeTorrentMap[ep.id] ?? null,
+                organized : organizedEpisodeIds.has(ep.id),
             }))
-        }))
+            // State saison : none / partial / complete
+            const total    = eps.filter((e: any) => e.available).length
+            const orgCount = eps.filter((e: any) => e.organized).length
+            const seasonOrganizedState =
+                orgCount === 0              ? 'none'     :
+                    orgCount >= total && total > 0 ? 'complete' : 'partial'
+            return {
+                ...season,
+                torrent              : seasonTorrentMap[season.id] ?? null,
+                organized_state      : seasonOrganizedState,
+                organized_count      : orgCount,
+                episodes             : eps,
+            }
+        })
 
         const heroBundles: any[] = [
             ...integraleTorrents.map(t => ({ label: 'Intégrale', torrent_url: t.torrent_url, magnet: t.magnet, raw: t.raw })),
