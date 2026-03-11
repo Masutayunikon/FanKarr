@@ -120,7 +120,7 @@ export async function autoOrganizeAll(
     try {
         torrents = await listFn()
     } catch (err) {
-        logger.error('organize', "Impossible de récupérer la liste des torrents:", err)
+        logger.error('organize', "Impossible de récupérer la liste des torrents: " + (err instanceof Error ? err.message : String(err)))
         return
     }
 
