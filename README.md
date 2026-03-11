@@ -109,6 +109,7 @@ Fankarr sera accessible sur `http://localhost:3001`.
 | `PUID` | `1000` | UID utilisateur pour les permissions fichiers |
 | `PGID` | `1000` | GID utilisateur pour les permissions fichiers |
 | `TZ` | — | Timezone (ex: `Europe/Paris`) |
+| `JWT_SECRET` | auto-généré | Secret JWT — généré automatiquement dans `data/secret.key` si absent |
 | `GITHUB_RAW_URL` | repo scraper | URL du `torrent_final.json` à utiliser |
 
 ### Premier démarrage
@@ -166,3 +167,4 @@ Fankarr est disponible dans l'appstore personnalisé. Pour l'installer :
 - [fankai.fr](https://fankai.fr) — Le projet Fankai
 - [Plugin Jellyfin Fankai](https://github.com/Nackophilz/fankai_jellyfin) — Reconnaissance des métadonnées dans Jellyfin
 - [fankarr-scraper](https://github.com/masutayunikon/fankarr-scraper) — Pipeline de collecte des torrents
+- [runtipi-appstore](https://github.com/Masutayunikon/runtipi-appstore) — Appstore Runtipi personnel
