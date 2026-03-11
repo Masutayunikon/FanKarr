@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.0](https://github.com/Masutayunikon/FanKarr/compare/v1.1.0...v1.2.0) (2026-03-11)
+
+
+### Features
+
+* **organize:** worker thread + badges statut + notifications ([b7242bc](https://github.com/Masutayunikon/FanKarr/commit/b7242bc95f59d259ab1a636aa304bf149f895041))
+* **ui:** états catalogue + logs + badges erreurs downloads ([5326828](https://github.com/Masutayunikon/FanKarr/commit/5326828d89aa10a53bbe1ac4016a5eee4d5dbc97))
+
 ## [1.1.0](https://github.com/Masutayunikon/FanKarr/compare/v1.0.6...v1.1.0) (2026-03-10)
 
 
