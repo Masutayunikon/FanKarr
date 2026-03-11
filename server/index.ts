@@ -11,6 +11,7 @@ import {
 } from './torrent-clients/index.js'
 import qbittorrentDriver from './torrent-clients/qbittorrent.js'
 import { organizeTorrent, autoOrganizeAll } from './organize.js'
+import { logger, readLogs, clearLogs, logsFileSize } from './logger.js'
 
 registerDriver(qbittorrentDriver)
 
@@ -108,16 +109,73 @@ function indexBySerie(torrents: any[]): Map<number, any[]> {
 }
 
 // ── Series ─────────────────────────────────────────────────────
+
+function computeSerieDownloadState(
+    serieTorrents : any[],
+    organized     : Record<string, Record<string, string>>,
+    activeTorrents: Set<string>  // hashes actuellement dans qB en downloading
+): 'none' | 'downloading' | 'partial' | 'complete' {
+    if (serieTorrents.length === 0) return 'none'
+
+    // Un torrent de la série est en cours de téléchargement ?
+    const hasActive = serieTorrents.some(t => activeTorrents.has(t.infohash?.toLowerCase()))
+    if (hasActive) return 'downloading'
+
+    // Compter les fichiers attendus vs organisés
+    let totalFiles = 0
+    let doneFiles  = 0
+    for (const t of serieTorrents) {
+        const files: any[] = t.torrent_files ?? []
+        if (files.length === 0) {
+            // Fichier unique
+            totalFiles++
+            if (organized[t.infohash?.toLowerCase()]?.[t.raw]) doneFiles++
+        } else {
+            totalFiles += files.length
+            doneFiles  += files.filter((f: any) => organized[t.infohash?.toLowerCase()]?.[f.filename]).length
+        }
+    }
+
+    if (totalFiles === 0) return 'none'
+    if (doneFiles === 0)  return 'none'
+    if (doneFiles >= totalFiles) return 'complete'
+    return 'partial'
+}
+
 app.get('/api/series', requireAuth, async (_req, res) => {
     try {
         const [apiData, torrents] = await Promise.all([fankaiGet('/series'), Promise.resolve(readTorrents())])
         const byId = indexBySerie(torrents)
+
+        // Charger organized.json
+        let organized: Record<string, Record<string, string>> = {}
+        try {
+            const orgPath = path.join(process.cwd(), 'data', 'organized.json')
+            if (fs.existsSync(orgPath))
+                organized = JSON.parse(fs.readFileSync(orgPath, 'utf-8'))
+        } catch {}
+
+        // Récupérer les hashes actifs depuis qB (best effort)
+        const activeTorrents = new Set<string>()
+        try {
+            const { category } = readSettings()
+            const active = await dispatchList(category ?? 'fankai')
+            for (const t of active) {
+                if (t.state === 'downloading' && t.hash)
+                    activeTorrents.add(t.hash.toLowerCase())
+            }
+        } catch {}
+
         const seriesList = Array.isArray(apiData) ? apiData : (apiData.series ?? [])
-        res.json({ series: seriesList.map((serie: any) => ({
-                ...serie,
-                torrent_count: byId.get(serie.id)?.length ?? 0,
-                has_torrents : byId.has(serie.id)
-            }))})
+        res.json({ series: seriesList.map((serie: any) => {
+                const serieTorrents = byId.get(serie.id) ?? []
+                return {
+                    ...serie,
+                    torrent_count : serieTorrents.length,
+                    has_torrents  : serieTorrents.length > 0,
+                    download_state: computeSerieDownloadState(serieTorrents, organized, activeTorrents),
+                }
+            })})
     } catch (err) {
         res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
     }
@@ -256,7 +314,12 @@ app.get('/api/downloads', requireAuth, async (_req, res) => {
             let organizeState: 'none' | 'partial' | 'done' = 'none'
             if (doneFiles >= totalFiles) organizeState = 'done'
             else if (doneFiles > 0)      organizeState = 'partial'
-            return { ...t, organizeState, organizeProgress: { done: doneFiles, total: totalFiles } }
+
+            // Récupérer les erreurs depuis recentOrganized
+            const notif = recentOrganized.find(n => n.hash === t.hash)
+            const errorFiles = notif?.errorFiles ?? []
+
+            return { ...t, organizeState, organizeProgress: { done: doneFiles, total: totalFiles }, errorFiles }
         })
 
         res.json(enriched)
@@ -267,12 +330,13 @@ app.get('/api/downloads', requireAuth, async (_req, res) => {
 
 // ── Résultats d'organisation récents (pour notifications frontend) ──
 interface OrganizeNotif {
-    hash    : string
-    name    : string
-    done    : number
-    skipped : number
-    errors  : number
-    at      : string
+    hash       : string
+    name       : string
+    done       : number
+    skipped    : number
+    errors     : number
+    errorFiles : { file: string; error: string }[]
+    at         : string
 }
 const recentOrganized: OrganizeNotif[] = []
 const MAX_NOTIFS = 20
@@ -308,6 +372,21 @@ app.post('/api/organize', requireAuth, async (req, res) => {
 })
 
 // ── Torrents status ────────────────────────────────────────────
+// ── Logs ──────────────────────────────────────────────────────
+app.get('/api/logs', requireAuth, (req, res) => {
+    const limit  = Number(req.query.limit)  || 100
+    const level  = (req.query.level  as string) || 'all'
+    const source = (req.query.source as string) || undefined
+    const entries = readLogs({ limit, level: level as any, source })
+    res.json({ entries, size: logsFileSize() })
+})
+
+app.post('/api/logs/clear', requireAuth, (_req, res) => {
+    clearLogs()
+    logger.info('api', 'Logs effacés')
+    res.json({ ok: true })
+})
+
 // ── System info ────────────────────────────────────────────────
 app.get('/api/system', requireAuth, (_req, res) => {
     const isDocker = fs.existsSync('/.dockerenv')

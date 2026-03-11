@@ -105,7 +105,25 @@
 
           <!-- Badge organisation -->
           <div v-if="t.state === 'seeding'" class="flex items-center gap-2">
-            <!-- Badge statut -->
+
+            <!-- Badge erreurs avec tooltip -->
+            <div v-if="t.errorFiles?.length > 0" class="relative group/err">
+              <span class="text-[9px] tracking-widest px-2 py-0.5 border border-red-500/40 text-red-400 cursor-default">
+                {{ t.errorFiles.length }} ERREUR{{ t.errorFiles.length > 1 ? 'S' : '' }}
+              </span>
+              <!-- Tooltip -->
+              <div class="absolute bottom-full right-0 mb-2 hidden group-hover/err:block z-10 w-80">
+                <div class="bg-[#0d1219] border border-red-500/30 p-3 text-[10px] shadow-xl">
+                  <div class="text-red-400 tracking-widest mb-2">FICHIERS EN ERREUR</div>
+                  <div v-for="e in t.errorFiles" :key="e.file" class="mb-1.5 last:mb-0">
+                    <p class="text-white truncate">{{ e.file }}</p>
+                    <p class="text-[#5a7a94]">{{ e.error }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Badge statut organisation -->
             <span class="text-[9px] tracking-widest px-2 py-0.5 border"
                   :class="t.organizeState === 'done'    ? 'border-green-500/40 text-green-500' :
                         t.organizeState === 'partial'  ? 'border-yellow-500/40 text-yellow-500' :
@@ -114,6 +132,7 @@
                 t.organizeState === 'partial' ? `EN COURS (${t.organizeProgress?.done}/${t.organizeProgress?.total})` :
                     'NON ORGANISÉ' }}
             </span>
+
             <!-- Bouton organiser si pas encore fait -->
             <button v-if="t.organizeState !== 'done'"
                     @click="organize(t)"

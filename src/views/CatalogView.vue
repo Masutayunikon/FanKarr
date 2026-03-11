@@ -8,7 +8,18 @@
           <span class="text-zinc-100">Fan</span><span class="text-orange-500">karr</span>
         </span>
         <div class="flex items-center gap-2">
-          <!-- Icône downloads avec badge -->
+          <!-- Icône logs -->
+          <router-link to="/logs"
+                       class="p-2 rounded-lg text-zinc-500 hover:text-zinc-100 hover:bg-white/5 transition"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+              <polyline points="10 9 9 9 8 9"/>
+            </svg>
+          </router-link>
           <router-link to="/downloads"
                        class="relative p-2 rounded-lg text-zinc-500 hover:text-zinc-100 hover:bg-white/5 transition"
           >
@@ -126,6 +137,27 @@
               {{ serie.torrent_count }}
             </div>
 
+            <!-- Badge état téléchargement -->
+            <div v-if="serie.download_state !== 'none'"
+                 class="absolute bottom-2 left-2 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold leading-none backdrop-blur-sm"
+                 :class="serie.download_state === 'complete'    ? 'bg-green-500/90 text-white' :
+                        serie.download_state === 'partial'     ? 'bg-orange-500/90 text-white' :
+                        serie.download_state === 'downloading' ? 'bg-blue-500/90 text-white'   : ''">
+              <!-- Icône -->
+              <svg v-if="serie.download_state === 'complete'" width="9" height="9" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+              <svg v-else-if="serie.download_state === 'downloading'" width="9" height="9" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3" class="animate-pulse">
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              <svg v-else width="9" height="9" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              {{ serie.download_state === 'complete' ? 'ORGANISÉ' : serie.download_state === 'downloading' ? 'EN COURS' : 'PARTIEL' }}
+            </div>
+
             <!-- Overlay hover -->
             <div class="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
               <span class="text-xs text-white border border-white/40 px-3 py-1.5 rounded-md">Voir</span>
@@ -170,15 +202,19 @@ const activeFilter = ref('all')
 const activeDownloads = ref(0)
 
 const filters = [
-  { label: 'Toutes', value: 'all' },
+  { label: 'Toutes',      value: 'all' },
   { label: 'Disponibles', value: 'available' },
+  { label: 'Téléchargés', value: 'complete' },
+  { label: 'En cours',    value: 'downloading' },
   { label: 'Sans torrent', value: 'unavailable' },
 ]
 
 const filtered = computed(() => {
   let list = store.series
-  if (activeFilter.value === 'available') list = list.filter(s => s.has_torrents)
-  if (activeFilter.value === 'unavailable') list = list.filter(s => !s.has_torrents)
+  if (activeFilter.value === 'available')    list = list.filter(s => s.has_torrents)
+  if (activeFilter.value === 'unavailable')  list = list.filter(s => !s.has_torrents)
+  if (activeFilter.value === 'complete')     list = list.filter(s => s.download_state === 'complete')
+  if (activeFilter.value === 'downloading')  list = list.filter(s => s.download_state === 'downloading' || s.download_state === 'partial')
   if (search.value.trim()) {
     const q = search.value.toLowerCase()
     list = list.filter(s => s.title.toLowerCase().includes(q))
@@ -188,7 +224,7 @@ const filtered = computed(() => {
 
 async function handleLogout() {
   await auth.logout()
-  await router.push('/auth')
+  router.push('/auth')
 }
 
 // ── Polling downloads actifs + notifications organisation ──────

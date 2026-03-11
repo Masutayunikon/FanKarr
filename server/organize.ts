@@ -25,7 +25,7 @@ export interface OrganizeResult {
  */
 export async function autoOrganizeAll(
     listFn  : () => Promise<any[]>,
-    onResult?: (r: { hash: string; name: string; done: number; skipped: number; errors: number }) => void
+    onResult?: (r: { hash: string; name: string; done: number; skipped: number; errors: number; errorFiles: { file: string; error: string }[] }) => void
 ): Promise<void> {
     if (workerRunning) {
         console.log('[organize] Worker déjà en cours, skip')
@@ -60,11 +60,12 @@ export async function autoOrganizeAll(
         } else if (msg.type === 'result') {
             console.log(`[organize] ${msg.name} → ${msg.done} OK, ${msg.skipped} skippés, ${msg.errors.length} erreurs`)
             onResult?.({
-                hash   : msg.hash,
-                name   : msg.name,
-                done   : msg.done,
-                skipped: msg.skipped,
-                errors : msg.errors.length,
+                hash       : msg.hash,
+                name       : msg.name,
+                done       : msg.done,
+                skipped    : msg.skipped,
+                errors     : msg.errors.length,
+                errorFiles : msg.errors,
             })
         } else if (msg.type === 'done') {
             console.log('[organize] Worker terminé')
