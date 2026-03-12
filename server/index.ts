@@ -8,7 +8,7 @@ import {
     registerDriver, getDriver, getAvailableClients,
     listClients, addClient, removeClient, getClient,
     sanitizeClient, dispatchDownload, dispatchList
-} from './torrent-clients/index.js'
+} from './torrent-clients'
 import qbittorrentDriver from './torrent-clients/qbittorrent.js'
 import { organizeTorrent, autoOrganizeAll, scanMediaPath } from './organize.js'
 import { logger, readLogs, clearLogs, logsFileSize } from './logger.js'
@@ -433,6 +433,22 @@ app.get('/api/system', requireAuth, (_req, res) => {
     res.json({ isDocker })
 })
 
+app.get('/api/browse', requireAuth, (req, res) => {
+    const dirPath = (req.query.path as string) || '/'
+    try {
+        const entries = fs.readdirSync(dirPath, { withFileTypes: true })
+        const dirs = entries
+            .filter(e => e.isDirectory())
+            .map(e => e.name)
+            .filter(n => !n.startsWith('.'))
+            .sort((a, b) => a.localeCompare(b))
+        const parent = dirPath === '/' ? null : path.dirname(dirPath)
+        res.json({ path: dirPath, parent, dirs })
+    } catch (err) {
+        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur lecture dossier' })
+    }
+})
+
 app.get('/api/torrents/status', requireAuth, (_req, res) => {
     try {
         if (!fs.existsSync(TORRENTS_PATH)) { res.json({ exists: false, count: 0, empty: true }); return }
@@ -454,6 +470,18 @@ app.post('/api/update', requireAuth, async (_req, res) => {
         fs.mkdirSync(path.dirname(TORRENTS_PATH), { recursive: true })
         fs.writeFileSync(TORRENTS_PATH, JSON.stringify(data, null, 2), 'utf-8')
         res.json({ ok: true, count: data.length })
+    } catch (err) {
+        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
+    }
+})
+
+app.post('/api/scan', requireAuth, async (_req, res) => {
+    try {
+        const { mediaPath } = readSettings()
+        const ORGANIZED_PATH = path.join(process.cwd(), 'data', 'organized.json')
+        const result = await scanMediaPath(mediaPath, TORRENTS_PATH, ORGANIZED_PATH)
+        logger.info('api', `Scan manuel: ${result.found} fichiers scannés, ${result.added} ajoutés`)
+        res.json({ ok: true, ...result })
     } catch (err) {
         res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
     }

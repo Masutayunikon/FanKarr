@@ -4,17 +4,19 @@ import path from 'path'
 const DATA_PATH = path.join(process.cwd(), 'data', 'settings.json')
 
 export interface Settings {
-    mediaPath     : string   // dossier Jellyfin destination ex: /media/Kai
-    completePath  : string   // dossier qB complétion ex: /downloads/complete
+    mediaPath     : string
+    completePath  : string
     organizeMode  : 'hardlink' | 'move'
-    category      : string   // catégorie qBittorrent
+    category      : string
+    nfoSupport    : boolean   // téléchargement NFO/images depuis GitLab Fankai Pack
 }
 
 const defaults: Settings = {
-    mediaPath    : '/media/Kai',
-    completePath : '/downloads/complete',
+    mediaPath    : '',
+    completePath : '',
     organizeMode : 'hardlink',
     category     : 'fankai',
+    nfoSupport   : false,
 }
 
 export function readSettings(): Settings {

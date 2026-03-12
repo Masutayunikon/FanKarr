@@ -4,9 +4,9 @@
     <!-- Header -->
     <header class="sticky top-0 z-50 bg-zinc-950/90 backdrop-blur border-b border-white/5">
       <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-        <span class="text-2xl font-serif tracking-tight">
+        <router-link to="/" class="text-2xl font-serif tracking-tight hover:opacity-80 transition">
           <span class="text-zinc-100">Fan</span><span class="text-orange-500">karr</span>
-        </span>
+        </router-link>
         <div class="flex items-center gap-2">
           <!-- Icône logs -->
           <router-link to="/logs"
@@ -67,13 +67,28 @@
               class="w-full bg-white/5 border border-white/[0.08] rounded-lg pl-9 pr-4 py-2 text-sm placeholder-zinc-600 outline-none focus:border-orange-500/50 transition"
           />
         </div>
-        <div class="flex gap-1">
+        <div class="flex items-center gap-1">
+          <!-- Groupe 1 : état de la série -->
           <button
-              v-for="f in filters"
+              v-for="f in filtersGroupe1"
               :key="f.value"
               class="px-3 py-1.5 rounded-lg text-xs font-medium border transition"
               :class="activeFilter === f.value
               ? 'bg-orange-500 border-orange-500 text-white'
+              : 'bg-transparent border-white/[0.08] text-zinc-500 hover:text-zinc-100 hover:border-white/20'"
+              @click="activeFilter = f.value"
+          >{{ f.label }}</button>
+
+          <!-- Séparateur -->
+          <span class="w-px h-5 bg-white/10 mx-1" />
+
+          <!-- Groupe 2 : état du téléchargement -->
+          <button
+              v-for="f in filtersGroupe2"
+              :key="f.value"
+              class="px-3 py-1.5 rounded-lg text-xs font-medium border transition"
+              :class="activeFilter === f.value
+              ? 'bg-blue-500 border-blue-500 text-white'
               : 'bg-transparent border-white/[0.08] text-zinc-500 hover:text-zinc-100 hover:border-white/20'"
               @click="activeFilter = f.value"
           >{{ f.label }}</button>
@@ -133,8 +148,14 @@
             </div>
 
             <!-- Badge torrents dispo -->
-            <div v-if="serie.has_torrents" class="absolute top-2 right-2 bg-orange-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+            <div v-if="serie.has_torrents"
+                 class="absolute top-2 right-2 bg-orange-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none cursor-default group/badge">
               {{ serie.torrent_count }}
+              <div class="absolute bottom-full right-0 mb-1.5 hidden group-hover/badge:block z-10">
+                <div class="bg-zinc-800 border border-white/10 text-white text-[10px] font-normal px-2 py-1 rounded whitespace-nowrap shadow-lg">
+                  {{ serie.torrent_count }} torrent{{ serie.torrent_count > 1 ? 's' : '' }} téléchargeables
+                </div>
+              </div>
             </div>
 
             <!-- Badge état téléchargement -->
@@ -201,12 +222,15 @@ const search = ref('')
 const activeFilter = ref('all')
 const activeDownloads = ref(0)
 
-const filters = [
-  { label: 'Toutes',      value: 'all' },
-  { label: 'Disponibles', value: 'available' },
-  { label: 'Téléchargés', value: 'complete' },
-  { label: 'En cours',    value: 'downloading' },
-  { label: 'Sans torrent', value: 'unavailable' },
+const filtersGroupe1 = [
+  { label: 'Toutes',        value: 'all' },
+  { label: 'Disponibles',   value: 'available' },
+  { label: 'Sans torrent',  value: 'unavailable' },
+]
+
+const filtersGroupe2 = [
+  { label: 'DL complet',    value: 'complete' },
+  { label: 'DL partiel',    value: 'downloading' },
 ]
 
 const filtered = computed(() => {

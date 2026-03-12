@@ -20,19 +20,22 @@ const TORRENTS_PATH  = path.join(process.cwd(), 'data', 'torrent_final.json')
 const ORGANIZED_PATH = path.join(process.cwd(), 'data', 'organized.json')
 
 // ─── Utils log ────────────────────────────────────────────────
+// Le worker tourne dans un thread séparé — il passe les logs au thread principal
+// qui les écrit dans le fichier via logger.ts
 
 function log(msg: string)   { parentPort?.postMessage({ type: 'log', level: 'info',  msg }) }
 function warn(msg: string)  { parentPort?.postMessage({ type: 'log', level: 'warn',  msg }) }
 function error(msg: string) { parentPort?.postMessage({ type: 'log', level: 'error', msg }) }
+function debug(msg: string) { parentPort?.postMessage({ type: 'log', level: 'debug', msg }) }
 
 // ─── Settings (lu directement, pas d'import circulaire) ──────
 
-function readSettings(): { mediaPath: string; completePath: string; organizeMode: string } {
+function readSettings(): { mediaPath: string; completePath: string; organizeMode: string; nfoSupport: boolean } {
     try {
         const p = path.join(process.cwd(), 'data', 'settings.json')
-        if (!fs.existsSync(p)) return { mediaPath: '/media/Kai', completePath: '/downloads/complete', organizeMode: 'hardlink' }
+        if (!fs.existsSync(p)) return { mediaPath: '', completePath: '', organizeMode: 'hardlink', nfoSupport: false }
         return JSON.parse(fs.readFileSync(p, 'utf-8'))
-    } catch { return { mediaPath: '/media/Kai', completePath: '/downloads/complete', organizeMode: 'hardlink' } }
+    } catch { return { mediaPath: '', completePath: '', organizeMode: 'hardlink', nfoSupport: false } }
 }
 
 // ─── Organized log ────────────────────────────────────────────
@@ -84,10 +87,98 @@ function isInExcludedFolder(filePath: string[]): boolean {
     return false
 }
 
+// ─── Map correction titres API → titres GitLab ───────────────
+
+const SERIE_TITLE_GITLAB_MAP: Record<string, string> = {
+    'Enfer Et Paradis Henshū'            : 'Enfer et Paradis Henshū',
+    'Hajime No Ippo Henshū'              : 'Hajime no Ippo Henshū',
+    'Hikaru No Go Henshū'                : 'Hikaru no Go Henshū',
+    'Hokuto No Ken Kaï'                  : 'Hokuto no Ken Kaï',
+    'Kaguya-sama : Love is War Henshū'   : 'Kaguya-sama - Love is War Henshū',
+    'Kenshin le Vagabond Henshū'         : 'Kenshin le vagabond Henshū',
+    'Kuroko No Basket Henshū'            : 'Kuroko no Basket Henshū',
+    'Shingeki No Kyojin Henshū'          : 'Shingeki no Kyojin Henshū',
+    'Tower Of God Henshū'                : 'Tower of God Henshū',
+}
+
+function getGitlabSerieTitle(serieTitle: string): string {
+    return SERIE_TITLE_GITLAB_MAP[serieTitle] ?? serieTitle
+}
+
+
+
+// ─── GitLab NFO downloader ────────────────────────────────────
+
+const GITLAB_API      = 'https://gitlab.com/api/v4/projects/ElPouki%2Ffankai_pack/repository'
+const GITLAB_RAW_BASE = 'https://gitlab.com/ElPouki/fankai_pack/-/raw/main/pack'
+
+async function fetchJson(url: string): Promise<any> {
+    const { default: nodeFetch } = await import('node-fetch')
+    const res = await (nodeFetch as any)(url, { headers: { 'User-Agent': 'fankarr' } })
+    if (!res.ok) throw new Error(`HTTP ${res.status} — ${url}`)
+    return res.json()
+}
+
+async function fetchBinary(url: string): Promise<Buffer> {
+    const { default: nodeFetch } = await import('node-fetch')
+    const res = await (nodeFetch as any)(url, { headers: { 'User-Agent': 'fankarr' } })
+    if (!res.ok) throw new Error(`HTTP ${res.status} — ${url}`)
+    return Buffer.from(await res.arrayBuffer())
+}
+
+async function downloadGitlabFolder(serieTitle: string, destRoot: string): Promise<void> {
+    const gitlabTitle = getGitlabSerieTitle(serieTitle)
+    const folderPath  = `pack/${gitlabTitle}`
+
+    log(`[nfo] Récupération dossier GitLab: ${gitlabTitle}`)
+
+    // Lister récursivement tous les fichiers du dossier
+    let files: any[]
+    try {
+        files = await fetchJson(
+            `${GITLAB_API}/tree?path=${encodeURIComponent(folderPath)}&recursive=true&per_page=100&ref=main`
+        )
+    } catch (err) {
+        warn(`[nfo] Dossier GitLab introuvable pour "${gitlabTitle}": ${err instanceof Error ? err.message : err}`)
+        return
+    }
+
+    if (!Array.isArray(files) || files.length === 0) {
+        warn(`[nfo] Aucun fichier trouvé sur GitLab pour "${gitlabTitle}"`)
+        return
+    }
+
+    const fileEntries = files.filter((f: any) => f.type === 'blob')
+    log(`[nfo] ${fileEntries.length} fichiers à télécharger`)
+
+    for (const entry of fileEntries) {
+        // entry.path = "pack/Black Lagoon Henshū/Saison 1/fichier.nfo"
+        // On retire le préfixe "pack/{gitlabTitle}/" pour obtenir le chemin relatif
+        const relativePath = entry.path.replace(`pack/${gitlabTitle}/`, '')
+        const destPath     = path.join(destRoot, relativePath)
+        const destDir      = path.dirname(destPath)
+
+        // Skip si déjà présent
+        if (fs.existsSync(destPath)) continue
+
+        try {
+            fs.mkdirSync(destDir, { recursive: true })
+            const rawUrl = `${GITLAB_RAW_BASE}/${encodeURIComponent(gitlabTitle)}/${relativePath.split('/').map(encodeURIComponent).join('/')}`
+            const data   = await fetchBinary(rawUrl)
+            fs.writeFileSync(destPath, data)
+            log(`[nfo] ✓ ${relativePath}`)
+        } catch (err) {
+            warn(`[nfo] ✗ ${relativePath}: ${err instanceof Error ? err.message : err}`)
+        }
+    }
+
+    log(`[nfo] Dossier GitLab synchronisé pour "${serieTitle}"`)
+}
+
 // ─── Filesystem ops ───────────────────────────────────────────
 
 function seasonFolder(n: number): string {
-    return `Saison ${String(n).padStart(3, '0')}`
+    return `Saison ${n}`
 }
 
 function tryHardlink(src: string, dest: string): boolean {
@@ -101,7 +192,7 @@ function tryHardlink(src: string, dest: string): boolean {
 // ─── Organise un torrent ──────────────────────────────────────
 
 async function organizeTorrent(hash: string, name: string, savePath: string) {
-    const { mediaPath, completePath, organizeMode } = readSettings()
+    const { mediaPath, completePath, organizeMode, nfoSupport } = readSettings()
     const result = { total: 0, skipped: 0, done: 0, errors: [] as { file: string; error: string }[] }
 
     log(`[organize] ── ${name} ──`)
@@ -118,13 +209,20 @@ async function organizeTorrent(hash: string, name: string, savePath: string) {
     const torrentFiles: any[] = torrent.torrent_files ?? []
     log(`[organize] serie=${serieTitle} fichiers=${torrentFiles.length}`)
 
+    // ── Téléchargement NFO/images depuis GitLab ───────────────
+    if (nfoSupport) {
+        const serieDestRoot = path.join(mediaPath, serieTitle)
+        await downloadGitlabFolder(serieTitle, serieDestRoot)
+    }
+
     // ── Cas fichier unique ────────────────────────────────────
     if (torrentFiles.length === 0) {
         log(`[organize] torrent_files vide → tentative fichier unique`)
         const candidates = [path.join(savePath, name), path.join(completePath, name)]
         let src: string | null = null
         for (const c of candidates) {
-            log(`[organize]   candidate: ${c} → ${fs.existsSync(c) ? '✓' : '✗'}`)
+            if (fs.existsSync(c)) log(`[organize]   ✓ source trouvée: ${c}`)
+            else debug(`[organize]   candidate absent: ${c}`)
             if (fs.existsSync(c)) { src = c; break }
         }
         if (!src) throw new Error(`Source introuvable pour "${name}"`)
@@ -196,9 +294,7 @@ async function organizeTorrent(hash: string, name: string, savePath: string) {
 
         const seasonNum = filenameSeasonMap.get(filename) ?? 1
         const destDir   = path.join(mediaPath, serieTitle, seasonFolder(seasonNum))
-        const resolvedEp = torrent.resolved_episodes?.find((e: any) => e.filename === filename)
-        const destName   = resolvedEp?.original_filename ?? filename
-        const dest       = path.join(destDir, destName)
+        const dest      = path.join(destDir, filename)
 
         if (fs.existsSync(dest)) {
             markOrganized(hash, filename)

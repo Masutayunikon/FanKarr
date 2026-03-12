@@ -10,7 +10,6 @@
         <h1 class="text-xl font-black text-white font-sans">Téléchargements</h1>
       </div>
       <div class="flex items-center gap-3">
-        <!-- Indicateur de polling -->
         <div class="flex items-center gap-2 text-[10px] text-[#5a7a94] tracking-widest">
           <div class="w-1.5 h-1.5 rounded-full" :class="polling ? 'bg-green-500 animate-pulse' : 'bg-[#1e2d3d]'"/>
           {{ polling ? 'EN DIRECT' : 'PAUSE' }}
@@ -30,6 +29,47 @@
       </div>
     </div>
 
+    <!-- Onglets -->
+    <div class="flex items-center justify-between mb-4">
+      <div class="flex gap-0 border border-[#1e2d3d]">
+        <button
+            @click="activeTab = 'active'"
+            class="px-5 py-2 text-xs tracking-widest transition-colors cursor-pointer"
+            :class="activeTab === 'active'
+            ? 'bg-[#e8513a] text-white border-[#e8513a]'
+            : 'text-[#5a7a94] hover:text-white'">
+          EN COURS
+          <span v-if="activeTorrents.length > 0"
+                class="ml-1.5 bg-white/20 text-[9px] px-1.5 py-0.5 rounded-full">
+            {{ activeTorrents.length }}
+          </span>
+        </button>
+        <button
+            @click="activeTab = 'done'"
+            class="px-5 py-2 text-xs tracking-widest transition-colors cursor-pointer border-l border-[#1e2d3d]"
+            :class="activeTab === 'done'
+            ? 'bg-[#e8513a] text-white'
+            : 'text-[#5a7a94] hover:text-white'">
+          TERMINÉS
+          <span v-if="doneTorrents.length > 0"
+                class="ml-1.5 bg-white/20 text-[9px] px-1.5 py-0.5 rounded-full">
+            {{ doneTorrents.length }}
+          </span>
+        </button>
+      </div>
+
+      <!-- Toggle masquer organisés (onglet TERMINÉS uniquement) -->
+      <div v-if="activeTab === 'done'" class="flex items-center gap-2">
+        <button @click="hideOrganized = !hideOrganized"
+                class="relative shrink-0 w-8 h-4 rounded-full transition-colors cursor-pointer"
+                :class="hideOrganized ? 'bg-[#e8513a]' : 'bg-[#1e2d3d]'">
+          <span class="absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform duration-200"
+                :class="hideOrganized ? 'translate-x-4' : 'translate-x-0'" />
+        </button>
+        <span class="text-[10px] text-[#5a7a94] tracking-widest">MASQUER ORGANISÉS</span>
+      </div>
+    </div>
+
     <!-- Pas de clients -->
     <div v-if="noClients" class="flex flex-col items-center justify-center gap-3 min-h-64 text-[#5a7a94]">
       <p class="text-sm">Aucun client torrent configuré</p>
@@ -46,14 +86,20 @@
     </div>
 
     <!-- Vide -->
-    <div v-else-if="!loading && torrents.length === 0" class="flex flex-col items-center justify-center gap-3 min-h-64 text-[#5a7a94]">
-      <p class="text-sm">Aucun téléchargement en cours</p>
-      <p class="text-[11px]">Les torrents lancés depuis Fankarr apparaîtront ici</p>
+    <div v-else-if="!loading && visibleTorrents.length === 0" class="flex flex-col items-center justify-center gap-3 min-h-64 text-[#5a7a94]">
+      <p class="text-sm">
+        {{ activeTab === 'active' ? 'Aucun téléchargement en cours' : 'Aucun torrent terminé' }}
+      </p>
+      <p class="text-[11px]">
+        {{ activeTab === 'active'
+          ? 'Les torrents avec la catégorie « fankai » apparaîtront ici'
+          : hideOrganized ? 'Tous les torrents terminés sont organisés' : '' }}
+      </p>
     </div>
 
     <!-- Liste torrents -->
     <div v-else class="flex flex-col gap-2">
-      <div v-for="t in torrents" :key="t.hash"
+      <div v-for="t in visibleTorrents" :key="t.hash"
            class="bg-[#0d1219] border border-[#1e2d3d] p-4">
 
         <!-- Ligne principale -->
@@ -61,17 +107,14 @@
           <div class="flex-1 min-w-0">
             <p class="text-sm text-white font-medium truncate">{{ t.name }}</p>
             <div class="flex items-center gap-3 mt-1">
-              <!-- Badge état -->
               <span class="text-[10px] tracking-widest px-2 py-0.5 border"
                     :class="stateBadge(t.state).class">
                 {{ stateBadge(t.state).label }}
               </span>
-              <!-- Client -->
               <span class="text-[10px] text-[#5a7a94]">{{ t.client_name }}</span>
             </div>
           </div>
 
-          <!-- Infos droite -->
           <div class="text-right shrink-0">
             <p class="text-sm font-bold text-white">{{ t.progress }}%</p>
             <p class="text-[10px] text-[#5a7a94] mt-0.5">
@@ -92,26 +135,17 @@
         <!-- Infos bas -->
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-4 text-[10px] text-[#5a7a94]">
-            <span v-if="t.state === 'downloading'">
-              ↓ {{ formatSpeed(t.speed) }}
-            </span>
-            <span v-if="t.state === 'downloading' && t.eta > 0">
-              ETA {{ formatEta(t.eta) }}
-            </span>
-            <span v-if="t.state === 'seeding'" class="text-green-500">
-              ✓ Complété
-            </span>
+            <span v-if="t.state === 'downloading'">↓ {{ formatSpeed(t.speed) }}</span>
+            <span v-if="t.state === 'downloading' && t.eta > 0">ETA {{ formatEta(t.eta) }}</span>
+            <span v-if="t.state === 'seeding'" class="text-green-500">✓ Complété</span>
           </div>
 
-          <!-- Badge organisation -->
+          <!-- Badge organisation (seulement pour les terminés) -->
           <div v-if="t.state === 'seeding'" class="flex items-center gap-2">
-
-            <!-- Badge erreurs avec tooltip -->
             <div v-if="t.errorFiles?.length > 0" class="relative group/err">
               <span class="text-[9px] tracking-widest px-2 py-0.5 border border-red-500/40 text-red-400 cursor-default">
                 {{ t.errorFiles.length }} ERREUR{{ t.errorFiles.length > 1 ? 'S' : '' }}
               </span>
-              <!-- Tooltip -->
               <div class="absolute bottom-full right-0 mb-2 hidden group-hover/err:block z-10 w-80">
                 <div class="bg-[#0d1219] border border-red-500/30 p-3 text-[10px] shadow-xl">
                   <div class="text-red-400 tracking-widest mb-2">FICHIERS EN ERREUR</div>
@@ -123,7 +157,6 @@
               </div>
             </div>
 
-            <!-- Badge statut organisation -->
             <span class="text-[9px] tracking-widest px-2 py-0.5 border"
                   :class="t.organizeState === 'done'    ? 'border-green-500/40 text-green-500' :
                         t.organizeState === 'partial'  ? 'border-yellow-500/40 text-yellow-500' :
@@ -133,7 +166,6 @@
                     'NON ORGANISÉ' }}
             </span>
 
-            <!-- Bouton organiser si pas encore fait -->
             <button v-if="t.organizeState !== 'done'"
                     @click="organize(t)"
                     :disabled="organizing[t.hash]"
@@ -153,13 +185,30 @@ import { useToast } from '@/composables/useToast'
 
 const { add: toast } = useToast()
 
-const torrents   = ref<any[]>([])
-const loading    = ref(true)
-const polling    = ref(true)
-const noClients  = ref(false)
-const organizing = ref<Record<string, boolean>>({})
+const torrents      = ref<any[]>([])
+const loading       = ref(true)
+const polling       = ref(true)
+const noClients     = ref(false)
+const organizing    = ref<Record<string, boolean>>({})
+const activeTab     = ref<'active' | 'done'>('active')
+const hideOrganized = ref(false)
 
 let pollInterval: ReturnType<typeof setInterval> | null = null
+
+// ── Filtres onglets ────────────────────────────────────────────
+const activeTorrents = computed(() =>
+    torrents.value.filter(t => ['downloading', 'paused', 'checking', 'error', 'unknown'].includes(t.state))
+)
+
+const doneTorrents = computed(() =>
+    torrents.value.filter(t => t.state === 'seeding')
+)
+
+const visibleTorrents = computed(() => {
+  if (activeTab.value === 'active') return activeTorrents.value
+  if (hideOrganized.value) return doneTorrents.value.filter(t => t.organizeState !== 'done')
+  return doneTorrents.value
+})
 
 // ── Stats ──────────────────────────────────────────────────────
 const stats = computed(() => [
@@ -213,7 +262,6 @@ async function organize(torrent: any) {
       body: JSON.stringify({ hash: torrent.hash, save_path: torrent.save_path, name: torrent.name })
     })
     if (res.ok) {
-      organized.value[torrent.hash] = true
       toast(`${torrent.name} organisé ✓`, 'success')
     } else {
       const { error } = await res.json()

@@ -168,7 +168,9 @@ export async function dispatchList(category?: string): Promise<(TorrentInfo & { 
         const driver = getDriver(client.type)
         if (!driver) continue
         try {
-            const torrents = await driver.list(client.config, category)
+            // La catégorie du client est prioritaire sur la catégorie globale
+            const clientCategory = (client.config.category as string) || category
+            const torrents = await driver.list(client.config, clientCategory)
             for (const t of torrents) {
                 results.push({ ...t, client_uuid: client.uuid, client_name: client.name })
             }

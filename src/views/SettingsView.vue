@@ -91,10 +91,15 @@
             <label class="text-[10px] text-[#5a7a94] tracking-widest">DOSSIER COMPLÉTION</label>
             <span v-if="isDocker" class="text-[9px] tracking-widest text-[#3a8fe8] border border-[#3a8fe8]/40 px-1.5 py-0.5">DOCKER</span>
           </div>
-          <input v-model="form.completePath" :disabled="isDocker"
-                 class="w-full bg-[#121920] border border-[#1e2d3d] text-sm px-3 py-2.5 outline-none transition-colors"
-                 :class="isDocker ? 'text-[#5a7a94] cursor-not-allowed opacity-60' : 'text-white focus:border-[#e8513a]'"
-                 placeholder="/downloads/complete"/>
+          <button v-if="!isDocker"
+                  @click="openPicker('completePath')"
+                  class="w-full bg-[#121920] border border-[#1e2d3d] text-sm px-3 py-2.5 text-left text-white hover:border-[#e8513a] transition-colors cursor-pointer font-mono truncate">
+            {{ form.completePath || '/downloads/complete' }}
+          </button>
+          <div v-else
+               class="w-full bg-[#121920] border border-[#1e2d3d] text-sm px-3 py-2.5 text-[#5a7a94] opacity-60 font-mono truncate">
+            {{ form.completePath || '/downloads/complete' }}
+          </div>
           <p class="text-[10px] text-[#5a7a94] mt-1.5">
             <span v-if="isDocker">Défini par le volume Docker — non modifiable ici</span>
             <span v-else>Dossier de complétion de qBittorrent</span>
@@ -107,10 +112,15 @@
             <label class="text-[10px] text-[#5a7a94] tracking-widest">DOSSIER JELLYFIN</label>
             <span v-if="isDocker" class="text-[9px] tracking-widest text-[#3a8fe8] border border-[#3a8fe8]/40 px-1.5 py-0.5">DOCKER</span>
           </div>
-          <input v-model="form.mediaPath" :disabled="isDocker"
-                 class="w-full bg-[#121920] border border-[#1e2d3d] text-sm px-3 py-2.5 outline-none transition-colors"
-                 :class="isDocker ? 'text-[#5a7a94] cursor-not-allowed opacity-60' : 'text-white focus:border-[#e8513a]'"
-                 placeholder="/media/Kai"/>
+          <button v-if="!isDocker"
+                  @click="openPicker('mediaPath')"
+                  class="w-full bg-[#121920] border border-[#1e2d3d] text-sm px-3 py-2.5 text-left text-white hover:border-[#e8513a] transition-colors cursor-pointer font-mono truncate">
+            {{ form.mediaPath || '/media/Kai' }}
+          </button>
+          <div v-else
+               class="w-full bg-[#121920] border border-[#1e2d3d] text-sm px-3 py-2.5 text-[#5a7a94] opacity-60 font-mono truncate">
+            {{ form.mediaPath || '/media/Kai' }}
+          </div>
           <p class="text-[10px] text-[#5a7a94] mt-1.5">
             <span v-if="isDocker">Défini par le volume Docker — non modifiable ici</span>
             <span v-else>Dossier racine de la bibliothèque Fankai dans Jellyfin</span>
@@ -141,11 +151,37 @@
           </p>
         </div>
 
-        <div class="pt-1">
+        <!-- Support NFO -->
+        <div>
+          <label class="text-[10px] text-[#5a7a94] tracking-widest block mb-2">NFO / MÉTADONNÉES</label>
+          <div class="flex items-center gap-3">
+            <button @click="form.nfoSupport = !form.nfoSupport"
+                    class="relative shrink-0 w-11 h-6 rounded-full transition-colors cursor-pointer"
+                    :class="form.nfoSupport ? 'bg-[#e8513a]' : 'bg-[#1e2d3d]'">
+              <span class="absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform duration-200"
+                    :class="form.nfoSupport ? 'translate-x-5' : 'translate-x-0'" />
+            </button>
+            <span class="text-xs text-[#c8d8e8]">Télécharger les NFO et images depuis GitLab</span>
+          </div>
+          <p class="text-[10px] text-[#5a7a94] mt-1.5">
+            Pour les lecteurs sans agent Fankai (Kodi, Infuse, etc.) — télécharge les métadonnées depuis
+            <span class="text-white">fankai_pack</span> au moment de l'organisation
+          </p>
+        </div>
+
+        <div class="pt-1 flex items-center gap-3">
           <button type="button" @click="save" :disabled="saving"
                   class="bg-[#e8513a] text-white px-6 py-2.5 text-xs tracking-widest hover:opacity-85 transition-opacity disabled:opacity-50 cursor-pointer">
             {{ saving ? '...' : 'SAUVEGARDER' }}
           </button>
+          <button type="button" @click="scan" :disabled="scanning"
+                  class="border border-[#1e2d3d] text-[#5a7a94] px-6 py-2.5 text-xs tracking-widest hover:border-[#e8513a] hover:text-[#e8513a] transition-colors disabled:opacity-50 cursor-pointer">
+            {{ scanning ? 'SCAN...' : 'ANALYSER BIBLIOTHÈQUE' }}
+          </button>
+          <span v-if="scanResult" class="text-[10px]"
+                :class="scanResult.added > 0 ? 'text-green-400' : 'text-[#5a7a94]'">
+            {{ scanResult.found }} fichiers · {{ scanResult.added }} ajoutés
+          </span>
         </div>
       </div>
     </div>
@@ -159,6 +195,14 @@
         SE DÉCONNECTER
       </button>
     </div>
+
+    <!-- Folder Picker -->
+    <FolderPicker
+        v-if="picker.open"
+        :initial-path="picker.currentPath"
+        @select="onPickerSelect"
+        @cancel="picker.open = false"
+    />
 
     <!-- Modal ajout client -->
     <div v-if="modal.open" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-4">
@@ -217,6 +261,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
+import FolderPicker from '@/components/FolderPicker.vue'
 
 const router = useRouter()
 const auth   = useAuthStore()
@@ -227,10 +272,31 @@ const form = ref({
   mediaPath   : '/media/Kai',
   completePath: '/downloads/complete',
   organizeMode: 'hardlink' as 'hardlink' | 'move',
+  nfoSupport  : false,
 })
 
 const saving    = ref(false)
 const updating  = ref(false)
+const scanning  = ref(false)
+const scanResult = ref<{ found: number; added: number } | null>(null)
+
+// ── Folder picker ──────────────────────────────────────────────
+const picker = ref<{ open: boolean; field: 'completePath' | 'mediaPath'; currentPath: string }>({
+  open: false, field: 'completePath', currentPath: '/'
+})
+
+function openPicker(field: 'completePath' | 'mediaPath') {
+  picker.value = {
+    open       : true,
+    field,
+    currentPath: (form.value as any)[field] || '/',
+  }
+}
+
+function onPickerSelect(path: string) {
+  (form.value as any)[picker.value.field] = path
+  picker.value.open = false
+}
 const isDocker  = ref(false)
 const torrentsStatus = ref({ exists: false, count: 0, empty: true })
 
@@ -272,7 +338,7 @@ onMounted(async () => {
   if (availRes.ok)    availableClients.value = await availRes.json()
   if (systemRes.ok)   isDocker.value = (await systemRes.json()).isDocker
 
-  for (const c of clients.value) await refreshHealth(c.uuid)
+  for (const c of clients.value) refreshHealth(c.uuid)
 })
 
 // ── Healthcheck ────────────────────────────────────────────────
@@ -362,7 +428,7 @@ async function saveClient() {
     if (res.ok) {
       const client = await res.json()
       clients.value.push(client)
-      await refreshHealth(client.uuid)
+      refreshHealth(client.uuid)
       closeModal()
       toast('Client enregistré ✓', 'success')
     } else {
@@ -391,6 +457,31 @@ async function update() {
     toast('Impossible de contacter le serveur', 'error')
   } finally {
     updating.value = false
+  }
+}
+
+// ── Scan bibliothèque ──────────────────────────────────────────
+async function scan() {
+  scanning.value  = true
+  scanResult.value = null
+  try {
+    const res = await fetch('/api/scan', { method: 'POST', credentials: 'include' })
+    if (res.ok) {
+      const data = await res.json()
+      scanResult.value = { found: data.found, added: data.added }
+      toast(
+          data.added > 0
+              ? `${data.found} fichiers scannés — ${data.added} ajoutés`
+              : `${data.found} fichiers scannés — rien de nouveau`,
+          'success'
+      )
+    } else {
+      toast('Erreur lors du scan', 'error')
+    }
+  } catch {
+    toast('Impossible de contacter le serveur', 'error')
+  } finally {
+    scanning.value = false
   }
 }
 
