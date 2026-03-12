@@ -91,19 +91,12 @@
             <label class="text-[10px] text-[#5a7a94] tracking-widest">DOSSIER COMPLÉTION</label>
             <span v-if="isDocker" class="text-[9px] tracking-widest text-[#3a8fe8] border border-[#3a8fe8]/40 px-1.5 py-0.5">DOCKER</span>
           </div>
-          <button v-if="!isDocker"
-                  @click="openPicker('completePath')"
-                  class="w-full bg-[#121920] border border-[#1e2d3d] text-sm px-3 py-2.5 text-left text-white hover:border-[#e8513a] transition-colors cursor-pointer font-mono truncate">
-            {{ form.completePath || '/downloads/complete' }}
+          <button @click="openPicker('completePath')"
+                  class="w-full bg-[#121920] border border-[#1e2d3d] text-sm px-3 py-2.5 text-left hover:border-[#e8513a] transition-colors cursor-pointer font-mono truncate"
+                  :class="form.completePath ? 'text-white' : 'text-[#5a7a94]'">
+            {{ form.completePath || '/' }}
           </button>
-          <div v-else
-               class="w-full bg-[#121920] border border-[#1e2d3d] text-sm px-3 py-2.5 text-[#5a7a94] opacity-60 font-mono truncate">
-            {{ form.completePath || '/downloads/complete' }}
-          </div>
-          <p class="text-[10px] text-[#5a7a94] mt-1.5">
-            <span v-if="isDocker">Défini par le volume Docker — non modifiable ici</span>
-            <span v-else>Dossier de complétion de qBittorrent</span>
-          </p>
+          <p class="text-[10px] text-[#5a7a94] mt-1.5">Dossier de complétion de qBittorrent</p>
         </div>
 
         <!-- Dossier Jellyfin -->
@@ -112,19 +105,12 @@
             <label class="text-[10px] text-[#5a7a94] tracking-widest">DOSSIER JELLYFIN</label>
             <span v-if="isDocker" class="text-[9px] tracking-widest text-[#3a8fe8] border border-[#3a8fe8]/40 px-1.5 py-0.5">DOCKER</span>
           </div>
-          <button v-if="!isDocker"
-                  @click="openPicker('mediaPath')"
-                  class="w-full bg-[#121920] border border-[#1e2d3d] text-sm px-3 py-2.5 text-left text-white hover:border-[#e8513a] transition-colors cursor-pointer font-mono truncate">
-            {{ form.mediaPath || '/media/Kai' }}
+          <button @click="openPicker('mediaPath')"
+                  class="w-full bg-[#121920] border border-[#1e2d3d] text-sm px-3 py-2.5 text-left hover:border-[#e8513a] transition-colors cursor-pointer font-mono truncate"
+                  :class="form.mediaPath ? 'text-white' : 'text-[#5a7a94]'">
+            {{ form.mediaPath || '/' }}
           </button>
-          <div v-else
-               class="w-full bg-[#121920] border border-[#1e2d3d] text-sm px-3 py-2.5 text-[#5a7a94] opacity-60 font-mono truncate">
-            {{ form.mediaPath || '/media/Kai' }}
-          </div>
-          <p class="text-[10px] text-[#5a7a94] mt-1.5">
-            <span v-if="isDocker">Défini par le volume Docker — non modifiable ici</span>
-            <span v-else>Dossier racine de la bibliothèque Fankai dans Jellyfin</span>
-          </p>
+          <p class="text-[10px] text-[#5a7a94] mt-1.5">Dossier racine de la bibliothèque Fankai dans Jellyfin</p>
         </div>
 
         <!-- Mode organisation -->
@@ -269,8 +255,8 @@ const { add: toast } = useToast()
 
 // ── State ──────────────────────────────────────────────────────
 const form = ref({
-  mediaPath   : '/media/Kai',
-  completePath: '/downloads/complete',
+  mediaPath   : '',
+  completePath: '',
   organizeMode: 'hardlink' as 'hardlink' | 'move',
   nfoSupport  : false,
 })
