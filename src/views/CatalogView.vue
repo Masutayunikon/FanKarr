@@ -276,23 +276,10 @@ async function fetchOrganizeNotifs() {
 }
 
 // ── Cache images ───────────────────────────────────────────────
-const imageCache = new Set<string>()
-
-function precacheImages(series: any[]) {
-  for (const s of series) {
-    if (s.poster_image && !imageCache.has(s.poster_image)) {
-      imageCache.add(s.poster_image)
-      const img = new Image()
-      img.src = s.poster_image
-    }
-  }
-}
+// Géré directement dans le store series.ts
 
 onMounted(async () => {
-  if (store.series.length === 0) {
-    await store.fetchSeries()
-    precacheImages(store.series)
-  }
+  if (store.series.length === 0) await store.fetchSeries()
   fetchActiveDownloads()
   fetchOrganizeNotifs()
   dlInterval = setInterval(() => {
@@ -304,7 +291,6 @@ onMounted(async () => {
 // Refresh au retour sur le catalogue (après update ou scan)
 onActivated(async () => {
   await store.fetchSeries()
-  precacheImages(store.series)
   fetchActiveDownloads()
 })
 

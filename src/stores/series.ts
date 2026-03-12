@@ -61,6 +61,8 @@ export const useSeriesStore = defineStore('series', () => {
     const loadingDetail = ref(false)
     const error = ref<string | null>(null)
 
+    const _imageCache = new Set<string>()
+
     async function fetchSeries() {
         loadingSeries.value = true
         error.value = null
@@ -69,6 +71,13 @@ export const useSeriesStore = defineStore('series', () => {
             if (!res.ok) throw new Error(`Erreur ${res.status}`)
             const data = await res.json()
             series.value = data.series
+            // Précache des posters en arrière-plan
+            for (const s of data.series as Serie[]) {
+                if (s.poster_image && !_imageCache.has(s.poster_image)) {
+                    _imageCache.add(s.poster_image)
+                    new Image().src = s.poster_image
+                }
+            }
         } catch (err) {
             error.value = err instanceof Error ? err.message : 'Erreur inconnue'
         } finally {
