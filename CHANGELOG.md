@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.7.0](https://github.com/Masutayunikon/FanKarr/compare/v1.6.0...v1.7.0) (2026-03-12)
+
+
+### Features
+
+* UX improvements, folder picker, download state & NFO support ([20771fc](https://github.com/Masutayunikon/FanKarr/commit/20771fc31c187fd1fea8aa9b07093b15621a5b85))
+
+
+### Bug Fixes
+
+* rename if the torrent name is not the same as the api ([b8fcf71](https://github.com/Masutayunikon/FanKarr/commit/b8fcf71f54ab14e5572a7553d8554b617b4981b7))
+
 ## [1.6.0](https://github.com/Masutayunikon/FanKarr/compare/v1.5.0...v1.6.0) (2026-03-11)
 
 
