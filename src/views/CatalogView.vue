@@ -147,16 +147,8 @@
               </svg>
             </div>
 
-            <!-- Badge torrents dispo -->
-            <div v-if="serie.has_torrents"
-                 class="absolute top-2 right-2 bg-orange-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none cursor-default group/badge">
-              {{ serie.torrent_count }}
-              <div class="absolute bottom-full right-0 mb-1.5 hidden group-hover/badge:block z-10">
-                <div class="bg-zinc-800 border border-white/10 text-white text-[10px] font-normal px-2 py-1 rounded whitespace-nowrap shadow-lg">
-                  {{ serie.torrent_count }} torrent{{ serie.torrent_count > 1 ? 's' : '' }} téléchargeables
-                </div>
-              </div>
-            </div>
+
+
 
             <!-- Badge état téléchargement -->
             <div v-if="serie.download_state !== 'none'"
@@ -207,7 +199,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSeriesStore } from '@/stores/series'
 import { useAuthStore } from '@/stores/auth'
@@ -283,14 +275,37 @@ async function fetchOrganizeNotifs() {
   } catch {}
 }
 
-onMounted(() => {
-  if (store.series.length === 0) store.fetchSeries()
+// ── Cache images ───────────────────────────────────────────────
+const imageCache = new Set<string>()
+
+function precacheImages(series: any[]) {
+  for (const s of series) {
+    if (s.poster_image && !imageCache.has(s.poster_image)) {
+      imageCache.add(s.poster_image)
+      const img = new Image()
+      img.src = s.poster_image
+    }
+  }
+}
+
+onMounted(async () => {
+  if (store.series.length === 0) {
+    await store.fetchSeries()
+    precacheImages(store.series)
+  }
   fetchActiveDownloads()
   fetchOrganizeNotifs()
   dlInterval = setInterval(() => {
     fetchActiveDownloads()
     fetchOrganizeNotifs()
   }, 10000)
+})
+
+// Refresh au retour sur le catalogue (après update ou scan)
+onActivated(async () => {
+  await store.fetchSeries()
+  precacheImages(store.series)
+  fetchActiveDownloads()
 })
 
 onUnmounted(() => {

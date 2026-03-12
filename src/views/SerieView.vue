@@ -1,495 +1,417 @@
 <template>
-  <div class="max-w-2xl mx-auto px-8 py-8">
-    <!-- Header -->
-    <div class="flex items-center gap-4 mb-8">
-      <button
-          @click="$router.push('/')"
-          class="text-[#5a7a94] text-xs tracking-widest hover:text-[#e8513a] transition-colors cursor-pointer">
-        ← CATALOGUE
-      </button>
-      <h1 class="text-xl font-black text-white font-sans">Paramètres</h1>
+  <div class="min-h-screen bg-zinc-950 text-zinc-100">
+
+    <!-- Back -->
+    <div class="max-w-7xl mx-auto px-6 pt-6">
+      <router-link to="/" class="inline-flex items-center gap-2 text-sm text-zinc-500 hover:text-zinc-100 transition">
+        <svg width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path d="M19 12H5M12 5l-7 7 7 7"/>
+        </svg>
+        Catalogue
+      </router-link>
     </div>
 
-    <!-- Bannière données manquantes -->
-    <div v-if="torrentsStatus.empty" class="border border-[#e8513a]/40 bg-[#e8513a]/5 p-4 mb-6 flex items-center justify-between gap-4">
-      <div>
-        <div class="text-[10px] text-[#e8513a] tracking-widest mb-1">DONNÉES MANQUANTES</div>
-        <p class="text-sm text-[#a0b4c4]">
-          {{ torrentsStatus.exists ? 'Le fichier de torrents est vide.' : 'Aucun fichier de torrents trouvé.' }}
-          Téléchargez les données pour utiliser Fankarr.
-        </p>
-      </div>
-      <button @click="update" :disabled="updating"
-              class="bg-[#e8513a] text-white px-5 py-2.5 text-xs tracking-widest hover:opacity-85 transition-opacity disabled:opacity-50 cursor-pointer whitespace-nowrap">
-        {{ updating ? 'TÉLÉCHARGEMENT...' : 'TÉLÉCHARGER' }}
-      </button>
+    <!-- Loading -->
+    <div v-if="store.loadingDetail" class="flex flex-col items-center justify-center gap-4 min-h-96 text-zinc-600">
+      <div class="w-8 h-8 border-2 border-white/10 border-t-orange-500 rounded-full animate-spin" />
+      <p class="text-sm">Chargement…</p>
     </div>
 
-    <!-- Données torrents -->
-    <div class="bg-[#0d1219] border border-[#1e2d3d] p-6 mb-4">
-      <div class="text-[10px] text-[#e8513a] tracking-widest mb-1">DONNÉES</div>
-      <h2 class="text-sm font-bold text-white mb-1">Torrents Fankai</h2>
-      <p class="text-[11px] text-[#5a7a94] mb-5">
-        {{ torrentsStatus.empty ? 'Aucune donnée chargée' : `${torrentsStatus.count} torrents chargés` }}
-      </p>
-      <button @click="update" :disabled="updating"
-              class="bg-[#e8513a] text-white px-6 py-2.5 text-xs tracking-widest hover:opacity-85 transition-opacity disabled:opacity-50 cursor-pointer">
-        {{ updating ? 'MISE À JOUR...' : 'METTRE À JOUR' }}
-      </button>
+    <!-- Error -->
+    <div v-else-if="store.error" class="flex flex-col items-center justify-center gap-4 min-h-96 text-orange-400">
+      <p class="text-sm">{{ store.error }}</p>
+      <button class="px-4 py-2 bg-orange-500 text-white rounded-lg text-sm" @click="load">Réessayer</button>
     </div>
 
-    <!-- Clients torrent -->
-    <div class="bg-[#0d1219] border border-[#1e2d3d] p-6 mb-4">
-      <div class="text-[10px] text-[#e8513a] tracking-widest mb-1">TÉLÉCHARGEMENT</div>
-      <div class="flex items-center justify-between mb-6">
-        <h2 class="text-sm font-bold text-white">Clients torrent</h2>
-        <button @click="openAddModal"
-                class="border border-[#1e2d3d] text-[#5a7a94] px-4 py-1.5 text-xs tracking-widest hover:border-[#e8513a] hover:text-[#e8513a] transition-colors cursor-pointer">
-          + AJOUTER
-        </button>
-      </div>
+    <template v-else-if="data">
+      <!-- Hero -->
+      <div class="relative">
+        <div v-if="data.serie.fanart_image" class="absolute inset-0 h-72 overflow-hidden pointer-events-none">
+          <img :src="data.serie.fanart_image" class="w-full h-full object-cover opacity-20" />
+          <div class="absolute inset-0 bg-gradient-to-b from-transparent to-zinc-950" />
+        </div>
 
-      <div v-if="clients.length === 0" class="text-[11px] text-[#5a7a94]">
-        Aucun client configuré
-      </div>
-      <div v-else class="flex flex-col gap-2">
-        <div v-for="client in clients" :key="client.uuid"
-             class="flex items-center justify-between border border-[#1e2d3d] px-4 py-3">
-          <div class="flex items-center gap-3">
-            <div class="w-2 h-2 rounded-full"
-                 :class="healthStatus[client.uuid] === true  ? 'bg-green-500' :
-                        healthStatus[client.uuid] === false ? 'bg-red-500'   : 'bg-[#1e2d3d]'"/>
-            <div>
-              <p class="text-sm text-white font-medium">{{ client.name }}</p>
-              <p class="text-[10px] text-[#5a7a94] tracking-widest mt-0.5">{{ clientLabel(client.type) }}</p>
+        <div class="relative max-w-7xl mx-auto px-6 pt-8 pb-10 flex gap-8">
+          <!-- Poster -->
+          <div class="shrink-0 w-36 rounded-xl overflow-hidden border border-white/10 shadow-2xl hidden sm:block">
+            <img v-if="data.serie.poster_image" :src="data.serie.poster_image" class="w-full h-full object-cover" />
+            <div v-else class="w-full aspect-[2/3] bg-zinc-900 flex items-center justify-center text-zinc-700">
+              <svg width="28" height="28" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <rect x="2" y="2" width="20" height="20" rx="2"/><path d="m9 9 6 6M15 9l-6 6"/>
+              </svg>
             </div>
           </div>
-          <div class="flex items-center gap-2">
-            <button @click="testClient(client.uuid)"
-                    class="text-[10px] text-[#5a7a94] tracking-widest hover:text-[#3a8fe8] transition-colors cursor-pointer px-2 py-1">
-              TESTER
-            </button>
-            <button @click="deleteClient(client.uuid)"
-                    class="text-[10px] text-[#5a7a94] tracking-widest hover:text-[#e8513a] transition-colors cursor-pointer px-2 py-1">
-              SUPPRIMER
-            </button>
+
+          <!-- Info -->
+          <div class="flex flex-col gap-3 justify-end min-w-0">
+            <h1 class="text-3xl font-bold tracking-tight">{{ data.serie.title }}</h1>
+            <div class="flex flex-wrap items-center gap-2">
+              <span v-if="data.serie.year" class="text-sm text-zinc-400">{{ data.serie.year }}</span>
+              <span
+                  v-if="data.serie.status"
+                  class="text-xs px-2 py-0.5 rounded-full font-medium border"
+                  :class="data.serie.status.toLowerCase() === 'continuing'
+                  ? 'bg-green-500/15 text-green-400 border-green-500/20'
+                  : 'bg-white/5 text-zinc-500 border-white/10'"
+              >{{ data.serie.status }}</span>
+            </div>
+            <p v-if="data.serie.plot" class="text-sm text-zinc-400 leading-relaxed max-w-2xl line-clamp-3">
+              {{ data.serie.plot }}
+            </p>
+
+            <!-- Boutons hero : intégrale, pack_saison promu, pack_episodes -->
+            <div class="flex flex-wrap gap-2 mt-1">
+              <button
+                  v-for="(t, i) in data.torrents_integrale"
+                  :key="i"
+                  class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition"
+                  :class="[
+                  t.label === 'Intégrale'
+                    ? 'bg-orange-500 hover:bg-orange-600 text-white'
+                    : 'bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/20',
+                  (downloading.has(`integrale-${i}`) || downloaded.has(`integrale-${i}`) || isAlreadyQueued(t)) ? 'opacity-50 cursor-not-allowed' : ''
+                ]"
+                  :disabled="downloading.has(`integrale-${i}`) || downloaded.has(`integrale-${i}`) || isAlreadyQueued(t)"
+                  @click="download(`integrale-${i}`, t.torrent_url, t.magnet)"
+              >
+                <DownloadIcon :spinning="downloading.has(`integrale-${i}`)" />
+                {{ isAlreadyQueued(t) ? 'Déjà ajouté' : downloaded.has(`integrale-${i}`) ? 'Envoyé ✓' : t.label }}
+              </button>
+            </div>
+            <!-- Barre progression intégrale -->
+            <template v-for="(t, i) in data.torrents_integrale" :key="`prog-${i}`">
+              <template v-if="torrentProgress(extractHash(t))">
+                <!-- Badge 100% -->
+                <span v-if="torrentProgress(extractHash(t))!.progress === 100"
+                      class="mt-2 inline-flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-full border bg-green-500/10 text-green-400 border-green-500/20">
+                  ✓ Téléchargé
+                </span>
+                <!-- Barre en cours -->
+                <div v-else class="mt-2 w-full max-w-sm">
+                  <div class="flex items-center justify-between text-[10px] text-zinc-500 mb-1">
+                    <span>Téléchargement</span>
+                    <span>{{ torrentProgress(extractHash(t))!.progress }}%</span>
+                  </div>
+                  <div class="h-1 bg-white/10 rounded-full overflow-hidden">
+                    <div class="h-full bg-orange-500 rounded-full transition-all duration-500"
+                         :style="{ width: `${torrentProgress(extractHash(t))!.progress}%` }" />
+                  </div>
+                </div>
+              </template>
+            </template>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Médias & Organisation -->
-    <div class="bg-[#0d1219] border border-[#1e2d3d] p-6 mb-4">
-      <div class="text-[10px] text-[#e8513a] tracking-widest mb-1">MÉDIAS</div>
-      <h2 class="text-sm font-bold text-white mb-6">Organisation</h2>
+      <!-- Seasons -->
+      <div class="max-w-7xl mx-auto px-6 pb-16 flex flex-col gap-6">
+        <div
+            v-for="season in data.seasons"
+            :key="season.id"
+            class="bg-zinc-900/50 border border-white/5 rounded-2xl overflow-hidden"
+        >
+          <!-- Season header -->
+          <div class="flex items-center justify-between px-5 py-4 border-b border-white/5">
+            <div class="flex items-center gap-3">
+              <button class="text-zinc-500 hover:text-zinc-100 transition" @click="toggleSeason(season.id)">
+                <svg
+                    width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"
+                    class="transition-transform duration-200"
+                    :class="collapsedSeasons.has(season.id) ? '' : 'rotate-180'"
+                >
+                  <path d="M18 15l-6-6-6 6"/>
+                </svg>
+              </button>
+              <div>
+                <h2 class="font-semibold text-sm">
+                  {{ season.season_number === 0 ? 'Spéciaux' : `Saison ${season.season_number}` }}
+                  <span v-if="season.title && season.title !== `Saison ${season.season_number}`" class="text-zinc-500 font-normal ml-1">
+                    — {{ season.title }}
+                  </span>
+                </h2>
+                <p class="text-xs text-zinc-600 mt-0.5">
+                  {{ season.episodes.length }} épisode{{ season.episodes.length > 1 ? 's' : '' }}
+                  · {{ seasonAvailableCount(season) }}/{{ season.episodes.length }} dispo
+                  <span v-if="season.organized_state !== 'none'"
+                        class="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium"
+                        :class="season.organized_state === 'complete'
+                        ? 'bg-green-500/10 text-green-400'
+                        : 'bg-yellow-500/10 text-yellow-500'">
+                    {{ season.organized_state === 'complete'
+                      ? `✓ ${season.organized_count} organisé${season.organized_count > 1 ? 's' : ''}`
+                      : `${season.organized_count}/${seasonAvailableCount(season)} organisés` }}
+                  </span>
+                </p>
+              </div>
+            </div>
 
-      <div class="flex flex-col gap-5">
-
-        <!-- Dossier complétion -->
-        <div>
-          <div class="flex items-center gap-2 mb-1.5">
-            <label class="text-[10px] text-[#5a7a94] tracking-widest">DOSSIER COMPLÉTION</label>
-            <span v-if="isDocker" class="text-[9px] tracking-widest text-[#3a8fe8] border border-[#3a8fe8]/40 px-1.5 py-0.5">DOCKER</span>
-          </div>
-          <button @click="openPicker('completePath')"
-                  class="w-full bg-[#121920] border border-[#1e2d3d] text-sm px-3 py-2.5 text-left hover:border-[#e8513a] transition-colors cursor-pointer font-mono truncate"
-                  :class="form.completePath ? 'text-white' : 'text-[#5a7a94]'">
-            {{ form.completePath || '/' }}
-          </button>
-          <p class="text-[10px] text-[#5a7a94] mt-1.5">Dossier de complétion de qBittorrent</p>
-        </div>
-
-        <!-- Dossier Jellyfin -->
-        <div>
-          <div class="flex items-center gap-2 mb-1.5">
-            <label class="text-[10px] text-[#5a7a94] tracking-widest">DOSSIER JELLYFIN</label>
-            <span v-if="isDocker" class="text-[9px] tracking-widest text-[#3a8fe8] border border-[#3a8fe8]/40 px-1.5 py-0.5">DOCKER</span>
-          </div>
-          <button @click="openPicker('mediaPath')"
-                  class="w-full bg-[#121920] border border-[#1e2d3d] text-sm px-3 py-2.5 text-left hover:border-[#e8513a] transition-colors cursor-pointer font-mono truncate"
-                  :class="form.mediaPath ? 'text-white' : 'text-[#5a7a94]'">
-            {{ form.mediaPath || '/' }}
-          </button>
-          <p class="text-[10px] text-[#5a7a94] mt-1.5">Dossier racine de la bibliothèque Fankai dans Jellyfin</p>
-        </div>
-
-        <!-- Mode organisation -->
-        <div>
-          <label class="text-[10px] text-[#5a7a94] tracking-widest block mb-2">MODE</label>
-          <div class="flex gap-2">
-            <button @click="form.organizeMode = 'hardlink'"
-                    class="px-5 py-2 text-xs tracking-widest border transition-colors cursor-pointer"
-                    :class="form.organizeMode === 'hardlink'
-                  ? 'border-[#e8513a] text-[#e8513a] bg-[#e8513a]/5'
-                  : 'border-[#1e2d3d] text-[#5a7a94] hover:border-[#5a7a94]'">
-              HARDLINK
+            <!-- Bouton pack_saison sur le header -->
+            <button
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition"
+                :class="[
+                season.torrent && !downloaded.has(`season-${season.id}`) && !isAlreadyQueued(season.torrent) && season.organized_state !== 'complete'
+                  ? 'bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border-orange-500/20'
+                  : 'bg-white/[0.03] text-zinc-600 border-white/8 cursor-not-allowed'
+              ]"
+                :disabled="!season.torrent || downloading.has(`season-${season.id}`) || downloaded.has(`season-${season.id}`) || isAlreadyQueued(season.torrent) || season.organized_state === 'complete'"
+                @click="season.torrent && download(`season-${season.id}`, season.torrent.torrent_url, season.torrent.magnet)"
+            >
+              <DownloadIcon :spinning="downloading.has(`season-${season.id}`)" :size="12" />
+              {{ season.organized_state === 'complete' ? 'Organisé ✓' : isAlreadyQueued(season.torrent) ? 'Déjà ajouté' : downloaded.has(`season-${season.id}`) ? 'Envoyé ✓' : 'Saison entière' }}
             </button>
-            <button @click="form.organizeMode = 'move'"
-                    class="px-5 py-2 text-xs tracking-widest border transition-colors cursor-pointer"
-                    :class="form.organizeMode === 'move'
-                  ? 'border-[#e8513a] text-[#e8513a] bg-[#e8513a]/5'
-                  : 'border-[#1e2d3d] text-[#5a7a94] hover:border-[#5a7a94]'">
-              MOVE
-            </button>
           </div>
-          <p class="text-[10px] text-[#5a7a94] mt-1.5">
-            <span class="text-white">Hardlink recommandé</span> — le fichier reste dans qBittorrent pour le ratio
-          </p>
-        </div>
+          <!-- Barre progression saison -->
+          <template v-if="torrentProgress(extractHash(season.torrent))">
+            <!-- Badge 100% -->
+            <div v-if="torrentProgress(extractHash(season.torrent))!.progress === 100"
+                 class="px-5 py-2 border-b border-white/5">
+              <span class="inline-flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-full border bg-green-500/10 text-green-400 border-green-500/20">
+                ✓ Téléchargé
+              </span>
+            </div>
+            <!-- Barre en cours -->
+            <div v-else class="px-5 py-2 border-b border-white/5">
+              <div class="flex items-center justify-between text-[10px] text-zinc-500 mb-1">
+                <span>Téléchargement en cours</span>
+                <span>{{ torrentProgress(extractHash(season.torrent))!.progress }}%</span>
+              </div>
+              <div class="h-1 bg-white/10 rounded-full overflow-hidden">
+                <div class="h-full bg-orange-500 rounded-full transition-all duration-500"
+                     :style="{ width: `${torrentProgress(extractHash(season.torrent))!.progress}%` }" />
+              </div>
+            </div>
+          </template>
 
-        <!-- Support NFO -->
-        <div>
-          <label class="text-[10px] text-[#5a7a94] tracking-widest block mb-2">NFO / MÉTADONNÉES</label>
-          <div class="flex items-center gap-3">
-            <button @click="form.nfoSupport = !form.nfoSupport"
-                    class="relative shrink-0 w-11 h-6 rounded-full transition-colors cursor-pointer"
-                    :class="form.nfoSupport ? 'bg-[#e8513a]' : 'bg-[#1e2d3d]'">
-              <span class="absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform duration-200"
-                    :class="form.nfoSupport ? 'translate-x-5' : 'translate-x-0'" />
-            </button>
-            <span class="text-xs text-[#c8d8e8]">Télécharger les NFO et images depuis GitLab</span>
+          <!-- Episodes -->
+          <div v-if="!collapsedSeasons.has(season.id)" class="divide-y divide-white/[0.04]">
+            <div
+                v-for="ep in season.episodes"
+                :key="ep.id"
+                class="px-5 py-3 hover:bg-white/[0.02] transition"
+            >
+              <!-- Ligne principale -->
+              <div class="flex items-center gap-4">
+                <!-- Thumbnail -->
+                <div class="shrink-0 w-24 aspect-video rounded-lg overflow-hidden bg-zinc-800 hidden sm:block">
+                  <img v-if="ep.thumb_image" :src="ep.thumb_image" class="w-full h-full object-cover" loading="lazy" />
+                  <div v-else class="w-full h-full flex items-center justify-center text-zinc-700 text-xs font-mono">
+                    {{ season.season_number === 0 ? 'SP' : `E${ep.episode_number}` }}
+                  </div>
+                </div>
+
+                <!-- Info -->
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2">
+                  <span class="text-xs text-zinc-600 shrink-0 font-mono">
+                    {{ season.season_number === 0 ? 'SP' : `E${String(ep.episode_number).padStart(2,'0')}` }}
+                  </span>
+                    <span class="text-sm font-medium truncate">{{ ep.title || `Épisode ${ep.episode_number}` }}</span>
+                  </div>
+                  <div class="flex items-center gap-3 mt-0.5">
+                    <span v-if="ep.aired" class="text-xs text-zinc-600">{{ formatDate(ep.aired) }}</span>
+                    <span v-if="ep.duration" class="text-xs text-zinc-600">{{ ep.duration }} min</span>
+                  </div>
+                </div>
+
+                <!-- Bouton épisode (type episode uniquement) -->
+                <div class="shrink-0 flex items-center gap-2">
+                  <!-- Badge organisé -->
+                  <span v-if="ep.organized"
+                        class="text-[10px] px-2 py-0.5 rounded-full border bg-green-500/10 text-green-400 border-green-500/20">
+                  ✓ organisé
+                </span>
+
+                  <!-- Badge téléchargé à 100% -->
+                  <span v-if="torrentProgress(extractHash(ep.torrent))?.progress === 100"
+                        class="text-[10px] px-2 py-0.5 rounded-full border bg-green-500/10 text-green-400 border-green-500/20">
+                  ✓ téléchargé
+                </span>
+
+                  <!-- Badge dispo/indispo -->
+                  <span
+                      class="inline-block text-[10px] px-2 py-0.5 rounded-full border"
+                      :class="ep.available
+                    ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                    : 'bg-white/5 text-zinc-600 border-white/8'"
+                  >
+                  {{ ep.available ? 'dispo' : 'indispo' }}
+                </span>
+
+                  <!-- Bouton download -->
+                  <button
+                      class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition"
+                      :class="[
+                    ep.torrent && !downloaded.has(`ep-${ep.id}`) && !isAlreadyQueued(ep.torrent) && !ep.organized
+                      ? 'bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border-orange-500/20'
+                      : 'bg-white/[0.03] text-zinc-600 border-white/8 cursor-not-allowed'
+                  ]"
+                      :disabled="!ep.torrent || downloading.has(`ep-${ep.id}`) || downloaded.has(`ep-${ep.id}`) || isAlreadyQueued(ep.torrent) || ep.organized"
+                      @click="ep.torrent && download(`ep-${ep.id}`, ep.torrent.torrent_url, ep.torrent.magnet)"
+                  >
+                    <DownloadIcon :spinning="downloading.has(`ep-${ep.id}`)" :size="12" />
+                    {{ ep.organized ? '✓' : isAlreadyQueued(ep.torrent) ? '✓' : downloaded.has(`ep-${ep.id}`) ? '✓' : 'Ep.' }}
+                  </button>
+                </div>
+              </div>
+
+              <!-- Barre progression épisode (seulement si < 100%) -->
+              <div v-if="torrentProgress(extractHash(ep.torrent)) && torrentProgress(extractHash(ep.torrent))!.progress < 100"
+                   class="mt-2 sm:pl-28">
+                <div class="flex items-center justify-between text-[10px] text-zinc-500 mb-1">
+                  <span>Téléchargement</span>
+                  <span>{{ torrentProgress(extractHash(ep.torrent))!.progress }}%</span>
+                </div>
+                <div class="h-0.5 bg-white/10 rounded-full overflow-hidden">
+                  <div class="h-full bg-orange-500 rounded-full transition-all duration-500"
+                       :style="{ width: `${torrentProgress(extractHash(ep.torrent))!.progress}%` }" />
+                </div>
+              </div>
+            </div>
           </div>
-          <p class="text-[10px] text-[#5a7a94] mt-1.5">
-            Pour les lecteurs sans agent Fankai (Kodi, Infuse, etc.) — télécharge les métadonnées depuis
-            <span class="text-white">fankai_pack</span> au moment de l'organisation
-          </p>
-        </div>
-
-        <div class="pt-1 flex items-center gap-3">
-          <button type="button" @click="save" :disabled="saving"
-                  class="bg-[#e8513a] text-white px-6 py-2.5 text-xs tracking-widest hover:opacity-85 transition-opacity disabled:opacity-50 cursor-pointer">
-            {{ saving ? '...' : 'SAUVEGARDER' }}
-          </button>
-          <button type="button" @click="scan" :disabled="scanning"
-                  class="border border-[#1e2d3d] text-[#5a7a94] px-6 py-2.5 text-xs tracking-widest hover:border-[#e8513a] hover:text-[#e8513a] transition-colors disabled:opacity-50 cursor-pointer">
-            {{ scanning ? 'SCAN...' : 'ANALYSER BIBLIOTHÈQUE' }}
-          </button>
-          <span v-if="scanResult" class="text-[10px]"
-                :class="scanResult.added > 0 ? 'text-green-400' : 'text-[#5a7a94]'">
-            {{ scanResult.found }} fichiers · {{ scanResult.added }} ajoutés
-          </span>
         </div>
       </div>
-    </div>
+    </template>
 
-    <!-- Compte -->
-    <div class="bg-[#0d1219] border border-[#1e2d3d] p-6">
-      <div class="text-[10px] text-[#e8513a] tracking-widest mb-1">COMPTE</div>
-      <h2 class="text-sm font-bold text-white mb-6">Session</h2>
-      <button type="button" @click="logout"
-              class="border border-[#1e2d3d] text-[#5a7a94] px-6 py-2.5 text-xs tracking-widest hover:border-[#e8513a] hover:text-[#e8513a] transition-colors cursor-pointer">
-        SE DÉCONNECTER
-      </button>
-    </div>
-
-    <!-- Folder Picker -->
-    <FolderPicker
-        v-if="picker.open"
-        :initial-path="picker.currentPath"
-        @select="onPickerSelect"
-        @cancel="picker.open = false"
-    />
-
-    <!-- Modal ajout client -->
-    <div v-if="modal.open" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-4">
-      <div class="bg-[#0d1219] border border-[#1e2d3d] w-full max-w-md p-6">
-        <div class="flex items-center justify-between mb-6">
-          <h3 class="text-sm font-bold text-white">Ajouter un client</h3>
-          <button @click="closeModal" class="text-[#5a7a94] hover:text-white transition-colors cursor-pointer">✕</button>
-        </div>
-
-        <div class="mb-4">
-          <label class="text-[10px] text-[#5a7a94] tracking-widest block mb-1.5">NOM</label>
-          <input v-model="modal.name" placeholder="Mon qBittorrent"
-                 class="w-full bg-[#121920] border border-[#1e2d3d] text-white px-3 py-2.5 text-sm outline-none focus:border-[#e8513a] transition-colors"/>
-        </div>
-
-        <div class="mb-4">
-          <label class="text-[10px] text-[#5a7a94] tracking-widest block mb-1.5">TYPE</label>
-          <select v-model="modal.type" @change="onTypeChange"
-                  class="w-full bg-[#121920] border border-[#1e2d3d] text-white px-3 py-2.5 text-sm outline-none focus:border-[#e8513a] transition-colors cursor-pointer">
-            <option value="">Choisir un type...</option>
-            <option v-for="def in availableClients" :key="def.id" :value="def.id">{{ def.label }}</option>
-          </select>
-        </div>
-
-        <div v-if="currentDefinition" class="flex flex-col gap-3 mb-6">
-          <div v-for="field in currentDefinition.fields" :key="field.key">
-            <label class="text-[10px] text-[#5a7a94] tracking-widest block mb-1.5">{{ field.label.toUpperCase() }}</label>
-            <input
-                v-model="modal.config[field.key]"
-                :type="field.type === 'password' ? 'password' : 'text'"
-                :placeholder="field.placeholder ?? ''"
-                class="w-full bg-[#121920] border border-[#1e2d3d] text-white px-3 py-2.5 text-sm outline-none focus:border-[#e8513a] transition-colors"/>
-          </div>
-        </div>
-
-        <div class="flex gap-3">
-          <button @click="saveClient" :disabled="modal.saving || !modal.tested"
-                  class="bg-[#e8513a] text-white px-6 py-2.5 text-xs tracking-widest hover:opacity-85 transition-opacity disabled:opacity-50 cursor-pointer">
-            {{ modal.saving ? '...' : 'ENREGISTRER' }}
-          </button>
-          <button @click="testNewClient" :disabled="modal.testing || !modal.type"
-                  class="border border-[#1e2d3d] text-[#5a7a94] px-6 py-2.5 text-xs tracking-widest hover:border-[#3a8fe8] hover:text-[#3a8fe8] transition-colors disabled:opacity-50 cursor-pointer">
-            {{ modal.testing ? '...' : modal.tested ? 'TESTÉ ✓' : 'TESTER' }}
-          </button>
-        </div>
-        <p v-if="!modal.tested && modal.type" class="text-[10px] text-[#5a7a94] mt-3">
-          Testez la connexion avant d'enregistrer
-        </p>
+    <!-- Toast -->
+    <Transition name="toast">
+      <div
+          v-if="toast"
+          class="fixed bottom-6 right-6 flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl text-sm font-medium z-50"
+          :class="toast.type === 'success'
+          ? 'bg-zinc-800 border border-green-500/30 text-green-400'
+          : 'bg-zinc-800 border border-red-500/30 text-red-400'"
+      >
+        <svg v-if="toast.type === 'success'" width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+          <path d="M20 6 9 17l-5-5"/>
+        </svg>
+        <svg v-else width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+          <circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>
+        </svg>
+        {{ toast.message }}
       </div>
-    </div>
+    </Transition>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
-import { useToast } from '@/composables/useToast'
-import FolderPicker from '@/components/FolderPicker.vue'
+import { ref, computed, onMounted, onUnmounted, defineComponent, h } from 'vue'
+import { useRoute } from 'vue-router'
+import { useSeriesStore } from '@/stores/series'
+import type { Season } from '@/stores/series'
 
-const router = useRouter()
-const auth   = useAuthStore()
-const { add: toast } = useToast()
-
-// ── State ──────────────────────────────────────────────────────
-const form = ref({
-  mediaPath   : '',
-  completePath: '',
-  organizeMode: 'hardlink' as 'hardlink' | 'move',
-  nfoSupport  : false,
-})
-
-const saving    = ref(false)
-const updating  = ref(false)
-const scanning  = ref(false)
-const scanResult = ref<{ found: number; added: number } | null>(null)
-
-// ── Folder picker ──────────────────────────────────────────────
-const picker = ref<{ open: boolean; field: 'completePath' | 'mediaPath'; currentPath: string }>({
-  open: false, field: 'completePath', currentPath: '/'
-})
-
-function openPicker(field: 'completePath' | 'mediaPath') {
-  picker.value = {
-    open       : true,
-    field,
-    currentPath: (form.value as any)[field] || '/',
+// ── Composant icône download ──────────────────────────────────
+const DownloadIcon = defineComponent({
+  props: { spinning: Boolean, size: { type: Number, default: 14 } },
+  setup(props) {
+    return () => props.spinning
+        ? h('div', { class: `w-${props.size === 12 ? '3' : '3.5'} h-${props.size === 12 ? '3' : '3.5'} border border-current/30 border-t-current rounded-full animate-spin` })
+        : h('svg', { width: props.size, height: props.size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+          h('path', { d: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3' })
+        ])
   }
-}
-
-function onPickerSelect(path: string) {
-  (form.value as any)[picker.value.field] = path
-  picker.value.open = false
-}
-const isDocker  = ref(false)
-const torrentsStatus = ref({ exists: false, count: 0, empty: true })
-
-const clients          = ref<any[]>([])
-const availableClients = ref<any[]>([])
-const healthStatus     = ref<Record<string, boolean | null>>({})
-
-const modal = ref({
-  open   : false,
-  name   : '',
-  type   : '',
-  config : {} as Record<string, string>,
-  testing: false,
-  saving : false,
-  tested : false,
 })
 
-// ── Computed ───────────────────────────────────────────────────
-const currentDefinition = computed(() =>
-    availableClients.value.find(d => d.id === modal.value.type) ?? null
-)
+// ── Setup ─────────────────────────────────────────────────────
+const route = useRoute()
+const store = useSeriesStore()
 
-function clientLabel(type: string): string {
-  return availableClients.value.find(d => d.id === type)?.label ?? type
-}
+const collapsedSeasons = ref<Set<number>>(new Set())
+const downloading      = ref<Set<string>>(new Set())
+const downloaded       = ref<Set<string>>(new Set())  // envoyés avec succès → bloqués
+const toast            = ref<{ type: 'success' | 'error'; message: string } | null>(null)
 
-// ── Init ───────────────────────────────────────────────────────
-onMounted(async () => {
-  const [settingsRes, statusRes, clientsRes, availRes, systemRes] = await Promise.all([
-    fetch('/api/settings',                  { credentials: 'include' }),
-    fetch('/api/torrents/status',           { credentials: 'include' }),
-    fetch('/api/torrent-clients',           { credentials: 'include' }),
-    fetch('/api/torrent-clients/available', { credentials: 'include' }),
-    fetch('/api/system',                    { credentials: 'include' }),
-  ])
-  if (settingsRes.ok) Object.assign(form.value, await settingsRes.json())
-  if (statusRes.ok)   torrentsStatus.value = await statusRes.json()
-  if (clientsRes.ok)  clients.value        = await clientsRes.json()
-  if (availRes.ok)    availableClients.value = await availRes.json()
-  if (systemRes.ok)   isDocker.value = (await systemRes.json()).isDocker
+// ── Progression downloads ──────────────────────────────────────
+interface ActiveTorrent { hash: string; progress: number; state: string; name: string }
+const activeTorrents = ref<ActiveTorrent[]>([])
+let pollTimer: ReturnType<typeof setInterval> | null = null
 
-  for (const c of clients.value) refreshHealth(c.uuid)
-})
-
-// ── Healthcheck ────────────────────────────────────────────────
-async function refreshHealth(uuid: string) {
-  healthStatus.value[uuid] = null
+async function fetchActiveDownloads() {
   try {
-    const res = await fetch(`/api/torrent-clients/${uuid}/healthcheck`, { credentials: 'include' })
-    healthStatus.value[uuid] = res.ok ? (await res.json()).online : false
-  } catch {
-    healthStatus.value[uuid] = false
-  }
+    const res = await fetch('/api/downloads', { credentials: 'include' })
+    if (!res.ok) return
+    const list: any[] = await res.json()
+    activeTorrents.value = list.map(t => ({
+      hash    : t.hash,
+      progress: t.progress ?? 0,
+      state   : t.state,
+      name    : t.name,
+    }))
+  } catch {}
 }
 
-// ── Test / delete clients ──────────────────────────────────────
-async function testClient(uuid: string) {
-  const res = await fetch(`/api/torrent-clients/${uuid}/test`, { method: 'POST', credentials: 'include' })
-  const { ok, message } = await res.json()
-  toast(ok ? 'Connexion réussie ✓' : (message ?? 'Connexion échouée'), ok ? 'success' : 'error')
-  healthStatus.value[uuid] = ok
+// Cherche si un torrent actif correspond à un hash donné
+function torrentProgress(hash: string | null | undefined): ActiveTorrent | null {
+  if (!hash) return null
+  return activeTorrents.value.find(t => t.hash.toLowerCase() === hash.toLowerCase()) ?? null
 }
 
-async function deleteClient(uuid: string) {
-  const res = await fetch(`/api/torrent-clients/${uuid}`, { method: 'DELETE', credentials: 'include' })
-  if (res.ok) {
-    clients.value = clients.value.filter(c => c.uuid !== uuid)
-    delete healthStatus.value[uuid]
-    toast('Client supprimé', 'success')
+// Hash d'un torrent de saison ou d'épisode (extrait depuis magnet ou url)
+function extractHash(torrent: { magnet?: string | null; torrent_url?: string | null } | null | undefined): string | null {
+  if (!torrent) return null
+  const magnet = torrent.magnet ?? ''
+  const m = magnet.match(/xt=urn:btih:([a-fA-F0-9]{40})/i)
+  return m ? m[1].toLowerCase() : null
+}
+
+// ── Data ───────────────────────────────────────────────────────
+const data = computed(() => store.currentSerie)
+
+function seasonAvailableCount(season: Season) {
+  return season.episodes.filter(e => e.available).length
+}
+
+function toggleSeason(id: number) {
+  if (collapsedSeasons.value.has(id)) collapsedSeasons.value.delete(id)
+  else collapsedSeasons.value.add(id)
+}
+
+function formatDate(d: string) {
+  if (!d) return ''
+  return new Date(d).toLocaleDateString('fr-FR', { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+function showToast(type: 'success' | 'error', message: string) {
+  toast.value = { type, message }
+  setTimeout(() => { toast.value = null }, 3500)
+}
+
+// Vérifie si un torrent est déjà en cours ou terminé dans qBittorrent
+function isAlreadyQueued(torrent: { magnet?: string | null; torrent_url?: string | null } | null | undefined): boolean {
+  const hash = extractHash(torrent)
+  if (!hash) return false
+  return activeTorrents.value.some(t => t.hash.toLowerCase() === hash.toLowerCase())
+}
+
+async function download(key: string, torrent_url: string | null, magnet: string | null) {
+  if (downloading.value.has(key) || downloaded.value.has(key)) return
+  downloading.value = new Set([...downloading.value, key])
+  const result = await store.download(torrent_url, magnet)
+  downloading.value = new Set([...downloading.value].filter(k => k !== key))
+  if (result.success) {
+    downloaded.value = new Set([...downloaded.value, key])
+    showToast('success', 'Téléchargement lancé')
+    fetchActiveDownloads()
   } else {
-    toast('Erreur lors de la suppression', 'error')
+    showToast('error', result.error ?? 'Erreur inconnue')
   }
 }
 
-// ── Modal ──────────────────────────────────────────────────────
-function openAddModal() {
-  modal.value = { open: true, name: '', type: '', config: {}, testing: false, saving: false, tested: false }
+function load() {
+  store.fetchSerieDetail(Number(route.params.id))
 }
 
-function closeModal() {
-  modal.value.open = false
-}
+onMounted(() => {
+  load()
+  fetchActiveDownloads()
+  pollTimer = setInterval(fetchActiveDownloads, 5000)
+})
 
-function onTypeChange() {
-  modal.value.config = {}
-  modal.value.tested = false
-  const def = currentDefinition.value
-  if (def) {
-    for (const field of def.fields) {
-      if (field.default !== undefined) modal.value.config[field.key] = String(field.default)
-    }
-  }
-}
-
-async function testNewClient() {
-  modal.value.testing = true
-  modal.value.tested  = false
-  try {
-    const res = await fetch('/api/torrent-clients/test-config', {
-      method : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ type: modal.value.type, config: modal.value.config })
-    })
-    const { ok, message } = await res.json()
-    modal.value.tested = ok
-    toast(ok ? 'Connexion réussie ✓' : (message ?? 'Connexion échouée'), ok ? 'success' : 'error')
-  } catch {
-    toast('Impossible de contacter le serveur', 'error')
-  } finally {
-    modal.value.testing = false
-  }
-}
-
-async function saveClient() {
-  if (!modal.value.tested) return
-  modal.value.saving = true
-  try {
-    const res = await fetch('/api/torrent-clients', {
-      method : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({
-        name  : modal.value.name || clientLabel(modal.value.type),
-        type  : modal.value.type,
-        config: modal.value.config
-      })
-    })
-    if (res.ok) {
-      const client = await res.json()
-      clients.value.push(client)
-      refreshHealth(client.uuid)
-      closeModal()
-      toast('Client enregistré ✓', 'success')
-    } else {
-      const { error } = await res.json()
-      toast(error ?? "Erreur lors de l'enregistrement", 'error')
-    }
-  } finally {
-    modal.value.saving = false
-  }
-}
-
-// ── Données torrents ───────────────────────────────────────────
-async function update() {
-  updating.value = true
-  try {
-    const res = await fetch('/api/update', { method: 'POST', credentials: 'include' })
-    if (res.ok) {
-      const { count } = await res.json()
-      torrentsStatus.value = { exists: true, count, empty: count === 0 }
-      toast(`${count} torrents téléchargés ✓`, 'success')
-    } else {
-      const { error } = await res.json()
-      toast(error ?? 'Erreur lors de la mise à jour', 'error')
-    }
-  } catch {
-    toast('Impossible de contacter le serveur', 'error')
-  } finally {
-    updating.value = false
-  }
-}
-
-// ── Scan bibliothèque ──────────────────────────────────────────
-async function scan() {
-  scanning.value  = true
-  scanResult.value = null
-  try {
-    const res = await fetch('/api/scan', { method: 'POST', credentials: 'include' })
-    if (res.ok) {
-      const data = await res.json()
-      scanResult.value = { found: data.found, added: data.added }
-      toast(
-          data.added > 0
-              ? `${data.found} fichiers scannés — ${data.added} ajoutés`
-              : `${data.found} fichiers scannés — rien de nouveau`,
-          'success'
-      )
-    } else {
-      toast('Erreur lors du scan', 'error')
-    }
-  } catch {
-    toast('Impossible de contacter le serveur', 'error')
-  } finally {
-    scanning.value = false
-  }
-}
-
-// ── Sauvegarder settings ───────────────────────────────────────
-async function save() {
-  saving.value = true
-  try {
-    const res = await fetch('/api/settings', {
-      method : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify(form.value)
-    })
-    if (res.ok) toast('Configuration sauvegardée', 'success')
-    else toast('Erreur lors de la sauvegarde', 'error')
-  } finally {
-    saving.value = false
-  }
-}
-
-async function logout() {
-  await auth.logout()
-  await router.push('/auth')
-}
+onUnmounted(() => {
+  if (pollTimer) clearInterval(pollTimer)
+})
 </script>
+
+<style scoped>
+.toast-enter-active, .toast-leave-active { transition: all 0.25s ease; }
+.toast-enter-from, .toast-leave-to { opacity: 0; transform: translateY(6px); }
+</style>
