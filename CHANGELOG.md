@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.2](https://github.com/Masutayunikon/FanKarr/compare/v1.7.1...v1.7.2) (2026-03-12)
+
+
+### Bug Fixes
+
+* docker is able to change directory ([af08f7d](https://github.com/Masutayunikon/FanKarr/commit/af08f7d9d4fb2e23c5feac6d33b2ef495f9d91b2))
+
 ## [1.7.1](https://github.com/Masutayunikon/FanKarr/compare/v1.7.0...v1.7.1) (2026-03-12)
 
 
