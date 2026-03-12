@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.0](https://github.com/Masutayunikon/FanKarr/compare/v1.7.3...v1.8.0) (2026-03-12)
+
+
+### Features
+
+* cache images ([da460de](https://github.com/Masutayunikon/FanKarr/commit/da460de60c4eec6851ea58ce0ae646a1208f6018))
+
 ## [1.7.3](https://github.com/Masutayunikon/FanKarr/compare/v1.7.2...v1.7.3) (2026-03-12)
 
 
