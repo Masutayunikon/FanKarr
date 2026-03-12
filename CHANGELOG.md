@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.3](https://github.com/Masutayunikon/FanKarr/compare/v1.7.2...v1.7.3) (2026-03-12)
+
+
+### Bug Fixes
+
+* CatalogView.vue badge deleted ([d897192](https://github.com/Masutayunikon/FanKarr/commit/d8971920462efd8d1d99eb867016c96713dfef58))
+* empty docker-compose.yml ([303dfd8](https://github.com/Masutayunikon/FanKarr/commit/303dfd85b5d033e2b247fd064ae1ae612fdb49e1))
+
 ## [1.7.2](https://github.com/Masutayunikon/FanKarr/compare/v1.7.1...v1.7.2) (2026-03-12)
 
 
