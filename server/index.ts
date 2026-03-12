@@ -8,7 +8,7 @@ import {
     registerDriver, getDriver, getAvailableClients,
     listClients, addClient, removeClient, getClient,
     sanitizeClient, dispatchDownload, dispatchList
-} from './torrent-clients'
+} from './torrent-clients/index.js'
 import qbittorrentDriver from './torrent-clients/qbittorrent.js'
 import { organizeTorrent, autoOrganizeAll, scanMediaPath } from './organize.js'
 import { logger, readLogs, clearLogs, logsFileSize } from './logger.js'
