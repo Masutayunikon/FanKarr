@@ -139,18 +139,25 @@ async function downloadGitlabFolder(serieTitle: string, destRoot: string): Promi
 
     log(`[nfo] Récupération dossier GitLab: ${gitlabTitle}`)
 
-    // Lister récursivement tous les fichiers du dossier
-    let files: any[]
+    // Lister récursivement tous les fichiers du dossier (pagination GitLab)
+    let files: any[] = []
     try {
-        files = await fetchJson(
-            `${GITLAB_API}/tree?path=${encodeURIComponent(folderPath)}&recursive=true&per_page=100&ref=main`
-        )
+        let page = 1
+        while (true) {
+            const batch = await fetchJson(
+                `${GITLAB_API}/tree?path=${encodeURIComponent(folderPath)}&recursive=true&per_page=100&page=${page}&ref=main`
+            )
+            if (!Array.isArray(batch) || batch.length === 0) break
+            files.push(...batch)
+            if (batch.length < 100) break
+            page++
+        }
     } catch (err) {
         warn(`[nfo] Dossier GitLab introuvable pour "${gitlabTitle}": ${err instanceof Error ? err.message : err}`)
         return
     }
 
-    if (!Array.isArray(files) || files.length === 0) {
+    if (files.length === 0) {
         warn(`[nfo] Aucun fichier trouvé sur GitLab pour "${gitlabTitle}"`)
         return
     }
@@ -291,15 +298,16 @@ async function organizeTorrent(hash: string, name: string, savePath: string) {
     const epByNum = new Map<number, number>()  // ep_number → season_number
     for (const ep of torrent.resolved_episodes ?? []) {
         if (ep.episode_number !== undefined && ep.season_number !== undefined)
-            epByNum.set(ep.episode_number, ep.season_number)
+            epByNum.set(Number(ep.episode_number), ep.season_number)
     }
 
     for (const tf of torrentFiles) {
-        const sn: number | null = tf.season_number ?? null
+        const sn: number | null = tf.season_number != null ? Number(tf.season_number) : null
+        const tfNum = tf.num !== undefined ? Number(tf.num) : undefined
         if (sn !== null) {
             filenameSeasonMap.set(tf.filename, sn)
-        } else if (tf.num !== undefined && epByNum.has(tf.num)) {
-            filenameSeasonMap.set(tf.filename, epByNum.get(tf.num)!)
+        } else if (tfNum !== undefined && epByNum.has(tfNum)) {
+            filenameSeasonMap.set(tf.filename, epByNum.get(tfNum)!)
         } else if (torrent.season_number !== undefined) {
             filenameSeasonMap.set(tf.filename, torrent.season_number)
         }
