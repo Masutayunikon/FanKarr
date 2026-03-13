@@ -42,8 +42,8 @@ app.get('/api/settings', requireAuth, (_req, res) => {
     res.json(readSettings())
 })
 app.post('/api/settings', requireAuth, (req, res) => {
-    const { mediaPath, completePath, organizeMode, category } = req.body
-    res.json(writeSettings({ mediaPath, completePath, organizeMode, category }))
+    const { mediaPath, completePath, organizeMode, category, nfoSupport } = req.body
+    res.json(writeSettings({ mediaPath, completePath, organizeMode, category, nfoSupport }))
 })
 
 // ── Torrent clients ────────────────────────────────────────────
@@ -495,7 +495,23 @@ if (fs.existsSync(PUBLIC_PATH)) {
 }
 
 // ── Start ──────────────────────────────────────────────────────
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
+    // Télécharger torrent_final.json si absent
+    if (!fs.existsSync(TORRENTS_PATH)) {
+        try {
+            console.log('[fankarr] torrent_final.json absent → téléchargement...')
+            const response = await fetch(GITHUB_RAW_URL)
+            if (!response.ok) throw new Error(`GitHub a répondu ${response.status}`)
+            const data = await response.json() as unknown[]
+            if (!Array.isArray(data)) throw new Error('Format invalide')
+            fs.mkdirSync(path.dirname(TORRENTS_PATH), { recursive: true })
+            fs.writeFileSync(TORRENTS_PATH, JSON.stringify(data, null, 2), 'utf-8')
+            console.log(`[fankarr] ${data.length} torrents téléchargés`)
+        } catch (err) {
+            console.warn(`[fankarr] ⚠ Téléchargement échoué: ${err instanceof Error ? err.message : err}`)
+        }
+    }
+
     try {
         const data  = JSON.parse(fs.readFileSync(TORRENTS_PATH, 'utf-8'))
         const count = Array.isArray(data) ? data.length : 0
