@@ -84,13 +84,18 @@ jobs:
           name: frontend-dist
           path: public/
 
-      - name: Build binary
+      - name: Build binary (Unix)
+        if: matrix.target != 'windows-x64'
         run: |
           mkdir -p binaries
-          bun build server/index.ts \
-            --compile \
-            --target ${{ matrix.bun-target }} \
-            --outfile ${{ matrix.binary }}
+          bun build server/index.ts --compile --target ${{ matrix.bun-target }} --outfile ${{ matrix.binary }}
+
+      - name: Build binary (Windows)
+        if: matrix.target == 'windows-x64'
+        run: |
+          New-Item -ItemType Directory -Force -Path binaries
+          bun build server/index.ts --compile --target ${{ matrix.bun-target }} --outfile ${{ matrix.binary }}
+        shell: pwsh
 
       - name: Package archive (Windows)
         if: matrix.target == 'windows-x64'
