@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.2](https://github.com/Masutayunikon/FanKarr/compare/v1.9.1...v1.9.2) (2026-03-13)
+
+
+### Bug Fixes
+
+* workflow directory ([baebd8f](https://github.com/Masutayunikon/FanKarr/commit/baebd8fae146db70ee1cce0c876d2d3bc0f9bf4e))
+
 ## [1.9.1](https://github.com/Masutayunikon/FanKarr/compare/v1.9.0...v1.9.1) (2026-03-13)
 
 
