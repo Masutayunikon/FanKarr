@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.1](https://github.com/Masutayunikon/FanKarr/compare/v1.10.0...v1.10.1) (2026-03-13)
+
+
+### Bug Fixes
+
+* add target node ([6c629e0](https://github.com/Masutayunikon/FanKarr/commit/6c629e0f6b4d38453cfb22fd315e02d9e8750c45))
+
 ## [1.10.0](https://github.com/Masutayunikon/FanKarr/compare/v1.9.5...v1.10.0) (2026-03-13)
 
 
