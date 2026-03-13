@@ -38,6 +38,8 @@ jobs:
     name: Build ${{ matrix.target }}
     needs: build-frontend
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     strategy:
       matrix:
         include:
