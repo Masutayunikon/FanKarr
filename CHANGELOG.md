@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.0](https://github.com/Masutayunikon/FanKarr/compare/v1.8.2...v1.9.0) (2026-03-13)
+
+
+### Features
+
+* add windows / linux / macos binaries on build ([f17a73b](https://github.com/Masutayunikon/FanKarr/commit/f17a73b9591fb49a75bd5fcdadf1970585877dab))
+
 ## [1.8.2](https://github.com/Masutayunikon/FanKarr/compare/v1.8.1...v1.8.2) (2026-03-13)
 
 
