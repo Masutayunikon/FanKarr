@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.1](https://github.com/Masutayunikon/FanKarr/compare/v1.8.0...v1.8.1) (2026-03-13)
+
+
+### Bug Fixes
+
+* nfo settings and add json file when not existing ([0b6bfa6](https://github.com/Masutayunikon/FanKarr/commit/0b6bfa6a81d99353be877ed6d99687ad3d55adbc))
+
 ## [1.8.0](https://github.com/Masutayunikon/FanKarr/compare/v1.7.3...v1.8.0) (2026-03-12)
 
 
