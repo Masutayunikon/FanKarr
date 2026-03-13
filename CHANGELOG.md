@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.3](https://github.com/Masutayunikon/FanKarr/compare/v1.9.2...v1.9.3) (2026-03-13)
+
+
+### Bug Fixes
+
+* use bcryptjs for compilation ([6a6981e](https://github.com/Masutayunikon/FanKarr/commit/6a6981e10a3a9019f49982d7680e562872ee95a5))
+
 ## [1.9.2](https://github.com/Masutayunikon/FanKarr/compare/v1.9.1...v1.9.2) (2026-03-13)
 
 
