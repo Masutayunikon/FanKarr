@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.0](https://github.com/Masutayunikon/FanKarr/compare/v1.10.3...v1.11.0) (2026-03-13)
+
+
+### Features
+
+* fix worker for multiple series in integral (one piece fix ?) ([2c773f8](https://github.com/Masutayunikon/FanKarr/commit/2c773f83ffd76d82c77a50a9c5729f20ea22b450))
+
 ## [1.10.3](https://github.com/Masutayunikon/FanKarr/compare/v1.10.2...v1.10.3) (2026-03-13)
 
 
