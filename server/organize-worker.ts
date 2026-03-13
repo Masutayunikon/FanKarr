@@ -218,8 +218,35 @@ async function organizeTorrent(hash: string, name: string, savePath: string) {
 
     // ── Téléchargement NFO/images depuis GitLab ───────────────
     if (nfoSupport) {
-        const serieDestRoot = path.join(mediaPath, serieTitle)
-        await downloadGitlabFolder(serieTitle, serieDestRoot)
+        // Collecter tous les titres de séries distincts depuis resolved_episodes
+        // (un pack_integrale peut mélanger plusieurs séries, ex: One Piece Yabai + Kaï)
+        const serieTitlesMap = new Map<number, string>()
+
+        // Titre principal du torrent
+        serieTitlesMap.set(torrent.serie_id ?? 0, serieTitle)
+
+        // Titres alternatifs depuis resolved_episodes
+        // resolved_episodes n'a pas toujours serie_title → on cherche dans torrent_final.json
+        const allTorrents: any[] = (() => {
+            try { return JSON.parse(fs.readFileSync(TORRENTS_PATH, 'utf-8')) } catch { return [] }
+        })()
+        const serieIdToTitle = new Map<number, string>()
+        for (const t of allTorrents) {
+            if (t.serie_id && t.serie_title) serieIdToTitle.set(t.serie_id, t.serie_title)
+        }
+
+        for (const ep of torrent.resolved_episodes ?? []) {
+            if (ep.serie_id && !serieTitlesMap.has(ep.serie_id)) {
+                const title = ep.serie_title ?? serieIdToTitle.get(ep.serie_id)
+                if (title) serieTitlesMap.set(ep.serie_id, title)
+            }
+        }
+
+        // Télécharger NFO pour chaque série distincte
+        for (const title of serieTitlesMap.values()) {
+            const serieDestRoot = path.join(mediaPath, title)
+            await downloadGitlabFolder(title, serieDestRoot)
+        }
     }
 
     // ── Cas fichier unique ────────────────────────────────────
