@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import bcrypt from 'bcrypt'
+import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import type { Request, Response, NextFunction } from 'express'
 import { JWT_SECRET } from './secret.js'
