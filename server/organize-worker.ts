@@ -249,10 +249,26 @@ async function organizeTorrent(hash: string, name: string, savePath: string) {
     }
 
     // ── Map filename → season ─────────────────────────────────
+    // Priorité : season_number dans torrent_files (packs multi-saisons)
+    // Fallback  : resolved_episodes matchés par episode_number (torrents individuels)
     const filenameSeasonMap = new Map<string, number>()
+
+    // Index resolved_episodes par episode_number pour lookup rapide
+    const epByNum = new Map<number, number>()  // ep_number → season_number
     for (const ep of torrent.resolved_episodes ?? []) {
-        if (ep.filename && ep.season_number !== undefined)
-            filenameSeasonMap.set(ep.filename, ep.season_number)
+        if (ep.episode_number !== undefined && ep.season_number !== undefined)
+            epByNum.set(ep.episode_number, ep.season_number)
+    }
+
+    for (const tf of torrentFiles) {
+        const sn: number | null = tf.season_number ?? null
+        if (sn !== null) {
+            filenameSeasonMap.set(tf.filename, sn)
+        } else if (tf.num !== undefined && epByNum.has(tf.num)) {
+            filenameSeasonMap.set(tf.filename, epByNum.get(tf.num)!)
+        } else if (torrent.season_number !== undefined) {
+            filenameSeasonMap.set(tf.filename, torrent.season_number)
+        }
     }
 
     result.total = torrentFiles.length
