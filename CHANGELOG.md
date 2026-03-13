@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.5](https://github.com/Masutayunikon/FanKarr/compare/v1.9.4...v1.9.5) (2026-03-13)
+
+
+### Bug Fixes
+
+* worker outside the exe ([c2ab58e](https://github.com/Masutayunikon/FanKarr/commit/c2ab58e7b2c34aae09b50dbdfde3277da4c276ff))
+
 ## [1.9.4](https://github.com/Masutayunikon/FanKarr/compare/v1.9.3...v1.9.4) (2026-03-13)
 
 
