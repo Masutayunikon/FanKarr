@@ -8,16 +8,15 @@
     "dev:server": "tsx watch server/index.ts",
     "dev:client": "vite",
     "build": "vite build && tsc -p tsconfig.server.json",
-    "build:bun:linux": "bun build server/index.ts --compile --target bun-linux-x64    --outfile binaries/fankarr-linux-x64",
-    "build:bun:windows": "bun build server/index.ts --compile --target bun-windows-x64  --outfile binaries/fankarr-windows-x64.exe",
-    "build:bun:macos": "bun build server/index.ts --compile --target bun-darwin-arm64 --outfile binaries/fankarr-macos",
+    "build:bun:linux": "bun build server/index.ts --compile --target bun-linux-x64    --outfile binaries/fankarr-linux-x64 && bun build server/organize-worker.ts --target bun-linux-x64    --outfile binaries/organize-worker.js",
+    "build:bun:windows": "bun build server/index.ts --compile --target bun-windows-x64  --outfile binaries/fankarr-windows-x64.exe && bun build server/organize-worker.ts --target bun-windows-x64  --outfile binaries/organize-worker.js",
+    "build:bun:macos": "bun build server/index.ts --compile --target bun-darwin-arm64 --outfile binaries/fankarr-macos && bun build server/organize-worker.ts --target bun-darwin-arm64 --outfile binaries/organize-worker.js",
     "build:bun:all": "pnpm build:bun:linux && pnpm build:bun:windows && pnpm build:bun:macos",
     "start": "node dist/server/index.js",
     "preview": "vite preview"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.2.1",
-    "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
@@ -25,10 +24,10 @@
     "pinia": "^3.0.4",
     "tailwindcss": "^4.2.1",
     "vue": "^3.5.25",
-    "vue-router": "^5.0.3"
+    "vue-router": "^5.0.3",
+    "bcryptjs": "^3.0.3"
   },
   "devDependencies": {
-    "@types/bcrypt": "^5.0.2",
     "@types/cookie-parser": "^1.4.8",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.9",
@@ -39,6 +38,7 @@
     "tsx": "^4.21.0",
     "typescript": "~5.9.3",
     "vite": "^7.3.1",
-    "vue-tsc": "^3.1.5"
+    "vue-tsc": "^3.1.5",
+    "@types/bcrypt": "^5.0.2"
   }
 }

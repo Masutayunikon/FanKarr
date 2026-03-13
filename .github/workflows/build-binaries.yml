@@ -97,16 +97,19 @@ jobs:
           bun build server/index.ts --compile --target ${{ matrix.bun-target }} --outfile ${{ matrix.binary }}
         shell: pwsh
 
+      - name: Build worker
+        run: bun build server/organize-worker.ts --target ${{ matrix.bun-target }} --outfile organize-worker.js
+
       - name: Package archive (Windows)
         if: matrix.target == 'windows-x64'
-        run: Compress-Archive -Path ${{ matrix.binary }}, public -DestinationPath ${{ matrix.archive }}
+        run: Compress-Archive -Path ${{ matrix.binary }}, organize-worker.js, public -DestinationPath ${{ matrix.archive }}
         shell: pwsh
 
       - name: Package archive (Unix)
         if: matrix.target != 'windows-x64'
         run: |
           chmod +x ${{ matrix.binary }}
-          zip -r ${{ matrix.archive }} ${{ matrix.binary }} public/
+          zip -r ${{ matrix.archive }} ${{ matrix.binary }} organize-worker.js public/
 
       - name: Upload archive to Release
         uses: softprops/action-gh-release@v2

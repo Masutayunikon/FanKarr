@@ -13,6 +13,18 @@ import { logger } from './logger.js'
 // Un seul worker à la fois
 let workerRunning = false
 
+// Résolution du chemin du worker
+// En binaire Bun compilé : le worker est à côté de l'exécutable
+// En Docker/dev : à côté du fichier courant
+function resolveWorkerPath(): string {
+    const _isBunBinary = typeof (globalThis as any).Bun !== 'undefined'
+        && path.dirname((process as any).execPath) !== process.cwd()
+    if (_isBunBinary) {
+        return path.join(path.dirname((process as any).execPath), 'organize-worker.js')
+    }
+    return path.join(path.dirname(new URL(import.meta.url).pathname), 'organize-worker.js')
+}
+
 export interface OrganizeResult {
     total   : number
     skipped : number
@@ -112,7 +124,7 @@ export async function autoOrganizeAll(
     onResult?: (r: { hash: string; name: string; done: number; skipped: number; errors: number; errorFiles: { file: string; error: string }[] }) => void
 ): Promise<void> {
     if (workerRunning) {
-        logger.debug('organize', 'Worker déjà en cours, skip')
+        console.log('[organize] Worker déjà en cours, skip')
         return
     }
 
@@ -120,7 +132,7 @@ export async function autoOrganizeAll(
     try {
         torrents = await listFn()
     } catch (err) {
-        logger.error('organize', "Impossible de récupérer la liste des torrents: " + (err instanceof Error ? err.message : String(err)))
+        console.error('[organize] Impossible de récupérer la liste des torrents:', err)
         return
     }
 
@@ -129,18 +141,20 @@ export async function autoOrganizeAll(
     const seedingCount = torrents.filter(t => t.state === 'seeding').length
     if (seedingCount === 0) return
 
-    logger.info('organize', `Lancement worker (${seedingCount} torrents en seeding)`)
+    console.log(`[organize] Lancement worker (${seedingCount} torrents en seeding)`)
     workerRunning = true
 
-    const workerPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'organize-worker.js')
+    const workerPath = resolveWorkerPath()
 
     const worker = new Worker(workerPath)
 
     worker.on('message', (msg: any) => {
         if (msg.type === 'log') {
-            logger[msg.level as 'debug'|'info'|'warn'|'error']('organize', msg.msg)
+            if (msg.level === 'error') console.error(msg.msg)
+            else if (msg.level === 'warn') console.warn(msg.msg)
+            else console.log(msg.msg)
         } else if (msg.type === 'result') {
-            logger.info('organize', `${msg.name} → ${msg.done} OK, ${msg.skipped} skippés, ${msg.errors.length} erreurs`)
+            console.log(`[organize] ${msg.name} → ${msg.done} OK, ${msg.skipped} skippés, ${msg.errors.length} erreurs`)
             onResult?.({
                 hash       : msg.hash,
                 name       : msg.name,
@@ -150,19 +164,19 @@ export async function autoOrganizeAll(
                 errorFiles : msg.errors,
             })
         } else if (msg.type === 'done') {
-            logger.debug('organize', 'Worker terminé')
+            console.log('[organize] Worker terminé')
             workerRunning = false
             worker.terminate()
         }
     })
 
     worker.on('error', (err) => {
-        logger.error('organize', `Worker erreur: ${err instanceof Error ? err.message : err}`)
+        console.error('[organize] Worker erreur:', err)
         workerRunning = false
     })
 
     worker.on('exit', (code) => {
-        if (code !== 0) logger.error('organize', `Worker exit code ${code}`)
+        if (code !== 0) console.error(`[organize] Worker exit code ${code}`)
         workerRunning = false
     })
 
@@ -180,7 +194,7 @@ export async function organizeTorrent(
     savePath: string
 ): Promise<OrganizeResult> {
     return new Promise((resolve, reject) => {
-        const workerPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'organize-worker.js')
+        const workerPath = resolveWorkerPath()
         const worker = new Worker(workerPath)
 
         // On envoie un seul torrent "fictif seeding"
@@ -189,7 +203,9 @@ export async function organizeTorrent(
 
         worker.on('message', (msg: any) => {
             if (msg.type === 'log') {
-                logger[msg.level as 'debug'|'info'|'warn'|'error']('organize', msg.msg)
+                if (msg.level === 'error') console.error(msg.msg)
+                else if (msg.level === 'warn') console.warn(msg.msg)
+                else console.log(msg.msg)
             } else if (msg.type === 'result') {
                 result.total   = msg.total
                 result.skipped = msg.skipped
