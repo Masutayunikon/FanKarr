@@ -17,9 +17,10 @@ let workerRunning = false
 // En binaire Bun compilé : le worker est à côté de l'exécutable
 // En Docker/dev : à côté du fichier courant
 function resolveWorkerPath(): string {
-    const _isBunBinary = typeof (globalThis as any).Bun !== 'undefined'
-        && path.dirname((process as any).execPath) !== process.cwd()
-    if (_isBunBinary) {
+    // Si Bun est présent → le worker est toujours à côté de l'exécutable
+    // (que ce soit un binaire compilé ou `bun run` en dev)
+    // En Node/tsx → on utilise import.meta.url
+    if (typeof (globalThis as any).Bun !== 'undefined') {
         return path.join(path.dirname((process as any).execPath), 'organize-worker.js')
     }
     return path.join(path.dirname(new URL(import.meta.url).pathname), 'organize-worker.js')
