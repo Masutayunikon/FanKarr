@@ -69,14 +69,9 @@ Fankarr récupère ce fichier au démarrage et via le bouton **Mettre à jour** 
 
 ## Installation
 
-### Prérequis
+### Docker Compose (recommandé)
 
-- Docker + Docker Compose
-- qBittorrent accessible en réseau
-- Un dossier de téléchargements complétés (`/downloads/complete` ou équivalent)
-- Un dossier médiathèque pour Jellyfin (`/media/Kai` ou équivalent)
-
-### Docker Compose
+**Prérequis** : Docker + Docker Compose, qBittorrent accessible en réseau.
 
 ```yaml
 services:
@@ -88,8 +83,8 @@ services:
       - PGID=1000        # GID de votre utilisateur (id -g)
       - TZ=Europe/Paris  # Votre timezone
     volumes:
-      - ./data:/app/data                        # Config, logs, base de données
-      - /votre/chemin/media:/media/Kai          # Destination Jellyfin
+      - ./data:/app/data                            # Config, logs, base de données
+      - /votre/chemin/media:/media/Kai              # Destination Jellyfin
       - /votre/chemin/complete:/downloads/complete  # Dossier complétés qBittorrent
     ports:
       - 3001:3001
@@ -100,15 +95,41 @@ services:
 docker compose up -d
 ```
 
-Fankarr sera accessible sur `http://localhost:3001`.
+### Binaire autonome (Windows / Linux / macOS)
+
+Téléchargez l'archive correspondant à votre système depuis les [Releases GitHub](https://github.com/masutayunikon/fankarr/releases/latest) :
+
+| Système | Archive |
+|---|---|
+| Windows x64 | `fankarr-windows-x64.zip` |
+| Linux x64 | `fankarr-linux-x64.zip` |
+| macOS (Apple Silicon) | `fankarr-macos.zip` |
+
+Extrayez l'archive — elle contient le binaire **et** le dossier `public/` qui doivent rester ensemble :
+
+```
+fankarr-windows-x64/
+├── fankarr.exe   ← lancer ce fichier
+└── public/       ← ne pas déplacer séparément
+```
+
+**Linux / macOS** : rendre le binaire exécutable avant le premier lancement :
+
+```bash
+chmod +x fankarr
+./fankarr
+```
+
+Fankarr sera accessible sur `http://localhost:3001`. Les données (config, logs, base de données) sont sauvegardées dans un dossier `data/` créé automatiquement à côté du binaire.
 
 ### Variables d'environnement
 
 | Variable | Défaut | Description |
 |---|---|---|
-| `PUID` | `1000` | UID utilisateur pour les permissions fichiers |
-| `PGID` | `1000` | GID utilisateur pour les permissions fichiers |
+| `PUID` | `1000` | UID utilisateur pour les permissions fichiers (Docker) |
+| `PGID` | `1000` | GID utilisateur pour les permissions fichiers (Docker) |
 | `TZ` | — | Timezone (ex: `Europe/Paris`) |
+| `PORT` | `3001` | Port d'écoute du serveur |
 | `JWT_SECRET` | auto-généré | Secret JWT — généré automatiquement dans `data/secret.key` si absent |
 | `GITHUB_RAW_URL` | repo scraper | URL du `torrent_final.json` à utiliser |
 
@@ -130,7 +151,7 @@ Fankarr organise automatiquement les fichiers terminés toutes les **30 secondes
 ```
 /media/Kai/
 └── Black Lagoon Henshū/
-    └── Saison 001/
+    └── Saison 1/
         ├── Black Lagoon Henshū S01E01.mkv
         ├── Black Lagoon Henshū S01E02.mkv
         └── ...
@@ -157,8 +178,8 @@ Fankarr est disponible dans l'appstore personnalisé. Pour l'installer :
 | Frontend | Vue 3 + Vite + Tailwind CSS |
 | Backend | Express 5 + TypeScript |
 | Auth | JWT + bcrypt |
-| Packaging | Docker (`node:20-slim`) + pnpm |
-| Permissions | gosu (PUID/PGID) |
+| Packaging Docker | `node:20-slim` + pnpm + gosu (PUID/PGID) |
+| Packaging binaire | Bun (self-contained, pas de Node requis) |
 
 ---
 

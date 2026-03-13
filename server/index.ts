@@ -15,10 +15,19 @@ import { logger, readLogs, clearLogs, logsFileSize } from './logger.js'
 
 registerDriver(qbittorrentDriver)
 
+// ── Base directory ─────────────────────────────────────────────
+// Binaire Bun compilé : data/ et public/ sont à côté de l'exécutable
+// Docker / dev        : relatif au cwd (comportement inchangé)
+const _isBunBinary = typeof (globalThis as any).Bun !== 'undefined'
+    && path.dirname((process as any).execPath) !== process.cwd()
+export const BASE_DIR = _isBunBinary
+    ? path.dirname((process as any).execPath)
+    : process.cwd()
+
 const app = express()
-const PORT = 3001
+const PORT = Number(process.env.PORT) || 3001
 const FANKAI_API    = 'https://metadata.fankai.fr'
-const TORRENTS_PATH = path.join(process.cwd(), 'data', 'torrent_final.json')
+const TORRENTS_PATH = path.join(BASE_DIR, 'data', 'torrent_final.json')
 const GITHUB_RAW_URL = process.env.GITHUB_RAW_URL
     ?? 'https://raw.githubusercontent.com/masutayunikon/fankarr-scraper/main/data/torrent_final.json'
 
@@ -26,7 +35,7 @@ app.use(express.json())
 app.use(cookieParser())
 
 // ── Static frontend (prod) ─────────────────────────────────────
-const PUBLIC_PATH = path.join(process.cwd(), 'public')
+const PUBLIC_PATH = path.join(BASE_DIR, 'public')
 if (fs.existsSync(PUBLIC_PATH)) {
     app.use(express.static(PUBLIC_PATH))
 }

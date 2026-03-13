@@ -16,8 +16,15 @@ import fsp  from 'fs/promises'
 import path from 'path'
 import { parentPort } from 'worker_threads'
 
-const TORRENTS_PATH  = path.join(process.cwd(), 'data', 'torrent_final.json')
-const ORGANIZED_PATH = path.join(process.cwd(), 'data', 'organized.json')
+// Base directory : binaire Bun ou cwd (Docker/dev)
+const _isBunBinary = typeof (globalThis as any).Bun !== 'undefined'
+    && path.dirname((process as any).execPath) !== process.cwd()
+const BASE_DIR = _isBunBinary
+    ? path.dirname((process as any).execPath)
+    : process.cwd()
+
+const TORRENTS_PATH  = path.join(BASE_DIR, 'data', 'torrent_final.json')
+const ORGANIZED_PATH = path.join(BASE_DIR, 'data', 'organized.json')
 
 // ─── Utils log ────────────────────────────────────────────────
 // Le worker tourne dans un thread séparé — il passe les logs au thread principal

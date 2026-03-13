@@ -1,0 +1,109 @@
+name: Build Binaries
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+
+jobs:
+  build-frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Vue frontend
+        run: pnpm build
+
+      - name: Upload frontend dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist/
+          retention-days: 1
+
+  build-binaries:
+    name: Build ${{ matrix.target }}
+    needs: build-frontend
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - target: windows-x64
+            os: windows-latest
+            bun-target: bun-windows-x64
+            binary: binaries/fankarr.exe
+            archive: fankarr-windows-x64.zip
+          - target: linux-x64
+            os: ubuntu-latest
+            bun-target: bun-linux-x64
+            binary: binaries/fankarr
+            archive: fankarr-linux-x64.zip
+          - target: macos
+            os: macos-latest
+            bun-target: bun-darwin-arm64
+            binary: binaries/fankarr
+            archive: fankarr-macos.zip
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download frontend dist
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: public/
+
+      - name: Build binary
+        run: |
+          mkdir -p binaries
+          bun build server/index.ts \
+            --compile \
+            --target ${{ matrix.bun-target }} \
+            --outfile ${{ matrix.binary }}
+
+      - name: Package archive (Windows)
+        if: matrix.target == 'windows-x64'
+        run: Compress-Archive -Path ${{ matrix.binary }}, public -DestinationPath ${{ matrix.archive }}
+        shell: pwsh
+
+      - name: Package archive (Unix)
+        if: matrix.target != 'windows-x64'
+        run: |
+          chmod +x ${{ matrix.binary }}
+          zip -r ${{ matrix.archive }} ${{ matrix.binary }} public/
+
+      - name: Upload archive to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.archive }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
