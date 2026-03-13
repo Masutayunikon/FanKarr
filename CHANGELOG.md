@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.2](https://github.com/Masutayunikon/FanKarr/compare/v1.8.1...v1.8.2) (2026-03-13)
+
+
+### Bug Fixes
+
+* season fallback ([e9b5091](https://github.com/Masutayunikon/FanKarr/commit/e9b5091242d73be77bf6fb525ce2865554e336cc))
+
 ## [1.8.1](https://github.com/Masutayunikon/FanKarr/compare/v1.8.0...v1.8.1) (2026-03-13)
 
 
