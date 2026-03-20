@@ -12,7 +12,7 @@ import {
 import qbittorrentDriver from './torrent-clients/qbittorrent.js'
 import { organizeTorrent, autoOrganizeAll, scanMediaPath } from './organize.js'
 import { logger, readLogs, clearLogs, logsFileSize } from './logger.js'
-import { DATA_DIR, BASE_DIR, _isBunBinary }  from './config.js'
+import { DATA_DIR, BASE_DIR }  from './config.js'
 
 registerDriver(qbittorrentDriver)
 
@@ -403,7 +403,7 @@ app.get('/api/downloads', requireAuth, async (_req, res) => {
 
         let torrentFinal: any[] = []
         try {
-            const tfPath = path.join(BASE_DIR, 'config', 'torrent_final.json')
+            const tfPath = path.join(DATA_DIR, 'config', 'torrent_final.json')
             if (fs.existsSync(tfPath))
                 torrentFinal = JSON.parse(fs.readFileSync(tfPath, 'utf-8'))
         } catch {}

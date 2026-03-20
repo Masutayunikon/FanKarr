@@ -4,9 +4,9 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import type { Request, Response, NextFunction } from 'express'
 import { JWT_SECRET } from './secret.js'
-import { BASE_DIR } from './config.js'
+import { DATA_DIR } from './config.js'
 
-const DATA_PATH = path.join(BASE_DIR, 'config', 'auth.json')
+const DATA_PATH = path.join(DATA_DIR, 'config', 'auth.json')
 const SALT_ROUNDS = 10
 
 interface AuthData {

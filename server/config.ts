@@ -10,4 +10,4 @@ export const BASE_DIR = _isBunBinary
 
 export const DATA_DIR = fs.existsSync('/.dockerenv')
     ? '/config'
-    : path.join(BASE_DIR, 'data')
+    : path.join(BASE_DIR, 'config')

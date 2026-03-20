@@ -1,8 +1,8 @@
 import fs from 'fs'
 import path from 'path'
-import { BASE_DIR, _isBunBinary } from './config.js'
+import { DATA_DIR } from './config.js'
 
-const DATA_PATH = path.join(BASE_DIR, 'config', 'settings.json')
+const DATA_PATH = path.join(DATA_DIR, 'config', 'settings.json')
 
 export interface Settings {
     mediaPath     : string
