@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.4](https://github.com/Masutayunikon/FanKarr/compare/v1.11.3...v1.11.4) (2026-03-20)
+
+
+### Bug Fixes
+
+* add config.ts with config variable (BASE_DIR...) ([a3eb67c](https://github.com/Masutayunikon/FanKarr/commit/a3eb67c9a0944500142a6636d57cae0acfd7543d))
+
 ## [1.11.3](https://github.com/Masutayunikon/FanKarr/compare/v1.11.2...v1.11.3) (2026-03-20)
 
 
