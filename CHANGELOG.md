@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.1](https://github.com/Masutayunikon/FanKarr/compare/v1.11.0...v1.11.1) (2026-03-13)
+
+
+### Bug Fixes
+
+* worker now work on multiple github files pages ([71784cd](https://github.com/Masutayunikon/FanKarr/commit/71784cd8bd8f3ea5dc7423687b080c1588d70854))
+
 ## [1.11.0](https://github.com/Masutayunikon/FanKarr/compare/v1.10.3...v1.11.0) (2026-03-13)
 
 
