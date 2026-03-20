@@ -314,7 +314,8 @@ async function organizeTorrent(hash: string, name: string, savePath: string) {
         const filePath: string[] = tf.path
 
         // Skip les fichiers dans des dossiers bonus/musique/images
-        if (isInExcludedFolder(filePath)) {
+        const tfMeta = torrentFiles.find((tf: any) => tf.filename === filename)
+        if (isInExcludedFolder(filePath) && tfMeta?.season_number == null) {
             log(`[organize] skip bonus: ${filename}`)
             result.skipped++
             continue
