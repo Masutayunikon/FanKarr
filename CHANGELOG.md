@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.6](https://github.com/Masutayunikon/FanKarr/compare/v1.11.5...v1.11.6) (2026-03-20)
+
+
+### Bug Fixes
+
+* path ([0329ee2](https://github.com/Masutayunikon/FanKarr/commit/0329ee27a34038456eb297f07b808de3157d88f4))
+
 ## [1.11.5](https://github.com/Masutayunikon/FanKarr/compare/v1.11.4...v1.11.5) (2026-03-20)
 
 
