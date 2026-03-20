@@ -24,7 +24,7 @@ COPY --from=build /app/dist/server /app/dist/server
 COPY --from=build /app/dist/client /app/public
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
-RUN mkdir -p /app/data
+RUN mkdir -p /config
 
 EXPOSE 3001
 ENV NODE_ENV=production

@@ -6,7 +6,7 @@ const _isBunBinary = typeof (globalThis as any).Bun !== 'undefined'
 const BASE_DIR = _isBunBinary
     ? path.dirname((process as any).execPath)
     : process.cwd()
-const DATA_PATH = path.join(BASE_DIR, 'data', 'settings.json')
+const DATA_PATH = path.join(BASE_DIR, 'config', 'settings.json')
 
 export interface Settings {
     mediaPath     : string

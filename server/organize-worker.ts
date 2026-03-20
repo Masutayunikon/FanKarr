@@ -23,8 +23,8 @@ const BASE_DIR = _isBunBinary
     ? path.dirname((process as any).execPath)
     : process.cwd()
 
-const TORRENTS_PATH  = path.join(BASE_DIR, 'data', 'torrent_final.json')
-const ORGANIZED_PATH = path.join(BASE_DIR, 'data', 'organized.json')
+const TORRENTS_PATH  = path.join(BASE_DIR, 'config', 'torrent_final.json')
+const ORGANIZED_PATH = path.join(BASE_DIR, 'config', 'organized.json')
 
 // ─── Utils log ────────────────────────────────────────────────
 // Le worker tourne dans un thread séparé — il passe les logs au thread principal
@@ -39,7 +39,7 @@ function debug(msg: string) { parentPort?.postMessage({ type: 'log', level: 'deb
 
 function readSettings(): { mediaPath: string; completePath: string; organizeMode: string; nfoSupport: boolean } {
     try {
-        const p = path.join(process.cwd(), 'data', 'settings.json')
+        const p = path.join(process.cwd(), 'config', 'settings.json')
         if (!fs.existsSync(p)) return { mediaPath: '', completePath: '', organizeMode: 'hardlink', nfoSupport: false }
         return JSON.parse(fs.readFileSync(p, 'utf-8'))
     } catch { return { mediaPath: '', completePath: '', organizeMode: 'hardlink', nfoSupport: false } }

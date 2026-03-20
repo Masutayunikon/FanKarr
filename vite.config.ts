@@ -14,9 +14,9 @@ export default defineConfig({
     outDir: 'dist/client'
   },
   server: {
-    port: 3000,
+    port: 3000,  // ou autre port fixe
     proxy: {
-      '/api': 'http://localhost:3001'
+      '/api': 'http://localhost:9898'
     }
   }
 })

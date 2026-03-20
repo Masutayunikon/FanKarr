@@ -2,7 +2,6 @@
 
 # Fankarr
 
-
 ![Version](https://img.shields.io/github/v/release/masutayunikon/fankarr?style=flat-square&color=e8513a&label=version)
 ![Docker Image Size](https://img.shields.io/docker/image-size/masutayunikon/fankarr/latest?style=flat-square&color=1e2d3d&label=image)
 ![Docker Pulls](https://img.shields.io/docker/pulls/masutayunikon/fankarr?style=flat-square&color=1e2d3d)
@@ -11,7 +10,7 @@
 ![Node](https://img.shields.io/badge/node-20-5a7a94?style=flat-square)
 ![Vue](https://img.shields.io/badge/vue-3-42b883?style=flat-square)
 
-**Gestionnaire de téléchargements pour le catalogue [Fankai](https://fankai.fr)**  
+**Gestionnaire de téléchargements pour le catalogue [Fankai](https://fankai.fr)**
 Inspiré de Radarr/Sonarr — interface dédiée aux éditions Kai & Yabai
 
 </div>
@@ -83,11 +82,10 @@ services:
       - PGID=1000        # GID de votre utilisateur (id -g)
       - TZ=Europe/Paris  # Votre timezone
     volumes:
-      - ./data:/app/data                            # Config, logs, base de données
-      - /votre/chemin/media:/media/Kai              # Destination Jellyfin
-      - /votre/chemin/complete:/downloads/complete  # Dossier complétés qBittorrent
+      - ./config:/config  # Config, logs, base de données
+      - /votre/chemin:/media  # Racine de votre médiathèque (voir note hardlinks)
     ports:
-      - 3001:3001
+      - 9898:9898
     restart: unless-stopped
 ```
 
@@ -95,15 +93,19 @@ services:
 docker compose up -d
 ```
 
+> **⚠️ Note sur les hardlinks** : Pour que le mode `hardlink` fonctionne, vos dossiers de téléchargement complets et votre médiathèque doivent être sur le **même filesystem**. La solution recommandée est de monter un seul volume racine (ex: `/votre/chemin:/media`) et de configurer vos chemins à l'intérieur — comme le font Radarr et Sonarr.
+>
+> Vous pouvez tout à fait monter plusieurs volumes si vous le souhaitez, mais dans ce cas les hardlinks ne seront pas possibles entre deux volumes différents et Fankarr basculera automatiquement en copie.
+
 ### Binaire autonome (Windows / Linux / macOS)
 
 Téléchargez l'archive correspondant à votre système depuis les [Releases GitHub](https://github.com/masutayunikon/fankarr/releases/latest) :
 
-| Système | Archive |
-|---|---|
-| Windows x64 | `fankarr-windows-x64.zip` |
-| Linux x64 | `fankarr-linux-x64.zip` |
-| macOS (Apple Silicon) | `fankarr-macos.zip` |
+| Système               | Archive                   |
+| --------------------- | ------------------------- |
+| Windows x64           | `fankarr-windows-x64.zip` |
+| Linux x64             | `fankarr-linux-x64.zip`   |
+| macOS (Apple Silicon) | `fankarr-macos.zip`       |
 
 Extrayez l'archive — elle contient le binaire **et** le dossier `public/` qui doivent rester ensemble :
 
@@ -120,22 +122,22 @@ chmod +x fankarr
 ./fankarr
 ```
 
-Fankarr sera accessible sur `http://localhost:3001`. Les données (config, logs, base de données) sont sauvegardées dans un dossier `data/` créé automatiquement à côté du binaire.
+Fankarr sera accessible sur `http://localhost:9898`. Les données (config, logs, base de données) sont sauvegardées dans un dossier `data/` créé automatiquement à côté du binaire.
 
 ### Variables d'environnement
 
-| Variable | Défaut | Description |
-|---|---|---|
-| `PUID` | `1000` | UID utilisateur pour les permissions fichiers (Docker) |
-| `PGID` | `1000` | GID utilisateur pour les permissions fichiers (Docker) |
-| `TZ` | — | Timezone (ex: `Europe/Paris`) |
-| `PORT` | `3001` | Port d'écoute du serveur |
-| `JWT_SECRET` | auto-généré | Secret JWT — généré automatiquement dans `data/secret.key` si absent |
-| `GITHUB_RAW_URL` | repo scraper | URL du `torrent_final.json` à utiliser |
+| Variable         | Défaut       | Description                                                             |
+| ---------------- | ------------ | ----------------------------------------------------------------------- |
+| `PUID`           | `1000`       | UID utilisateur pour les permissions fichiers (Docker)                  |
+| `PGID`           | `1000`       | GID utilisateur pour les permissions fichiers (Docker)                  |
+| `TZ`             | —            | Timezone (ex: `Europe/Paris`)                                           |
+| `PORT`           | `9898`       | Port d'écoute du serveur                                                |
+| `JWT_SECRET`     | auto-généré  | Secret JWT — généré automatiquement dans `/config/secret.key` si absent |
+| `GITHUB_RAW_URL` | repo scraper | URL du `torrent_final.json` à utiliser                                  |
 
 ### Premier démarrage
 
-1. Ouvrir `http://localhost:3001`
+1. Ouvrir `http://localhost:9898`
 2. Créer un mot de passe à la première connexion
 3. Aller dans **Paramètres** → ajouter votre client qBittorrent
 4. Vérifier les chemins `completePath` et `mediaPath`
@@ -173,12 +175,12 @@ Fankarr est disponible dans l'appstore personnalisé. Pour l'installer :
 
 ## Stack technique
 
-| Couche | Technologie |
-|---|---|
-| Frontend | Vue 3 + Vite + Tailwind CSS |
-| Backend | Express 5 + TypeScript |
-| Auth | JWT + bcrypt |
-| Packaging Docker | `node:20-slim` + pnpm + gosu (PUID/PGID) |
+| Couche            | Technologie                              |
+| ----------------- | ---------------------------------------- |
+| Frontend          | Vue 3 + Vite + Tailwind CSS              |
+| Backend           | Express 5 + TypeScript                   |
+| Auth              | JWT + bcrypt                             |
+| Packaging Docker  | `node:20-slim` + pnpm + gosu (PUID/PGID) |
 | Packaging binaire | Bun (self-contained, pas de Node requis) |
 
 ---

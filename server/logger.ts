@@ -19,7 +19,7 @@ export interface LogEntry {
     meta?   : Record<string, any>
 }
 
-const LOGS_PATH    = path.join(process.cwd(), 'data', 'logs.jsonl')
+const LOGS_PATH    = path.join(process.cwd(), 'config', 'logs.jsonl')
 const MAX_LINES    = 2000   // rotation auto au-delà
 const IS_PROD      = process.env.NODE_ENV === 'production'
 

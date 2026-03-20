@@ -1,15 +1,14 @@
-services:
-  fankarr:
-    image: masutayunikon/fankarr:latest
-    container_name: fankarr
-    environment:
-      - PUID=1000        # UID de votre utilisateur (id -u)
-      - PGID=1000        # GID de votre utilisateur (id -g)
-      - TZ=Europe/Paris  # Votre timezone
-    volumes:
-      - ./data:/app/data                        # Config, logs, base de données
-      - /votre/chemin/media:/media/Kai          # Destination Jellyfin
-      - /votre/chemin/complete:/downloads/complete  # Dossier complétés qBittorrent
-    ports:
-      - 3001:3001
-    restart: unless-stopped
+fankarr:
+  image: masutayunikon/fankarr:latest
+  container_name: fankarr
+  environment:
+    - PUID=1000        # UID de votre utilisateur (id -u)
+    - PGID=1000        # GID de votre utilisateur (id -g)
+    - TZ=Europe/Paris  # Votre timezone
+  volumes:
+    - ./config:/config  # Config, logs, base de données
+    - /votre/chemin:/media  # Racine de votre mediatheque (hardlinks compatibles)
+  ports:
+    - 9898:9898
+  restart: unless-stopped
+ 

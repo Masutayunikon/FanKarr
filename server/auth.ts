@@ -5,7 +5,7 @@ import jwt from 'jsonwebtoken'
 import type { Request, Response, NextFunction } from 'express'
 import { JWT_SECRET } from './secret.js'
 
-const DATA_PATH = path.join(process.cwd(), 'data', 'auth.json')
+const DATA_PATH = path.join(process.cwd(), 'config', 'auth.json')
 const SALT_ROUNDS = 10
 
 interface AuthData {

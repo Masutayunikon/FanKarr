@@ -10,7 +10,7 @@ import fs       from 'fs'
 import path     from 'path'
 import crypto   from 'crypto'
 
-const SECRET_PATH = path.join(process.cwd(), 'data', 'secret.key')
+const SECRET_PATH = path.join(process.cwd(), 'config', 'secret.key')
 
 function generateSecret(): string {
     return crypto.randomBytes(48).toString('hex')

@@ -2,7 +2,7 @@ node_modules
 .git
 .gitignore
 *.md
-data
+config
 .env
 .env.*
 !.env.example
