@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.8](https://github.com/Masutayunikon/FanKarr/compare/v1.11.7...v1.11.8) (2026-03-20)
+
+
+### Bug Fixes
+
+* config path /config/config to /config ([7518191](https://github.com/Masutayunikon/FanKarr/commit/75181910244621a8eca989067fd4777922914d8e))
+
 ## [1.11.7](https://github.com/Masutayunikon/FanKarr/compare/v1.11.6...v1.11.7) (2026-03-20)
 
 
