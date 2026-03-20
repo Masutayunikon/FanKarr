@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.2](https://github.com/Masutayunikon/FanKarr/compare/v1.11.1...v1.11.2) (2026-03-20)
+
+
+### Bug Fixes
+
+* port 9898, /config volume, Kaï→Kai matching, NFO pagination GitLab, saison 0 specials, JoJo/Hokuto strict season resolve ([3a278ba](https://github.com/Masutayunikon/FanKarr/commit/3a278ba33388d6ff6f33413d7696d58d0172c953))
+
 ## [1.11.1](https://github.com/Masutayunikon/FanKarr/compare/v1.11.0...v1.11.1) (2026-03-13)
 
 
