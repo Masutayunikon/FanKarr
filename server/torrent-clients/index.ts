@@ -78,7 +78,7 @@ export function getAvailableClients(): TorrentClientDefinition[] {
 
 // ─── Persistence (clients enregistrés) ────────────────────────────────────────
 
-const CLIENTS_PATH = path.join(DATA_DIR, 'config', 'torrent_clients.json')
+const CLIENTS_PATH = path.join(DATA_DIR, 'torrent_clients.json')
 
 function loadClients(): SavedClient[] {
     try {

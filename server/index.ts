@@ -403,7 +403,7 @@ app.get('/api/downloads', requireAuth, async (_req, res) => {
 
         let torrentFinal: any[] = []
         try {
-            const tfPath = path.join(DATA_DIR, 'config', 'torrent_final.json')
+            const tfPath = path.join(DATA_DIR, 'torrent_final.json')
             if (fs.existsSync(tfPath))
                 torrentFinal = JSON.parse(fs.readFileSync(tfPath, 'utf-8'))
         } catch {}

@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { DATA_DIR } from './config.js'
 
-const DATA_PATH = path.join(DATA_DIR, 'config', 'settings.json')
+const DATA_PATH = path.join(DATA_DIR, 'settings.json')
 
 export interface Settings {
     mediaPath     : string
