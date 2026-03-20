@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 
-const _isBunBinary = typeof (globalThis as any).Bun !== 'undefined'
+export const _isBunBinary = typeof (globalThis as any).Bun !== 'undefined'
     && path.dirname((process as any).execPath) !== process.cwd()
 
 export const BASE_DIR = _isBunBinary
