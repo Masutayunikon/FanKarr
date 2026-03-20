@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.5](https://github.com/Masutayunikon/FanKarr/compare/v1.11.4...v1.11.5) (2026-03-20)
+
+
+### Bug Fixes
+
+* export _isBunBinary ([3d43de3](https://github.com/Masutayunikon/FanKarr/commit/3d43de3eb223ec0338e0b9aebffff35e116e00a0))
+
 ## [1.11.4](https://github.com/Masutayunikon/FanKarr/compare/v1.11.3...v1.11.4) (2026-03-20)
 
 
