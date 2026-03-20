@@ -8,6 +8,7 @@
 
 import fs   from 'fs'
 import path from 'path'
+import { BASE_DIR } from './config.js'
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
@@ -19,7 +20,7 @@ export interface LogEntry {
     meta?   : Record<string, any>
 }
 
-const LOGS_PATH    = path.join(process.cwd(), 'config', 'logs.jsonl')
+const LOGS_PATH    = path.join(BASE_DIR, 'config', 'logs.jsonl')
 const MAX_LINES    = 2000   // rotation auto au-delà
 const IS_PROD      = process.env.NODE_ENV === 'production'
 

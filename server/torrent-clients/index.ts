@@ -9,6 +9,7 @@
 import { randomUUID } from 'crypto'
 import fs from 'fs'
 import path from 'path'
+import { BASE_DIR } from '../config.js'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -77,7 +78,7 @@ export function getAvailableClients(): TorrentClientDefinition[] {
 
 // ─── Persistence (clients enregistrés) ────────────────────────────────────────
 
-const CLIENTS_PATH = path.join(process.cwd(), 'config', 'torrent_clients.json')
+const CLIENTS_PATH = path.join(BASE_DIR, 'config', 'torrent_clients.json')
 
 function loadClients(): SavedClient[] {
     try {

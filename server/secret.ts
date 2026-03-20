@@ -9,8 +9,9 @@
 import fs       from 'fs'
 import path     from 'path'
 import crypto   from 'crypto'
+import { BASE_DIR } from './config.js'
 
-const SECRET_PATH = path.join(process.cwd(), 'config', 'secret.key')
+const SECRET_PATH = path.join(BASE_DIR, 'config', 'secret.key')
 
 function generateSecret(): string {
     return crypto.randomBytes(48).toString('hex')

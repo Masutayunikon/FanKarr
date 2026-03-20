@@ -15,13 +15,7 @@ import fs   from 'fs'
 import fsp  from 'fs/promises'
 import path from 'path'
 import { parentPort } from 'worker_threads'
-
-// Base directory : binaire Bun ou cwd (Docker/dev)
-const _isBunBinary = typeof (globalThis as any).Bun !== 'undefined'
-    && path.dirname((process as any).execPath) !== process.cwd()
-const BASE_DIR = _isBunBinary
-    ? path.dirname((process as any).execPath)
-    : process.cwd()
+import { BASE_DIR, _isBunBinary } from './config.js'
 
 const TORRENTS_PATH  = path.join(BASE_DIR, 'config', 'torrent_final.json')
 const ORGANIZED_PATH = path.join(BASE_DIR, 'config', 'organized.json')
@@ -39,7 +33,7 @@ function debug(msg: string) { parentPort?.postMessage({ type: 'log', level: 'deb
 
 function readSettings(): { mediaPath: string; completePath: string; organizeMode: string; nfoSupport: boolean } {
     try {
-        const p = path.join(process.cwd(), 'config', 'settings.json')
+        const p = path.join(BASE_DIR, 'config', 'settings.json')
         if (!fs.existsSync(p)) return { mediaPath: '', completePath: '', organizeMode: 'hardlink', nfoSupport: false }
         return JSON.parse(fs.readFileSync(p, 'utf-8'))
     } catch { return { mediaPath: '', completePath: '', organizeMode: 'hardlink', nfoSupport: false } }

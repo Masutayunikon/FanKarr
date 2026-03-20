@@ -12,22 +12,9 @@ import {
 import qbittorrentDriver from './torrent-clients/qbittorrent.js'
 import { organizeTorrent, autoOrganizeAll, scanMediaPath } from './organize.js'
 import { logger, readLogs, clearLogs, logsFileSize } from './logger.js'
+import { DATA_DIR, BASE_DIR, _isBunBinary }  from './config.js'
 
 registerDriver(qbittorrentDriver)
-
-// ── Base directory ─────────────────────────────────────────────
-// Binaire Bun compilé : data/ et public/ sont à côté de l'exécutable
-// Docker / dev        : relatif au cwd (comportement inchangé)
-const _isBunBinary = typeof (globalThis as any).Bun !== 'undefined'
-    && path.dirname((process as any).execPath) !== process.cwd()
-export const BASE_DIR = _isBunBinary
-    ? path.dirname((process as any).execPath)
-    : process.cwd()
-
-// DATA_DIR : /config
-export const DATA_DIR = fs.existsSync('/.dockerenv')
-    ? '/config'
-    : path.join(BASE_DIR, 'config')
 
 const app = express()
 const PORT = Number(process.env.PORT) || 9898
@@ -416,7 +403,7 @@ app.get('/api/downloads', requireAuth, async (_req, res) => {
 
         let torrentFinal: any[] = []
         try {
-            const tfPath = path.join(process.cwd(), 'config', 'torrent_final.json')
+            const tfPath = path.join(BASE_DIR, 'config', 'torrent_final.json')
             if (fs.existsSync(tfPath))
                 torrentFinal = JSON.parse(fs.readFileSync(tfPath, 'utf-8'))
         } catch {}

@@ -1,11 +1,7 @@
 import fs from 'fs'
 import path from 'path'
+import { BASE_DIR, _isBunBinary } from './config.js'
 
-const _isBunBinary = typeof (globalThis as any).Bun !== 'undefined'
-    && path.dirname((process as any).execPath) !== process.cwd()
-const BASE_DIR = _isBunBinary
-    ? path.dirname((process as any).execPath)
-    : process.cwd()
 const DATA_PATH = path.join(BASE_DIR, 'config', 'settings.json')
 
 export interface Settings {
