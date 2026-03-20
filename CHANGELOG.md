@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.9](https://github.com/Masutayunikon/FanKarr/compare/v1.11.8...v1.11.9) (2026-03-20)
+
+
+### Bug Fixes
+
+* season 0 resolved is no longer skipped in the worker ([c48ec76](https://github.com/Masutayunikon/FanKarr/commit/c48ec769ba7725327e657366e882498846d0c63f))
+
 ## [1.11.8](https://github.com/Masutayunikon/FanKarr/compare/v1.11.7...v1.11.8) (2026-03-20)
 
 
