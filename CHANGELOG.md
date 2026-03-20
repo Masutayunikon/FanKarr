@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.3](https://github.com/Masutayunikon/FanKarr/compare/v1.11.2...v1.11.3) (2026-03-20)
+
+
+### Bug Fixes
+
+* entrypoint.sh config directory ([7e4b2fa](https://github.com/Masutayunikon/FanKarr/commit/7e4b2fa60a5946d3220618f13420a07fa57e8e1b))
+
 ## [1.11.2](https://github.com/Masutayunikon/FanKarr/compare/v1.11.1...v1.11.2) (2026-03-20)
 
 
