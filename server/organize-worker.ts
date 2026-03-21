@@ -15,10 +15,16 @@ import fs   from 'fs'
 import fsp  from 'fs/promises'
 import path from 'path'
 import { parentPort } from 'worker_threads'
-import { DATA_DIR } from './config.js'
 
-const TORRENTS_PATH  = path.join(DATA_DIR, 'torrent_final.json')
-const ORGANIZED_PATH = path.join(DATA_DIR, 'organized.json')
+// Base directory : binaire Bun ou cwd (Docker/dev)
+const _isBunBinary = typeof (globalThis as any).Bun !== 'undefined'
+    && path.dirname((process as any).execPath) !== process.cwd()
+const BASE_DIR = _isBunBinary
+    ? path.dirname((process as any).execPath)
+    : process.cwd()
+
+const TORRENTS_PATH  = path.join(BASE_DIR, 'data', 'torrent_final.json')
+const ORGANIZED_PATH = path.join(BASE_DIR, 'data', 'organized.json')
 
 // ─── Utils log ────────────────────────────────────────────────
 // Le worker tourne dans un thread séparé — il passe les logs au thread principal
@@ -33,7 +39,7 @@ function debug(msg: string) { parentPort?.postMessage({ type: 'log', level: 'deb
 
 function readSettings(): { mediaPath: string; completePath: string; organizeMode: string; nfoSupport: boolean } {
     try {
-        const p = path.join(DATA_DIR, 'settings.json')
+        const p = path.join(process.cwd(), 'data', 'settings.json')
         if (!fs.existsSync(p)) return { mediaPath: '', completePath: '', organizeMode: 'hardlink', nfoSupport: false }
         return JSON.parse(fs.readFileSync(p, 'utf-8'))
     } catch { return { mediaPath: '', completePath: '', organizeMode: 'hardlink', nfoSupport: false } }
@@ -283,29 +289,35 @@ async function organizeTorrent(hash: string, name: string, savePath: string) {
         return { ...result, total: 1, done: 1 }
     }
 
+    // ── Map filename → original_filename (depuis l'API) ────────
+    const filenameToOriginal = new Map<string, string>()
+    for (const ep of torrent.resolved_episodes ?? []) {
+        if (ep.filename && ep.original_filename && ep.filename !== ep.original_filename) {
+            filenameToOriginal.set(ep.filename, ep.original_filename)
+        }
+    }
+
     // ── Map filename → season ─────────────────────────────────
     // Priorité : season_number dans torrent_files (packs multi-saisons)
     // Fallback  : resolved_episodes matchés par episode_number (torrents individuels)
     const filenameSeasonMap = new Map<string, number>()
 
     // Index resolved_episodes par episode_number pour lookup rapide
-    const filenameToSeason = new Map<string, number>()
+    const epByNum = new Map<number, number>()  // ep_number → season_number
     for (const ep of torrent.resolved_episodes ?? []) {
-        if (ep.filename && ep.season_number !== undefined)
-            filenameToSeason.set(ep.filename, ep.season_number)
+        if (ep.episode_number !== undefined && ep.season_number !== undefined)
+            epByNum.set(Number(ep.episode_number), ep.season_number)
     }
 
     for (const tf of torrentFiles) {
-        const sn = tf.season_number != null ? Number(tf.season_number) : null
+        const sn: number | null = tf.season_number != null ? Number(tf.season_number) : null
+        const tfNum = tf.num !== undefined ? Number(tf.num) : undefined
         if (sn !== null) {
             filenameSeasonMap.set(tf.filename, sn)
-        } else {
-            const fromResolved = filenameToSeason.get(tf.filename)
-            if (fromResolved !== undefined) {
-                filenameSeasonMap.set(tf.filename, fromResolved)
-            } else if (torrent.season_number !== undefined) {
-                filenameSeasonMap.set(tf.filename, torrent.season_number)
-            }
+        } else if (tfNum !== undefined && epByNum.has(tfNum)) {
+            filenameSeasonMap.set(tf.filename, epByNum.get(tfNum)!)
+        } else if (torrent.season_number !== undefined) {
+            filenameSeasonMap.set(tf.filename, torrent.season_number)
         }
     }
 
@@ -316,8 +328,7 @@ async function organizeTorrent(hash: string, name: string, savePath: string) {
         const filePath: string[] = tf.path
 
         // Skip les fichiers dans des dossiers bonus/musique/images
-        const tfMeta = torrentFiles.find((tf: any) => tf.filename === filename)
-        if (isInExcludedFolder(filePath) && tfMeta?.season_number == null) {
+        if (isInExcludedFolder(filePath)) {
             log(`[organize] skip bonus: ${filename}`)
             result.skipped++
             continue
@@ -347,9 +358,10 @@ async function organizeTorrent(hash: string, name: string, savePath: string) {
             continue
         }
 
-        const seasonNum = filenameSeasonMap.get(filename) ?? 1
-        const destDir   = path.join(mediaPath, serieTitle, seasonFolder(seasonNum))
-        const dest      = path.join(destDir, filename)
+        const seasonNum     = filenameSeasonMap.get(filename) ?? 1
+        const destFilename  = filenameToOriginal.get(filename) ?? filename
+        const destDir       = path.join(mediaPath, serieTitle, seasonFolder(seasonNum))
+        const dest          = path.join(destDir, destFilename)
 
         if (fs.existsSync(dest)) {
             markOrganized(hash, filename)
