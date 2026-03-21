@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.14.0](https://github.com/Masutayunikon/FanKarr/compare/v1.13.0...v1.14.0) (2026-03-21)
+
+
+### Features
+
+* **scraper:** extraction du nom bencode pour les torrents locaux ([67237e9](https://github.com/Masutayunikon/FanKarr/commit/67237e977e34edda4d92a9375de4c4e470725eb1))
+* **series-view:** badge "Hors Fankai" sur les épisodes de torrents manuels ([67237e9](https://github.com/Masutayunikon/FanKarr/commit/67237e977e34edda4d92a9375de4c4e470725eb1))
+* **series-view:** tooltip avec le nom du torrent sur les boutons intégrale ([67237e9](https://github.com/Masutayunikon/FanKarr/commit/67237e977e34edda4d92a9375de4c4e470725eb1))
+
+
+### Bug Fixes
+
+* **catalogue:** état "partiel" incorrect quand l'intégrale est organisée ([67237e9](https://github.com/Masutayunikon/FanKarr/commit/67237e977e34edda4d92a9375de4c4e470725eb1))
+* **series:** résolution boutons de téléchargement saisons Yu-Gi-Oh et séries similaires ([67237e9](https://github.com/Masutayunikon/FanKarr/commit/67237e977e34edda4d92a9375de4c4e470725eb1))
+
 ## [1.13.0](https://github.com/Masutayunikon/FanKarr/compare/v1.12.2...v1.13.0) (2026-03-21)
 
 
