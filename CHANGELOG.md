@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.11.10](https://github.com/Masutayunikon/FanKarr/compare/v1.11.9...v1.11.10) (2026-03-21)
+
+
+### Bug Fixes
+
+* improve torrent organization and cleanup logic ([1908cb3](https://github.com/Masutayunikon/FanKarr/commit/1908cb3e8c5b99e91e26735f7cfa3dcd23709df7))
+* season 0 not clonficting anymore ([635082d](https://github.com/Masutayunikon/FanKarr/commit/635082de00bb42bdeaf20b1654f742ad1c4addbe))
+
 ## [1.11.9](https://github.com/Masutayunikon/FanKarr/compare/v1.11.8...v1.11.9) (2026-03-20)
 
 
