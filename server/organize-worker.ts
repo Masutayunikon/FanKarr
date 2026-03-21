@@ -278,16 +278,16 @@ async function organizeTorrent(hash: string, name: string, savePath: string) {
     }
 
     for (const tf of torrentFiles) {
-        const sn = tf.season_number != null ? Number(tf.season_number) : null
-        if (sn !== null) {
-            filenameSeasonMap.set(tf.filename, sn)
-        } else {
-            const fromResolved = filenameToSeason.get(tf.filename)
-            if (fromResolved !== undefined) {
-                filenameSeasonMap.set(tf.filename, fromResolved)
-            } else if (torrent.season_number !== undefined) {
-                filenameSeasonMap.set(tf.filename, torrent.season_number)
-            }
+        // Priorité 1 : resolved_episodes (saison API Fankai)
+        const fromResolved = filenameToSeason.get(tf.filename)
+        if (fromResolved !== undefined) {
+            filenameSeasonMap.set(tf.filename, fromResolved)
+            // Priorité 2 : season_number dans torrent_files (dossier Saison/Partie)
+        } else if (tf.season_number != null) {
+            filenameSeasonMap.set(tf.filename, Number(tf.season_number))
+            // Priorité 3 : season_number du torrent
+        } else if (torrent.season_number !== undefined) {
+            filenameSeasonMap.set(tf.filename, torrent.season_number)
         }
     }
 
