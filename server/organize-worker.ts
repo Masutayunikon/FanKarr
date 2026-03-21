@@ -289,21 +289,23 @@ async function organizeTorrent(hash: string, name: string, savePath: string) {
     const filenameSeasonMap = new Map<string, number>()
 
     // Index resolved_episodes par episode_number pour lookup rapide
-    const epByNum = new Map<number, number>()  // ep_number → season_number
+    const filenameToSeason = new Map<string, number>()
     for (const ep of torrent.resolved_episodes ?? []) {
-        if (ep.episode_number !== undefined && ep.season_number !== undefined)
-            epByNum.set(Number(ep.episode_number), ep.season_number)
+        if (ep.filename && ep.season_number !== undefined)
+            filenameToSeason.set(ep.filename, ep.season_number)
     }
 
     for (const tf of torrentFiles) {
-        const sn: number | null = tf.season_number != null ? Number(tf.season_number) : null
-        const tfNum = tf.num !== undefined ? Number(tf.num) : undefined
+        const sn = tf.season_number != null ? Number(tf.season_number) : null
         if (sn !== null) {
             filenameSeasonMap.set(tf.filename, sn)
-        } else if (tfNum !== undefined && epByNum.has(tfNum)) {
-            filenameSeasonMap.set(tf.filename, epByNum.get(tfNum)!)
-        } else if (torrent.season_number !== undefined) {
-            filenameSeasonMap.set(tf.filename, torrent.season_number)
+        } else {
+            const fromResolved = filenameToSeason.get(tf.filename)
+            if (fromResolved !== undefined) {
+                filenameSeasonMap.set(tf.filename, fromResolved)
+            } else if (torrent.season_number !== undefined) {
+                filenameSeasonMap.set(tf.filename, torrent.season_number)
+            }
         }
     }
 
