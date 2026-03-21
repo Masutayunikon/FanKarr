@@ -142,22 +142,28 @@ function computeSerieDownloadState(
     const hasActive = serieTorrents.some(t => activeTorrents.has(t.infohash?.toLowerCase()))
     if (hasActive) return 'downloading'
 
-    let totalFiles = 0
-    let doneFiles  = 0
+    // Collecter tous les épisodes uniques de la série (par episode_id)
+    const allEpisodeIds = new Set<number>()
+    const organizedEpisodeIds = new Set<number>()
+
     for (const t of serieTorrents) {
+        const hash     = t.infohash?.toLowerCase()
+        const orgFiles = organized[hash] ?? {}
         const files: any[] = t.torrent_files ?? []
-        if (files.length === 0) {
-            totalFiles++
-            if (organized[t.infohash?.toLowerCase()]?.[t.raw]) doneFiles++
-        } else {
-            totalFiles += files.length
-            doneFiles  += files.filter((f: any) => organized[t.infohash?.toLowerCase()]?.[f.filename]).length
+
+        for (const ep of t.resolved_episodes ?? []) {
+            allEpisodeIds.add(ep.episode_id)
+            // Cherche le fichier correspondant à cet épisode dans torrent_files
+            const epFile = files.find((f: any) => f.filename === ep.filename)
+            if (epFile ? orgFiles[epFile.filename] : Object.keys(orgFiles).length > 0) {
+                organizedEpisodeIds.add(ep.episode_id)
+            }
         }
     }
 
-    if (totalFiles === 0) return 'none'
-    if (doneFiles === 0)  return 'none'
-    if (doneFiles >= totalFiles) return 'complete'
+    if (allEpisodeIds.size === 0) return 'none'
+    if (organizedEpisodeIds.size === 0) return 'none'
+    if (organizedEpisodeIds.size >= allEpisodeIds.size) return 'complete'
     return 'partial'
 }
 
@@ -242,12 +248,13 @@ app.get('/api/series/:id', requireAuth, async (req, res) => {
         const availableBySnEn      = new Set<string>()  // "sn:en"
         const episodeTorrentMap: Record<number, any> = {}
         const episodeTorrentMapBySnEn: Record<string, any> = {}
-        const seasonTorrentMap : Record<number, any> = {}
+        const seasonTorrentMap : Record<number, any> = {}   // keyed by season_id (scraper)
+        const seasonTorrentMapBySn: Record<number, any> = {} // keyed by season_number (fallback)
         const integraleTorrents: any[] = []
         const packEpisodesTorrents: any[] = []
 
         for (const t of torrents) {
-            const ref = { torrent_url: t.torrent_url, magnet: t.magnet, type: t.type, raw: t.raw }
+            const ref = { torrent_url: t.torrent_url, magnet: t.magnet, type: t.type, raw: t.raw, manual: t.manual ?? false }
             for (const ep of t.resolved_episodes ?? []) {
                 availableEpisodeIds.add(ep.episode_id)
                 const snEnKey = `${ep.season_number}:${ep.episode_number}`
@@ -264,6 +271,8 @@ app.get('/api/series/:id', requireAuth, async (req, res) => {
                 } else {
                     const sids = rs.length > 0 ? rs.map((r: any) => r.season_id) : [t.season_id]
                     for (const sid of sids) { if (sid) seasonTorrentMap[sid] = ref }
+                    const sns = rs.length > 0 ? rs.map((r: any) => r.season_number) : [t.season_number]
+                    for (const sn of sns) { if (sn != null) seasonTorrentMapBySn[sn] = ref }
                 }
             } else if (t.type === 'pack_integrale') {
                 integraleTorrents.push(t)
@@ -271,6 +280,13 @@ app.get('/api/series/:id', requireAuth, async (req, res) => {
                 packEpisodesTorrents.push(t)
             }
         }
+
+        // ── DEBUG ──────────────────────────────────────────────
+        console.log(`[debug /api/series/${id}] serie="${serie.title}" allSeasonIds=`, [...allSeasonIds])
+        console.log(`[debug /api/series/${id}] seasonTorrentMap=`, seasonTorrentMap)
+        console.log(`[debug /api/series/${id}] seasons from API:`, seasonsWithEpisodes.map((s: any) => ({ id: s.id, season_number: s.season_number, title: s.title })))
+        console.log(`[debug /api/series/${id}] torrents matched:`, torrents.map(t => ({ raw: t.raw, type: t.type, season_id: t.season_id, resolved_seasons: t.resolved_seasons })))
+        // ── END DEBUG ──────────────────────────────────────────
 
         let promotedIntegrale: any = null
         if (integraleTorrents.length === 0 && allSeasonIds.size > 0) {
@@ -349,7 +365,7 @@ app.get('/api/series/:id', requireAuth, async (req, res) => {
                     orgCount >= total && total > 0 ? 'complete' : 'partial'
             return {
                 ...season,
-                torrent              : seasonTorrentMap[season.id] ?? null,
+                torrent              : seasonTorrentMap[season.id] ?? seasonTorrentMapBySn[season.season_number] ?? null,
                 organized_state      : seasonOrganizedState,
                 organized_count      : orgCount,
                 episodes             : eps,

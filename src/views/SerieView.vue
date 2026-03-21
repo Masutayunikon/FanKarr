@@ -27,7 +27,8 @@
       <!-- Hero -->
       <div class="relative">
         <div v-if="data.serie.fanart_image" class="absolute inset-0 h-72 overflow-hidden pointer-events-none">
-          <img :src="data.serie.fanart_image" class="w-full h-full object-cover opacity-20" />
+          <img :src="data.serie.fanart_image" class="w-full h-full object-cover opacity-20"
+               @error="e => ((e.target as HTMLElement).closest('div') as HTMLElement).style.display = 'none'" />
           <div class="absolute inset-0 bg-gradient-to-b from-transparent to-zinc-950" />
         </div>
 
@@ -64,6 +65,7 @@
               <button
                   v-for="(t, i) in data.torrents_integrale"
                   :key="i"
+                  :title="t.raw"
                   class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition"
                   :class="[
                   t.label === 'Intégrale'
@@ -81,12 +83,10 @@
             <!-- Barre progression intégrale -->
             <template v-for="(t, i) in data.torrents_integrale" :key="`prog-${i}`">
               <template v-if="torrentProgress(extractHash(t))">
-                <!-- Badge 100% -->
                 <span v-if="torrentProgress(extractHash(t))!.progress === 100"
                       class="mt-2 inline-flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-full border bg-green-500/10 text-green-400 border-green-500/20">
                   ✓ Téléchargé
                 </span>
-                <!-- Barre en cours -->
                 <div v-else class="mt-2 w-full max-w-sm">
                   <div class="flex items-center justify-between text-[10px] text-zinc-500 mb-1">
                     <span>Téléchargement</span>
@@ -160,16 +160,15 @@
               {{ season.organized_state === 'complete' ? 'Organisé ✓' : isAlreadyQueued(season.torrent) ? 'Déjà ajouté' : downloaded.has(`season-${season.id}`) ? 'Envoyé ✓' : 'Saison entière' }}
             </button>
           </div>
+
           <!-- Barre progression saison -->
           <template v-if="torrentProgress(extractHash(season.torrent))">
-            <!-- Badge 100% -->
             <div v-if="torrentProgress(extractHash(season.torrent))!.progress === 100"
                  class="px-5 py-2 border-b border-white/5">
               <span class="inline-flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-full border bg-green-500/10 text-green-400 border-green-500/20">
                 ✓ Téléchargé
               </span>
             </div>
-            <!-- Barre en cours -->
             <div v-else class="px-5 py-2 border-b border-white/5">
               <div class="flex items-center justify-between text-[10px] text-zinc-500 mb-1">
                 <span>Téléchargement en cours</span>
@@ -202,9 +201,9 @@
                 <!-- Info -->
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2">
-                  <span class="text-xs text-zinc-600 shrink-0 font-mono">
-                    {{ season.season_number === 0 ? 'SP' : `E${String(ep.episode_number).padStart(2,'0')}` }}
-                  </span>
+                    <span class="text-xs text-zinc-600 shrink-0 font-mono">
+                      {{ season.season_number === 0 ? 'SP' : `E${String(ep.episode_number).padStart(2,'0')}` }}
+                    </span>
                     <span class="text-sm font-medium truncate">{{ ep.title || `Épisode ${ep.episode_number}` }}</span>
                   </div>
                   <div class="flex items-center gap-3 mt-0.5">
@@ -213,38 +212,48 @@
                   </div>
                 </div>
 
-                <!-- Bouton épisode (type episode uniquement) -->
+                <!-- Badges + bouton download -->
                 <div class="shrink-0 flex items-center gap-2">
+
+                  <!-- Badge Hors Fankai (torrent manuel) -->
+                  <span
+                      v-if="ep.torrent?.manual"
+                      title="Ce fichier ne provient pas du catalogue Fan-Kai officiel"
+                      class="text-[10px] px-2 py-0.5 rounded-full border bg-purple-500/10 text-purple-400 border-purple-500/20"
+                  >
+                    Hors Fankai
+                  </span>
+
                   <!-- Badge organisé -->
                   <span v-if="ep.organized"
                         class="text-[10px] px-2 py-0.5 rounded-full border bg-green-500/10 text-green-400 border-green-500/20">
-                  ✓ organisé
-                </span>
+                    ✓ organisé
+                  </span>
 
                   <!-- Badge téléchargé à 100% -->
                   <span v-if="torrentProgress(extractHash(ep.torrent))?.progress === 100"
                         class="text-[10px] px-2 py-0.5 rounded-full border bg-green-500/10 text-green-400 border-green-500/20">
-                  ✓ téléchargé
-                </span>
+                    ✓ téléchargé
+                  </span>
 
                   <!-- Badge dispo/indispo -->
                   <span
                       class="inline-block text-[10px] px-2 py-0.5 rounded-full border"
                       :class="ep.available
-                    ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                    : 'bg-white/5 text-zinc-600 border-white/8'"
+                        ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                        : 'bg-white/5 text-zinc-600 border-white/8'"
                   >
-                  {{ ep.available ? 'dispo' : 'indispo' }}
-                </span>
+                    {{ ep.available ? 'dispo' : 'indispo' }}
+                  </span>
 
                   <!-- Bouton download -->
                   <button
                       class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition"
                       :class="[
-                    ep.torrent && !downloaded.has(`ep-${ep.id}`) && !isAlreadyQueued(ep.torrent) && !ep.organized
-                      ? 'bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border-orange-500/20'
-                      : 'bg-white/[0.03] text-zinc-600 border-white/8 cursor-not-allowed'
-                  ]"
+                        ep.torrent && !downloaded.has(`ep-${ep.id}`) && !isAlreadyQueued(ep.torrent) && !ep.organized
+                          ? 'bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border-orange-500/20'
+                          : 'bg-white/[0.03] text-zinc-600 border-white/8 cursor-not-allowed'
+                      ]"
                       :disabled="!ep.torrent || downloading.has(`ep-${ep.id}`) || downloaded.has(`ep-${ep.id}`) || isAlreadyQueued(ep.torrent) || ep.organized"
                       @click="ep.torrent && download(`ep-${ep.id}`, ep.torrent.torrent_url, ep.torrent.magnet)"
                   >
@@ -317,7 +326,7 @@ const store = useSeriesStore()
 
 const collapsedSeasons = ref<Set<number>>(new Set())
 const downloading      = ref<Set<string>>(new Set())
-const downloaded       = ref<Set<string>>(new Set())  // envoyés avec succès → bloqués
+const downloaded       = ref<Set<string>>(new Set())
 const toast            = ref<{ type: 'success' | 'error'; message: string } | null>(null)
 
 // ── Progression downloads ──────────────────────────────────────
@@ -339,13 +348,11 @@ async function fetchActiveDownloads() {
   } catch {}
 }
 
-// Cherche si un torrent actif correspond à un hash donné
 function torrentProgress(hash: string | null | undefined): ActiveTorrent | null {
   if (!hash) return null
   return activeTorrents.value.find(t => t.hash.toLowerCase() === hash.toLowerCase()) ?? null
 }
 
-// Hash d'un torrent de saison ou d'épisode (extrait depuis magnet ou url)
 function extractHash(torrent: { magnet?: string | null; torrent_url?: string | null } | null | undefined): string | null {
   if (!torrent) return null
   const magnet = torrent.magnet ?? ''
@@ -375,7 +382,6 @@ function showToast(type: 'success' | 'error', message: string) {
   setTimeout(() => { toast.value = null }, 3500)
 }
 
-// Vérifie si un torrent est déjà en cours ou terminé dans qBittorrent
 function isAlreadyQueued(torrent: { magnet?: string | null; torrent_url?: string | null } | null | undefined): boolean {
   const hash = extractHash(torrent)
   if (!hash) return false
