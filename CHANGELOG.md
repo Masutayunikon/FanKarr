@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.2](https://github.com/Masutayunikon/FanKarr/compare/v1.12.1...v1.12.2) (2026-03-21)
+
+
+### Bug Fixes
+
+* use season number from resolved episodes in priority ([dc48634](https://github.com/Masutayunikon/FanKarr/commit/dc486347193a8066a32d8f0106518abc2b04b7e2))
+
 ## [1.12.1](https://github.com/Masutayunikon/FanKarr/compare/v1.12.0...v1.12.1) (2026-03-21)
 
 
