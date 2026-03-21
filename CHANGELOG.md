@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.0](https://github.com/Masutayunikon/FanKarr/compare/v1.11.10...v1.12.0) (2026-03-21)
+
+
+### Features
+
+* now rename episodes with original_filename from api ([9bdb21a](https://github.com/Masutayunikon/FanKarr/commit/9bdb21a673ebb9871548aea6691bafbd049554ce))
+
 ## [1.11.10](https://github.com/Masutayunikon/FanKarr/compare/v1.11.9...v1.11.10) (2026-03-21)
 
 
