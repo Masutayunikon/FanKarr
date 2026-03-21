@@ -15,31 +15,22 @@ import fs   from 'fs'
 import fsp  from 'fs/promises'
 import path from 'path'
 import { parentPort } from 'worker_threads'
+import { DATA_DIR } from './config.js'
 
-// Base directory : binaire Bun ou cwd (Docker/dev)
-const _isBunBinary = typeof (globalThis as any).Bun !== 'undefined'
-    && path.dirname((process as any).execPath) !== process.cwd()
-const BASE_DIR = _isBunBinary
-    ? path.dirname((process as any).execPath)
-    : process.cwd()
-
-const TORRENTS_PATH  = path.join(BASE_DIR, 'data', 'torrent_final.json')
-const ORGANIZED_PATH = path.join(BASE_DIR, 'data', 'organized.json')
+const TORRENTS_PATH  = path.join(DATA_DIR, 'torrent_final.json')
+const ORGANIZED_PATH = path.join(DATA_DIR, 'organized.json')
 
 // ─── Utils log ────────────────────────────────────────────────
-// Le worker tourne dans un thread séparé — il passe les logs au thread principal
-// qui les écrit dans le fichier via logger.ts
-
 function log(msg: string)   { parentPort?.postMessage({ type: 'log', level: 'info',  msg }) }
 function warn(msg: string)  { parentPort?.postMessage({ type: 'log', level: 'warn',  msg }) }
 function error(msg: string) { parentPort?.postMessage({ type: 'log', level: 'error', msg }) }
 function debug(msg: string) { parentPort?.postMessage({ type: 'log', level: 'debug', msg }) }
 
-// ─── Settings (lu directement, pas d'import circulaire) ──────
+// ─── Settings ─────────────────────────────────────────────────
 
 function readSettings(): { mediaPath: string; completePath: string; organizeMode: string; nfoSupport: boolean } {
     try {
-        const p = path.join(process.cwd(), 'data', 'settings.json')
+        const p = path.join(DATA_DIR, 'settings.json')
         if (!fs.existsSync(p)) return { mediaPath: '', completePath: '', organizeMode: 'hardlink', nfoSupport: false }
         return JSON.parse(fs.readFileSync(p, 'utf-8'))
     } catch { return { mediaPath: '', completePath: '', organizeMode: 'hardlink', nfoSupport: false } }
@@ -112,8 +103,6 @@ function getGitlabSerieTitle(serieTitle: string): string {
     return SERIE_TITLE_GITLAB_MAP[serieTitle] ?? serieTitle
 }
 
-
-
 // ─── GitLab NFO downloader ────────────────────────────────────
 
 const GITLAB_API      = 'https://gitlab.com/api/v4/projects/ElPouki%2Ffankai_pack/repository'
@@ -139,7 +128,6 @@ async function downloadGitlabFolder(serieTitle: string, destRoot: string): Promi
 
     log(`[nfo] Récupération dossier GitLab: ${gitlabTitle}`)
 
-    // Lister récursivement tous les fichiers du dossier (pagination GitLab)
     let files: any[] = []
     try {
         let page = 1
@@ -166,13 +154,10 @@ async function downloadGitlabFolder(serieTitle: string, destRoot: string): Promi
     log(`[nfo] ${fileEntries.length} fichiers à télécharger`)
 
     for (const entry of fileEntries) {
-        // entry.path = "pack/Black Lagoon Henshū/Saison 1/fichier.nfo"
-        // On retire le préfixe "pack/{gitlabTitle}/" pour obtenir le chemin relatif
         const relativePath = entry.path.replace(`pack/${gitlabTitle}/`, '')
         const destPath     = path.join(destRoot, relativePath)
         const destDir      = path.dirname(destPath)
 
-        // Skip si déjà présent
         if (fs.existsSync(destPath)) continue
 
         try {
@@ -225,15 +210,9 @@ async function organizeTorrent(hash: string, name: string, savePath: string) {
 
     // ── Téléchargement NFO/images depuis GitLab ───────────────
     if (nfoSupport) {
-        // Collecter tous les titres de séries distincts depuis resolved_episodes
-        // (un pack_integrale peut mélanger plusieurs séries, ex: One Piece Yabai + Kaï)
         const serieTitlesMap = new Map<number, string>()
-
-        // Titre principal du torrent
         serieTitlesMap.set(torrent.serie_id ?? 0, serieTitle)
 
-        // Titres alternatifs depuis resolved_episodes
-        // resolved_episodes n'a pas toujours serie_title → on cherche dans torrent_final.json
         const allTorrents: any[] = (() => {
             try { return JSON.parse(fs.readFileSync(TORRENTS_PATH, 'utf-8')) } catch { return [] }
         })()
@@ -249,7 +228,6 @@ async function organizeTorrent(hash: string, name: string, savePath: string) {
             }
         }
 
-        // Télécharger NFO pour chaque série distincte
         for (const title of serieTitlesMap.values()) {
             const serieDestRoot = path.join(mediaPath, title)
             await downloadGitlabFolder(title, serieDestRoot)
@@ -289,35 +267,36 @@ async function organizeTorrent(hash: string, name: string, savePath: string) {
         return { ...result, total: 1, done: 1 }
     }
 
+    // ── Map filename → season ─────────────────────────────────
+    const filenameSeasonMap = new Map<string, number>()
+
+    // Index par filename depuis resolved_episodes (évite les collisions episode_number)
+    const filenameToSeason = new Map<string, number>()
+    for (const ep of torrent.resolved_episodes ?? []) {
+        if (ep.filename && ep.season_number !== undefined)
+            filenameToSeason.set(ep.filename, ep.season_number)
+    }
+
+    for (const tf of torrentFiles) {
+        const sn = tf.season_number != null ? Number(tf.season_number) : null
+        if (sn !== null) {
+            filenameSeasonMap.set(tf.filename, sn)
+        } else {
+            const fromResolved = filenameToSeason.get(tf.filename)
+            if (fromResolved !== undefined) {
+                filenameSeasonMap.set(tf.filename, fromResolved)
+            } else if (torrent.season_number !== undefined) {
+                filenameSeasonMap.set(tf.filename, torrent.season_number)
+            }
+        }
+    }
+
     // ── Map filename → original_filename (depuis l'API) ────────
+    // Permet de renommer le fichier selon le nom standardisé Fankai
     const filenameToOriginal = new Map<string, string>()
     for (const ep of torrent.resolved_episodes ?? []) {
         if (ep.filename && ep.original_filename && ep.filename !== ep.original_filename) {
             filenameToOriginal.set(ep.filename, ep.original_filename)
-        }
-    }
-
-    // ── Map filename → season ─────────────────────────────────
-    // Priorité : season_number dans torrent_files (packs multi-saisons)
-    // Fallback  : resolved_episodes matchés par episode_number (torrents individuels)
-    const filenameSeasonMap = new Map<string, number>()
-
-    // Index resolved_episodes par episode_number pour lookup rapide
-    const epByNum = new Map<number, number>()  // ep_number → season_number
-    for (const ep of torrent.resolved_episodes ?? []) {
-        if (ep.episode_number !== undefined && ep.season_number !== undefined)
-            epByNum.set(Number(ep.episode_number), ep.season_number)
-    }
-
-    for (const tf of torrentFiles) {
-        const sn: number | null = tf.season_number != null ? Number(tf.season_number) : null
-        const tfNum = tf.num !== undefined ? Number(tf.num) : undefined
-        if (sn !== null) {
-            filenameSeasonMap.set(tf.filename, sn)
-        } else if (tfNum !== undefined && epByNum.has(tfNum)) {
-            filenameSeasonMap.set(tf.filename, epByNum.get(tfNum)!)
-        } else if (torrent.season_number !== undefined) {
-            filenameSeasonMap.set(tf.filename, torrent.season_number)
         }
     }
 
@@ -328,7 +307,9 @@ async function organizeTorrent(hash: string, name: string, savePath: string) {
         const filePath: string[] = tf.path
 
         // Skip les fichiers dans des dossiers bonus/musique/images
-        if (isInExcludedFolder(filePath)) {
+        // Exception : fichiers avec season_number explicite (saison 0)
+        const tfMeta = torrentFiles.find((tf: any) => tf.filename === filename)
+        if (isInExcludedFolder(filePath) && tfMeta?.season_number == null) {
             log(`[organize] skip bonus: ${filename}`)
             result.skipped++
             continue
@@ -358,10 +339,10 @@ async function organizeTorrent(hash: string, name: string, savePath: string) {
             continue
         }
 
-        const seasonNum     = filenameSeasonMap.get(filename) ?? 1
-        const destFilename  = filenameToOriginal.get(filename) ?? filename
-        const destDir       = path.join(mediaPath, serieTitle, seasonFolder(seasonNum))
-        const dest          = path.join(destDir, destFilename)
+        const seasonNum    = filenameSeasonMap.get(filename) ?? 1
+        const destFilename = filenameToOriginal.get(filename) ?? filename
+        const destDir      = path.join(mediaPath, serieTitle, seasonFolder(seasonNum))
+        const dest         = path.join(destDir, destFilename)
 
         if (fs.existsSync(dest)) {
             markOrganized(hash, filename)
@@ -379,7 +360,7 @@ async function organizeTorrent(hash: string, name: string, savePath: string) {
             }
             markOrganized(hash, filename)
             result.done++
-            log(`[organize] ✓ ${filename} → Saison ${String(seasonNum).padStart(3,'0')}`)
+            log(`[organize] ✓ ${destFilename} → Saison ${String(seasonNum).padStart(3,'0')}`)
         } catch (err) {
             const msg = err instanceof Error ? err.message : 'Erreur inconnue'
             error(`[organize] ✗ ${filename}: ${msg}`)
@@ -409,7 +390,6 @@ parentPort?.on('message', async (msg: any) => {
         }
 
         const files: any[] = torrent.torrent_files ?? []
-        // Pour fichier unique : vérifier via le name directement
         const allDone = files.length > 0
             ? files.every((f: any) => organized[t.hash]?.[f.filename])
             : !!organized[t.hash]?.[t.name]
