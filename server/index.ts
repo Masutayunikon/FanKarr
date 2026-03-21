@@ -135,21 +135,18 @@ function indexByNormalizedTitle(torrents: any[]): Map<string, any[]> {
 function computeSerieDownloadState(
     serieTorrents : any[],
     organized     : Record<string, Record<string, string>>,
-    activeTorrents: Set<string>  // hashes actuellement dans qB en downloading
+    activeTorrents: Set<string>
 ): 'none' | 'downloading' | 'partial' | 'complete' {
     if (serieTorrents.length === 0) return 'none'
 
-    // Un torrent de la série est en cours de téléchargement ?
     const hasActive = serieTorrents.some(t => activeTorrents.has(t.infohash?.toLowerCase()))
     if (hasActive) return 'downloading'
 
-    // Compter les fichiers attendus vs organisés
     let totalFiles = 0
     let doneFiles  = 0
     for (const t of serieTorrents) {
         const files: any[] = t.torrent_files ?? []
         if (files.length === 0) {
-            // Fichier unique
             totalFiles++
             if (organized[t.infohash?.toLowerCase()]?.[t.raw]) doneFiles++
         } else {
@@ -191,7 +188,7 @@ app.get('/api/series', requireAuth, async (_req, res) => {
 
         const seriesRaw = Array.isArray(apiData) ? apiData : (apiData.series ?? [])
 
-        // Dédupliquer les séries Kaï/Kai — garder celle qui a des torrents, sinon la plus récente (ID le plus grand)
+        // Dédupliquer les séries Kaï/Kai — garder celle qui a des torrents, sinon la plus récente
         const seenTitles = new Map<string, any>()
         for (const serie of seriesRaw) {
             const key = normalizeTitle(serie.title ?? serie.show_title ?? '')
@@ -201,7 +198,6 @@ app.get('/api/series', requireAuth, async (_req, res) => {
                 const existing = seenTitles.get(key)!
                 const existingHasTorrents = (byId.get(existing.id) ?? byNormTitle.get(key) ?? []).length > 0
                 const newHasTorrents      = (byId.get(serie.id)    ?? byNormTitle.get(key) ?? []).length > 0
-                // Préférer celle qui a des torrents, sinon la plus récente
                 if (!existingHasTorrents && newHasTorrents) seenTitles.set(key, serie)
                 else if (existingHasTorrents === newHasTorrents && serie.id > existing.id) seenTitles.set(key, serie)
             }
@@ -236,7 +232,6 @@ app.get('/api/series/:id', requireAuth, async (req, res) => {
         }))
 
         const allTorrents  = readTorrents()
-        const serieMeta    = allTorrents.find(t => t.serie_id === id)
         const normApiTitle = normalizeTitle(serie.title ?? serie.show_title ?? '')
         const torrents     = allTorrents.filter(t =>
             t.serie_id === id ||
@@ -244,7 +239,6 @@ app.get('/api/series/:id', requireAuth, async (req, res) => {
         )
         const allSeasonIds = new Set<number>(seasonsWithEpisodes.filter((s: any) => s.season_number !== 0).map((s: any) => s.id))
         const availableEpisodeIds  = new Set<number>()
-        // Fallback par season_number+episode_number pour les séries migrées Kaï→Kai
         const availableBySnEn      = new Set<string>()  // "sn:en"
         const episodeTorrentMap: Record<number, any> = {}
         const episodeTorrentMapBySnEn: Record<string, any> = {}
@@ -319,8 +313,6 @@ app.get('/api/series/:id', requireAuth, async (req, res) => {
                 organized = JSON.parse(fs.readFileSync(orgPath, 'utf-8'))
         } catch {}
 
-        // Construire un set des episode_id organisés
-        // On croise resolved_episodes de chaque torrent avec organized.json
         const organizedEpisodeIds = new Set<number>()
         const organizedBySnEn     = new Set<string>()
         for (const t of torrents) {
@@ -328,9 +320,7 @@ app.get('/api/series/:id', requireAuth, async (req, res) => {
             const files = t.torrent_files ?? []
             const orgFiles = organized[hash] ?? {}
             if (Object.keys(orgFiles).length === 0) continue
-            // Au moins un fichier organisé pour ce torrent → on marque les épisodes résolus
             for (const ep of t.resolved_episodes ?? []) {
-                // Vérifier si le fichier de cet épisode est organisé
                 const epFile = files.find((f: any) =>
                     f.episode_ids?.includes(ep.episode_id) || f.episode_number === ep.episode_number
                 )
@@ -352,7 +342,6 @@ app.get('/api/series/:id', requireAuth, async (req, res) => {
                 organized : organizedEpisodeIds.has(ep.id)
                     || organizedBySnEn.has(`${season.season_number}:${ep.episode_number}`),
             }))
-            // State saison : none / partial / complete
             const total    = eps.filter((e: any) => e.available).length
             const orgCount = eps.filter((e: any) => e.organized).length
             const seasonOrganizedState =
@@ -393,7 +382,6 @@ app.get('/api/downloads', requireAuth, async (_req, res) => {
         const { category } = readSettings()
         const torrents = await dispatchList(category ?? 'fankai')
 
-        // Enrichir avec l'état d'organisation
         let organized: Record<string, Record<string, string>> = {}
         try {
             const orgPath = path.join(DATA_DIR, 'organized.json')
@@ -419,7 +407,6 @@ app.get('/api/downloads', requireAuth, async (_req, res) => {
             if (doneFiles >= totalFiles) organizeState = 'done'
             else if (doneFiles > 0)      organizeState = 'partial'
 
-            // Récupérer les erreurs depuis recentOrganized
             const notif = recentOrganized.find(n => n.hash === t.hash)
             const errorFiles = notif?.errorFiles ?? []
 
@@ -432,7 +419,7 @@ app.get('/api/downloads', requireAuth, async (_req, res) => {
     }
 })
 
-// ── Résultats d'organisation récents (pour notifications frontend) ──
+// ── Résultats d'organisation récents ──────────────────────────
 interface OrganizeNotif {
     hash       : string
     name       : string
@@ -454,12 +441,10 @@ app.get('/api/organize/recent', requireAuth, (_req, res) => {
     res.json(recentOrganized)
 })
 
-// Vider les notifs lues
 app.post('/api/organize/recent/clear', requireAuth, (_req, res) => {
     recentOrganized.length = 0
     res.json({ ok: true })
 })
-
 
 app.post('/api/organize', requireAuth, async (req, res) => {
     const { hash, name, save_path } = req.body
@@ -475,7 +460,6 @@ app.post('/api/organize', requireAuth, async (req, res) => {
     }
 })
 
-// ── Torrents status ────────────────────────────────────────────
 // ── Logs ──────────────────────────────────────────────────────
 app.get('/api/logs', requireAuth, (req, res) => {
     const limit  = Number(req.query.limit)  || 100
@@ -551,7 +535,7 @@ app.post('/api/scan', requireAuth, async (_req, res) => {
     }
 })
 
-// ── SPA fallback (prod) — doit être après toutes les routes API ─
+// ── SPA fallback (prod) ────────────────────────────────────────
 if (fs.existsSync(PUBLIC_PATH)) {
     app.get('*path', (_req, res) => {
         res.sendFile(path.join(PUBLIC_PATH, 'index.html'))
@@ -591,7 +575,8 @@ app.listen(PORT, async () => {
         logger.error('organize', `scanMediaPath échoué: ${err}`)
     )
 
-    // Auto-organise toutes les 30s
+    // Auto-organise — polling différentiel toutes les 5 minutes
+    // Le worker ne se lance que si un torrent vient de passer en seeding
     const autoOrganize = async () => {
         try {
             const { category } = readSettings()
@@ -607,9 +592,9 @@ app.listen(PORT, async () => {
             console.error('[organize] Erreur auto-organise:', err)
         }
     }
-    // Premier run 30s après démarrage, puis toutes les 30s
+    // Premier run 10s après démarrage, puis toutes les 5 minutes
     setTimeout(() => {
         autoOrganize()
-        setInterval(autoOrganize, 30_000)
-    }, 30_000)
+        setInterval(autoOrganize, 5 * 60_000)
+    }, 10_000)
 })

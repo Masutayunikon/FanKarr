@@ -13,6 +13,9 @@ import { logger } from './logger.js'
 // Un seul worker à la fois
 let workerRunning = false
 
+// État précédent des torrents pour détecter les passages downloading → seeding
+const _prevStates = new Map<string, string>()  // hash → state
+
 // Résolution du chemin du worker
 // En binaire Bun compilé : le worker est à côté de l'exécutable
 // En Docker/dev : à côté du fichier courant
@@ -81,6 +84,9 @@ export async function scanMediaPath(
             organized = JSON.parse(fs.readFileSync(organizedPath, 'utf-8'))
     } catch {}
 
+    // Construire le set des fichiers présents sur le disque (pour nettoyage)
+    const presentFiles = new Set<string>()  // "hash:filename"
+
     // Parcourir récursivement mediaPath
     function walk(dir: string) {
         let entries: fs.Dirent[]
@@ -94,6 +100,7 @@ export async function scanMediaPath(
                 result.found++
                 const hash = filenameIndex.get(entry.name)
                 if (!hash) continue
+                presentFiles.add(`${hash}:${entry.name}`)
                 if (organized[hash]?.[entry.name]) continue  // déjà connu
                 // Marquer comme organisé
                 if (!organized[hash]) organized[hash] = {}
@@ -105,9 +112,28 @@ export async function scanMediaPath(
 
     walk(mediaPath)
 
-    if (result.added > 0) {
+    // Nettoyer les entrées orphelines (fichiers supprimés)
+    let removed = 0
+    for (const [hash, files] of Object.entries(organized)) {
+        for (const filename of Object.keys(files)) {
+            if (!presentFiles.has(`${hash}:${filename}`)) {
+                // Vérifier que ce hash est bien dans le filenameIndex
+                // (évite de supprimer des entrées de torrents non-scannés)
+                if (filenameIndex.get(filename) === hash) {
+                    delete organized[hash][filename]
+                    removed++
+                }
+            }
+        }
+        // Supprimer l'entrée du torrent si elle est vide
+        if (Object.keys(organized[hash]).length === 0) {
+            delete organized[hash]
+        }
+    }
+
+    if (result.added > 0 || removed > 0) {
         fs.writeFileSync(organizedPath, JSON.stringify(organized, null, 2), 'utf-8')
-        logger.info('organize', `scanMediaPath: ${result.found} fichiers scannés, ${result.added} ajoutés à organized.json`)
+        logger.info('organize', `scanMediaPath: ${result.found} fichiers scannés, ${result.added} ajoutés, ${removed} entrées orphelines supprimées`)
     } else {
         logger.info('organize', `scanMediaPath: ${result.found} fichiers scannés, rien de nouveau`)
     }
@@ -139,10 +165,27 @@ export async function autoOrganizeAll(
 
     if (torrents.length === 0) return
 
+    const isFirstRun = _prevStates.size === 0
     const seedingCount = torrents.filter(t => t.state === 'seeding').length
+
+    // Détecter les torrents qui viennent de passer en seeding (downloading → seeding)
+    const newlySeeding = torrents.filter(t => {
+        const prev = _prevStates.get(t.hash)
+        return t.state === 'seeding' && (prev === undefined || prev !== 'seeding')
+    })
+
+    // Mettre à jour l'état précédent
+    for (const t of torrents) _prevStates.set(t.hash, t.state)
+
+    // Lancer seulement si : premier run avec des seeders, ou nouveau torrent terminé
+    if (!isFirstRun && newlySeeding.length === 0) return
     if (seedingCount === 0) return
 
-    console.log(`[organize] Lancement worker (${seedingCount} torrents en seeding)`)
+    if (newlySeeding.length > 0 && !isFirstRun) {
+        console.log(`[organize] ${newlySeeding.length} nouveau(x) torrent(s) terminé(s) → lancement worker`)
+    } else {
+        console.log(`[organize] Lancement worker (${seedingCount} torrents en seeding)`)
+    }
     workerRunning = true
 
     const workerPath = resolveWorkerPath()
