@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.2.0](https://github.com/Masutayunikon/FanKarr/compare/v2.1.3...v2.2.0) (2026-03-23)
+
+
+### Features
+
+* add organize all button ([bbaccfd](https://github.com/Masutayunikon/FanKarr/commit/bbaccfd97b51724932f2ebf22cad81be1cde61c0))
+
+
+### Bug Fixes
+
+* organizer reuse the wrong name for gitlab path ([bbaccfd](https://github.com/Masutayunikon/FanKarr/commit/bbaccfd97b51724932f2ebf22cad81be1cde61c0))
+
 ## [2.1.3](https://github.com/Masutayunikon/FanKarr/compare/v2.1.2...v2.1.3) (2026-03-23)
 
 
