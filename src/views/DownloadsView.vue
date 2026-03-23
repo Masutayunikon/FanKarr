@@ -10,6 +10,12 @@
         <h1 class="text-xl font-black text-white font-sans">Téléchargements</h1>
       </div>
       <div class="flex items-center gap-3">
+        <button
+            @click="organizeAll"
+            :disabled="organizingAll"
+            class="border border-[#1e2d3d] text-[#5a7a94] px-4 py-1.5 text-xs tracking-widest hover:border-green-500 hover:text-green-500 transition-colors cursor-pointer disabled:opacity-50">
+          {{ organizingAll ? '...' : 'ORGANISER TOUT' }}
+        </button>
         <div class="flex items-center gap-2 text-[10px] text-[#5a7a94] tracking-widest">
           <div class="w-1.5 h-1.5 rounded-full" :class="polling ? 'bg-green-500 animate-pulse' : 'bg-[#1e2d3d]'"/>
           {{ polling ? 'EN DIRECT' : 'PAUSE' }}
@@ -190,6 +196,7 @@ const loading       = ref(true)
 const polling       = ref(true)
 const noClients     = ref(false)
 const organizing    = ref<Record<string, boolean>>({})
+const organizingAll = ref(false)
 const activeTab     = ref<'active' | 'done'>('active')
 const hideOrganized = ref(false)
 
@@ -251,7 +258,7 @@ function togglePolling() {
 onMounted(startPolling)
 onUnmounted(stopPolling)
 
-// ── Organiser ──────────────────────────────────────────────────
+// ── Organiser un torrent ───────────────────────────────────────
 async function organize(torrent: any) {
   organizing.value[torrent.hash] = true
   try {
@@ -263,6 +270,7 @@ async function organize(torrent: any) {
     })
     if (res.ok) {
       toast(`${torrent.name} organisé ✓`, 'success')
+      await fetchTorrents()
     } else {
       const { error } = await res.json()
       toast(error ?? 'Erreur lors de l\'organisation', 'error')
@@ -272,6 +280,40 @@ async function organize(torrent: any) {
   } finally {
     organizing.value[torrent.hash] = false
   }
+}
+
+// ── Organiser tout ─────────────────────────────────────────────
+async function organizeAll() {
+  const toOrganize = doneTorrents.value.filter(t => t.organizeState !== 'done')
+  if (toOrganize.length === 0) {
+    toast('Tous les torrents sont déjà organisés', 'success')
+    return
+  }
+
+  organizingAll.value = true
+  let done = 0
+  let errors = 0
+
+  for (const t of toOrganize) {
+    try {
+      const res = await fetch('/api/organize', {
+        method : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ hash: t.hash, save_path: t.save_path, name: t.name })
+      })
+      if (res.ok) done++
+      else errors++
+    } catch {
+      errors++
+    }
+  }
+
+  organizingAll.value = false
+  await fetchTorrents()
+
+  if (errors === 0) toast(`${done} torrent(s) organisé(s) ✓`, 'success')
+  else toast(`${done} OK, ${errors} erreur(s)`, 'error')
 }
 
 // ── Helpers affichage ──────────────────────────────────────────

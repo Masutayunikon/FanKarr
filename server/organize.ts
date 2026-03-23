@@ -154,7 +154,19 @@ export async function autoOrganizeAll(
 
     for (const t of torrents) _prevStates.set(t.hash, t.state)
 
-    if (!isFirstRun && newlySeeding.length === 0) return
+    // Charger organized.json pour vérifier s'il reste des torrents non organisés
+    let organized: Record<string, Record<string, string>> = {}
+    try {
+        const orgPath = path.join(DATA_DIR, 'organized.json')
+        if (fs.existsSync(orgPath))
+            organized = JSON.parse(fs.readFileSync(orgPath, 'utf-8'))
+    } catch {}
+
+    const hasUnorganized = torrents.some(t =>
+        t.state === 'seeding' && !organized[t.hash?.toLowerCase()]
+    )
+
+    if (!isFirstRun && newlySeeding.length === 0 && !hasUnorganized) return
     if (seedingCount === 0) return
 
     if (newlySeeding.length > 0 && !isFirstRun) {

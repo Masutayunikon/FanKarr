@@ -67,12 +67,20 @@ function findTorrentByHash(hash: string, seriesData: any[]): { torrent: any; ser
                 if (t.infohash?.toLowerCase() === hash.toLowerCase())
                     return { torrent: { ...t, _season: season }, serieData: sd }
             }
-            // Niveau épisode
-            for (const ep of season.episodes ?? []) {
-                for (const t of ep.torrents ?? []) {
-                    if (t.infohash?.toLowerCase() === hash.toLowerCase())
-                        return { torrent: { ...t, _episode: ep, _season: season }, serieData: sd }
-                }
+            // Niveau épisode — compter combien d'épisodes partagent ce torrent
+            const matchingEpisodes = season.episodes?.filter((ep: any) =>
+                ep.torrents?.some((t: any) => t.infohash?.toLowerCase() === hash.toLowerCase())
+            ) ?? []
+
+            if (matchingEpisodes.length === 1) {
+                // Torrent propre à un seul épisode → cas épisode unique
+                const ep = matchingEpisodes[0]
+                const t  = ep.torrents.find((t: any) => t.infohash?.toLowerCase() === hash.toLowerCase())
+                return { torrent: { ...t, _episode: ep, _season: season }, serieData: sd }
+            } else if (matchingEpisodes.length > 1) {
+                // Même torrent partagé entre plusieurs épisodes → traiter comme pack_saison
+                const t = matchingEpisodes[0].torrents.find((t: any) => t.infohash?.toLowerCase() === hash.toLowerCase())
+                return { torrent: { ...t, _season: season }, serieData: sd }
             }
         }
     }
@@ -135,6 +143,23 @@ function isInExcludedFolder(filePath: string[]): boolean {
     return false
 }
 
+// ─── Map correction titres API → titres GitLab ───────────────
+const SERIE_TITLE_GITLAB_MAP: Record<string, string> = {
+    'Enfer Et Paradis Henshū'          : 'Enfer et Paradis Henshū',
+    'Hajime No Ippo Henshū'            : 'Hajime no Ippo Henshū',
+    'Hikaru No Go Henshū'              : 'Hikaru no Go Henshū',
+    'Hokuto No Ken Kaï'                : 'Hokuto no Ken Kaï',
+    'Kaguya-sama : Love is War Henshū' : 'Kaguya-sama - Love is War Henshū',
+    'Kenshin le Vagabond Henshū'       : 'Kenshin le vagabond Henshū',
+    'Kuroko No Basket Henshū'          : 'Kuroko no Basket Henshū',
+    'Shingeki No Kyojin Henshū'        : 'Shingeki no Kyojin Henshū',
+    'Tower Of God Henshū'              : 'Tower of God Henshū',
+}
+
+function getGitlabSerieTitle(serieTitle: string): string {
+    return SERIE_TITLE_GITLAB_MAP[serieTitle] ?? serieTitle
+}
+
 // ─── GitLab NFO downloader ────────────────────────────────────
 const GITLAB_API      = 'https://gitlab.com/api/v4/projects/ElPouki%2Ffankai_pack/repository'
 const GITLAB_RAW_BASE = 'https://gitlab.com/ElPouki/fankai_pack/-/raw/main/pack'
@@ -154,8 +179,9 @@ async function fetchBinary(url: string): Promise<Buffer> {
 }
 
 async function downloadGitlabFolder(serieTitle: string, destRoot: string): Promise<void> {
-    const folderPath = `pack/${serieTitle}`
-    log(`[nfo] Récupération dossier GitLab: ${serieTitle}`)
+    const gitlabTitle = getGitlabSerieTitle(serieTitle)
+    const folderPath  = `pack/${gitlabTitle}`
+    log(`[nfo] Récupération dossier GitLab: ${gitlabTitle}`)
 
     let files: any[] = []
     try {
@@ -180,12 +206,12 @@ async function downloadGitlabFolder(serieTitle: string, destRoot: string): Promi
     log(`[nfo] ${fileEntries.length} fichiers à télécharger`)
 
     for (const entry of fileEntries) {
-        const relativePath = entry.path.replace(`pack/${serieTitle}/`, '')
+        const relativePath = entry.path.replace(`pack/${gitlabTitle}/`, '')
         const destPath     = path.join(destRoot, relativePath)
         if (fs.existsSync(destPath)) continue
         try {
             fs.mkdirSync(path.dirname(destPath), { recursive: true })
-            const rawUrl = `${GITLAB_RAW_BASE}/${encodeURIComponent(serieTitle)}/${relativePath.split('/').map(encodeURIComponent).join('/')}`
+            const rawUrl = `${GITLAB_RAW_BASE}/${encodeURIComponent(gitlabTitle)}/${relativePath.split('/').map(encodeURIComponent).join('/')}`
             const data   = await fetchBinary(rawUrl)
             fs.writeFileSync(destPath, data)
             log(`[nfo] ✓ ${relativePath}`)
@@ -193,7 +219,7 @@ async function downloadGitlabFolder(serieTitle: string, destRoot: string): Promi
             warn(`[nfo] ✗ ${relativePath}: ${err instanceof Error ? err.message : err}`)
         }
     }
-    log(`[nfo] GitLab synchronisé pour "${serieTitle}"`)
+    log(`[nfo] GitLab synchronisé pour "${gitlabTitle}"`)
 }
 
 // ─── Filesystem ops ───────────────────────────────────────────
