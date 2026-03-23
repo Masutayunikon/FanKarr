@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.0.0](https://github.com/Masutayunikon/FanKarr/compare/v1.14.0...v2.0.0) (2026-03-23)
+
+
+### ⚠ BREAKING CHANGES
+
+* suppression de torrent_final.json au profit d'un système de fichiers par série (series/{id}.json) avec cache mémoire GitHub 6h. Version majeure — nécessite un nouveau scraper et une mise à jour complète.
+
+### Features
+
+* **api:** adaptation complète à la nouvelle structure API Fankai ([b3fd7dd](https://github.com/Masutayunikon/FanKarr/commit/b3fd7dded40bf067acc8552cbf5f34a57d27000c))
+* **api:** cache mémoire GitHub TTL 6h avec invalidation via /api/update ([b3fd7dd](https://github.com/Masutayunikon/FanKarr/commit/b3fd7dded40bf067acc8552cbf5f34a57d27000c))
+* **api:** matching torrents par hiérarchie série/saison/épisode ([b3fd7dd](https://github.com/Masutayunikon/FanKarr/commit/b3fd7dded40bf067acc8552cbf5f34a57d27000c))
+* migration vers nouvelle architecture API et scraper par série ([b3fd7dd](https://github.com/Masutayunikon/FanKarr/commit/b3fd7dded40bf067acc8552cbf5f34a57d27000c))
+* **organize:** refonte complète sans torrent_final.json ([b3fd7dd](https://github.com/Masutayunikon/FanKarr/commit/b3fd7dded40bf067acc8552cbf5f34a57d27000c))
+* **scraper:** extraction nom bencode dans raw pour torrents locaux ([b3fd7dd](https://github.com/Masutayunikon/FanKarr/commit/b3fd7dded40bf067acc8552cbf5f34a57d27000c))
+* **series-view:** badge "Hors Fankai" sur épisodes de torrents manuels ([b3fd7dd](https://github.com/Masutayunikon/FanKarr/commit/b3fd7dded40bf067acc8552cbf5f34a57d27000c))
+* **series-view:** tooltip raw name sur boutons intégrale via :title ([b3fd7dd](https://github.com/Masutayunikon/FanKarr/commit/b3fd7dded40bf067acc8552cbf5f34a57d27000c))
+
+
+### Bug Fixes
+
+* **catalogue:** état download basé sur épisodes organisés vs torrents bruts ([b3fd7dd](https://github.com/Masutayunikon/FanKarr/commit/b3fd7dded40bf067acc8552cbf5f34a57d27000c))
+* **series:** boutons saison Yu-Gi-Oh via fallback season_number ([b3fd7dd](https://github.com/Masutayunikon/FanKarr/commit/b3fd7dded40bf067acc8552cbf5f34a57d27000c))
+
 ## [1.14.0](https://github.com/Masutayunikon/FanKarr/compare/v1.13.0...v1.14.0) (2026-03-21)
 
 
