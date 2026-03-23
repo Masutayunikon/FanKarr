@@ -18,10 +18,9 @@ registerDriver(qbittorrentDriver)
 
 const app = express()
 const PORT = Number(process.env.PORT) || 9898
-const FANKAI_API    = 'https://metadata.fankai.fr'
-const TORRENTS_PATH = path.join(DATA_DIR, 'torrent_final.json')
-const GITHUB_RAW_URL = process.env.GITHUB_RAW_URL
-    ?? 'https://raw.githubusercontent.com/masutayunikon/fankarr-scraper/main/data/torrent_final.json'
+const FANKAI_API  = 'https://metadata.fankai.fr'
+const GITHUB_BASE = process.env.GITHUB_BASE
+    ?? 'https://raw.githubusercontent.com/masutayunikon/fankarr-scraper/main'
 
 app.use(express.json())
 app.use(cookieParser())
@@ -87,77 +86,254 @@ app.get('/api/torrent-clients/:uuid/healthcheck', requireAuth, async (req, res) 
     res.json(await driver.healthcheck(client.config))
 })
 
-// ── Helpers ────────────────────────────────────────────────────
-function readTorrents(): any[] {
+// ── Cache GitHub ───────────────────────────────────────────────
+
+const CACHE_TTL_MS = 6 * 60 * 60 * 1000  // 6 heures
+
+interface CacheEntry<T> { data: T; expiresAt: number }
+const _cache = new Map<string, CacheEntry<any>>()
+
+function cacheGet<T>(key: string): T | null {
+    const entry = _cache.get(key)
+    if (!entry) return null
+    if (Date.now() > entry.expiresAt) { _cache.delete(key); return null }
+    return entry.data as T
+}
+
+function cacheSet<T>(key: string, data: T): void {
+    _cache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS })
+}
+
+function cacheClear(): void { _cache.clear() }
+
+async function githubGet(urlPath: string): Promise<any> {
+    const key = urlPath
+    const cached = cacheGet(key)
+    if (cached) return cached
+    const res = await fetch(`${GITHUB_BASE}/${urlPath}`)
+    if (!res.ok) throw new Error(`GitHub ${res.status}: ${urlPath}`)
+    const data = await res.json()
+    cacheSet(key, data)
+    return data
+}
+
+async function readAvailable(): Promise<number[]> {
     try {
-        if (!fs.existsSync(TORRENTS_PATH)) return []
-        return JSON.parse(fs.readFileSync(TORRENTS_PATH, 'utf-8'))
+        return await githubGet('available.json') as number[]
     } catch { return [] }
 }
+
+async function readSerieData(serieId: number): Promise<any | null> {
+    try {
+        return await githubGet(`series/${serieId}.json`)
+    } catch { return null }
+}
+
+// Extrait tous les torrents d'un series/{id}.json avec leur type et niveau hiérarchique
+// Retourne une liste plate compatible avec l'ancienne interface { infohash, torrent_url, magnet, raw, type, ... }
+function extractTorrentsFromSerieData(sd: any): any[] {
+    const result: any[] = []
+    if (!sd) return result
+
+    // Torrents au niveau série → pack_integrale (ou pack_saison si une seule saison)
+    for (const t of sd.torrents ?? []) {
+        result.push({
+            ...t,
+            raw       : t.title,
+            type      : 'pack_integrale',
+            serie_id  : sd.id,
+            serie_title: sd.title,
+            // episodes couverts : tous les épisodes de toutes les saisons qui ont paths[i]
+            _serieLevel: true,
+            _serieData : sd,
+            _torrentIdx: (sd.torrents ?? []).indexOf(t),
+        })
+    }
+
+    // Torrents au niveau saison → pack_saison
+    for (const season of sd.seasons ?? []) {
+        for (const t of season.torrents ?? []) {
+            result.push({
+                ...t,
+                raw          : t.title,
+                type         : 'pack_saison',
+                serie_id     : sd.id,
+                serie_title  : sd.title,
+                season_id    : season.id,
+                season_number: season.season_number,
+                _seasonLevel : true,
+                _season      : season,
+                _torrentIdx  : (season.torrents ?? []).indexOf(t),
+            })
+        }
+
+        // Torrents au niveau épisode → episode
+        for (const ep of season.episodes ?? []) {
+            for (const t of ep.torrents ?? []) {
+                result.push({
+                    ...t,
+                    raw          : t.title,
+                    type         : 'episode',
+                    serie_id     : sd.id,
+                    serie_title  : sd.title,
+                    season_id    : season.id,
+                    season_number: season.season_number,
+                    episode_id   : ep.id,
+                    episode_number: ep.episode_number,
+                    _episodeLevel: true,
+                    _episode     : ep,
+                    _torrentIdx  : (ep.torrents ?? []).indexOf(t),
+                })
+            }
+        }
+    }
+
+    return result
+}
+
+// Construit resolved_episodes pour un torrent à partir des paths[torrentIdx]
+// paths[i] = chemin du fichier dans le torrent i → on extrait le filename
+function buildResolvedEpisodes(sd: any, torrentIdx: number, seasonFilter?: number): any[] {
+    const resolved: any[] = []
+    for (const season of sd.seasons ?? []) {
+        if (seasonFilter !== undefined && season.season_number !== seasonFilter) continue
+        for (const ep of season.episodes ?? []) {
+            const filePath = (ep.paths ?? [])[torrentIdx]
+            if (!filePath) continue
+            const filename = filePath.split('/').pop() ?? filePath
+            resolved.push({
+                episode_id    : ep.id,
+                episode_number: ep.episode_number,
+                season_number : season.season_number,
+                season_id     : season.id,
+                filename,
+                original_filename: filename, // sera enrichi depuis l'API si besoin
+            })
+        }
+    }
+    return resolved
+}
+
 async function fankaiGet(endpoint: string): Promise<any> {
     const res = await fetch(`${FANKAI_API}${endpoint}`)
     if (!res.ok) throw new Error(`Fankai API ${res.status}: ${endpoint}`)
     return res.json()
 }
+
 function normalizeTitle(s: string): string {
     return s.toLowerCase()
         .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')  // strip accents (ï→i, é→e...)
+        .replace(/[\u0300-\u036f]/g, '')
         .replace(/[^a-z0-9]/g, ' ')
         .replace(/\s+/g, ' ')
         .trim()
 }
 
-function indexBySerie(torrents: any[]): Map<number, any[]> {
-    const map = new Map<number, any[]>()
-    for (const t of torrents) {
-        if (!t.serie_id) continue
-        if (!map.has(t.serie_id)) map.set(t.serie_id, [])
-        map.get(t.serie_id)!.push(t)
-    }
-    return map
+function imgProxy(url: string | null | undefined, w: number, q = 70): string | null {
+    if (!url) return null
+    const stripped = url.replace(/^https?:\/\//, '')
+    return `https://wsrv.nl/?url=${stripped}&w=${w}&q=${q}`
 }
 
-function indexByNormalizedTitle(torrents: any[]): Map<string, any[]> {
-    const map = new Map<string, any[]>()
-    for (const t of torrents) {
-        const title = t.serie_title || t.show_title
-        if (!title) continue
-        const key = normalizeTitle(title)
-        if (!map.has(key)) map.set(key, [])
-        map.get(key)!.push(t)
+function normalizeSerie(serie: any): any {
+    const poster = serie.poster_image ?? serie.images?.poster ?? null
+    const fanart = serie.fanart_image ?? serie.images?.fanart  ?? null
+    return {
+        ...serie,
+        poster_image: imgProxy(poster, 300),
+        fanart_image: imgProxy(fanart, 1280, 60),
     }
-    return map
 }
 
-// ── Series ─────────────────────────────────────────────────────
+function normalizeSeason(season: any): any {
+    const poster = season.poster_image ?? season.images?.poster ?? null
+    return {
+        ...season,
+        poster_image: imgProxy(poster, 300),
+    }
+}
+
+function normalizeEpisode(ep: any): any {
+    const thumb = ep.thumb_image ?? ep.thumbnail ?? null
+    return {
+        ...ep,
+        thumb_image: imgProxy(thumb, 400),
+    }
+}
+
+// ── Enrichissement seriesData avec original_filename depuis l'API ──────────────
+// Fetche /seasons/{id}/episodes pour chaque saison et injecte original_filename
+// dans chaque épisode du serieData, indexé par episode_id
+async function enrichSeriesDataWithOriginalFilenames(seriesData: any[]): Promise<any[]> {
+    return Promise.all(seriesData.map(async (sd) => {
+        if (!sd) return sd
+        const enrichedSeasons = await Promise.all((sd.seasons ?? []).map(async (season: any) => {
+            let epsData: any[] = []
+            try {
+                const res = await fankaiGet(`/seasons/${season.id}/episodes`)
+                epsData = Array.isArray(res) ? res : (res.episodes ?? [])
+            } catch { return season }
+
+            // Index episode_id → original_filename
+            const origMap = new Map<number, string>()
+            for (const ep of epsData) {
+                if (ep.id && ep.original_filename) origMap.set(ep.id, ep.original_filename)
+            }
+
+            // Injecter dans les épisodes du serieData
+            const enrichedEpisodes = (season.episodes ?? []).map((ep: any) => ({
+                ...ep,
+                original_filename: origMap.get(ep.id) ?? null,
+            }))
+
+            return { ...season, episodes: enrichedEpisodes }
+        }))
+        return { ...sd, seasons: enrichedSeasons }
+    }))
+}
+
+// Helper réutilisable : charge + enrichit toutes les seriesData du cache
+async function loadEnrichedSeriesData(): Promise<any[]> {
+    const ids   = await readAvailable()
+    const allSd = await Promise.all(ids.map(id => readSerieData(id)))
+    const valid = allSd.filter(Boolean)
+    return enrichSeriesDataWithOriginalFilenames(valid)
+}
 
 function computeSerieDownloadState(
-    serieTorrents : any[],
+    serieData     : any | null,
     organized     : Record<string, Record<string, string>>,
     activeTorrents: Set<string>
 ): 'none' | 'downloading' | 'partial' | 'complete' {
-    if (serieTorrents.length === 0) return 'none'
+    if (!serieData) return 'none'
 
-    const hasActive = serieTorrents.some(t => activeTorrents.has(t.infohash?.toLowerCase()))
+    const allTorrents = extractTorrentsFromSerieData(serieData)
+    if (allTorrents.length === 0) return 'none'
+
+    const hasActive = allTorrents.some(t => t.infohash && activeTorrents.has(t.infohash.toLowerCase()))
     if (hasActive) return 'downloading'
 
-    // Collecter tous les épisodes uniques de la série (par episode_id)
+    // Collecter tous les episode_id de la série et ceux organisés
     const allEpisodeIds = new Set<number>()
     const organizedEpisodeIds = new Set<number>()
 
-    for (const t of serieTorrents) {
-        const hash     = t.infohash?.toLowerCase()
-        const orgFiles = organized[hash] ?? {}
-        const files: any[] = t.torrent_files ?? []
-
-        for (const ep of t.resolved_episodes ?? []) {
-            allEpisodeIds.add(ep.episode_id)
-            // Cherche le fichier correspondant à cet épisode dans torrent_files
-            const epFile = files.find((f: any) => f.filename === ep.filename)
-            if (epFile ? orgFiles[epFile.filename] : Object.keys(orgFiles).length > 0) {
-                organizedEpisodeIds.add(ep.episode_id)
+    for (const season of serieData.seasons ?? []) {
+        for (const ep of season.episodes ?? []) {
+            if ((ep.torrents ?? []).length > 0 || (ep.paths ?? []).length > 0) {
+                allEpisodeIds.add(ep.id)
             }
+        }
+    }
+
+    // Vérifier via organized.json : si le filename du path est organisé
+    for (const t of allTorrents) {
+        const hash = t.infohash?.toLowerCase()
+        if (!hash) continue
+        const orgFiles = organized[hash] ?? {}
+        if (Object.keys(orgFiles).length === 0) continue
+        const resolved = buildResolvedEpisodes(serieData, t._torrentIdx, t.season_number)
+        for (const ep of resolved) {
+            if (orgFiles[ep.filename]) organizedEpisodeIds.add(ep.episode_id)
         }
     }
 
@@ -169,9 +345,11 @@ function computeSerieDownloadState(
 
 app.get('/api/series', requireAuth, async (_req, res) => {
     try {
-        const [apiData, torrents] = await Promise.all([fankaiGet('/series'), Promise.resolve(readTorrents())])
-        const byId        = indexBySerie(torrents)
-        const byNormTitle = indexByNormalizedTitle(torrents)
+        const [apiData, availableIds] = await Promise.all([
+            fankaiGet('/series'),
+            readAvailable(),
+        ])
+        const availableSet = new Set<number>(availableIds)
 
         // Charger organized.json
         let organized: Record<string, Record<string, string>> = {}
@@ -187,39 +365,31 @@ app.get('/api/series', requireAuth, async (_req, res) => {
             const { category } = readSettings()
             const active = await dispatchList(category ?? 'fankai')
             for (const t of active) {
-                if (t.state === 'downloading' && t.hash)
-                    activeTorrents.add(t.hash.toLowerCase())
+                if (t.hash) activeTorrents.add(t.hash.toLowerCase())
             }
         } catch {}
 
-        const seriesRaw = Array.isArray(apiData) ? apiData : (apiData.series ?? [])
+        const seriesRaw = (Array.isArray(apiData) ? apiData : (apiData.series ?? [])).map(normalizeSerie)
 
-        // Dédupliquer les séries Kaï/Kai — garder celle qui a des torrents, sinon la plus récente
-        const seenTitles = new Map<string, any>()
-        for (const serie of seriesRaw) {
-            const key = normalizeTitle(serie.title ?? serie.show_title ?? '')
-            if (!seenTitles.has(key)) {
-                seenTitles.set(key, serie)
-            } else {
-                const existing = seenTitles.get(key)!
-                const existingHasTorrents = (byId.get(existing.id) ?? byNormTitle.get(key) ?? []).length > 0
-                const newHasTorrents      = (byId.get(serie.id)    ?? byNormTitle.get(key) ?? []).length > 0
-                if (!existingHasTorrents && newHasTorrents) seenTitles.set(key, serie)
-                else if (existingHasTorrents === newHasTorrents && serie.id > existing.id) seenTitles.set(key, serie)
-            }
-        }
-        const seriesList = [...seenTitles.values()]
+        // Charger les series data en parallèle uniquement pour celles qui ont des torrents
+        const serieDataMap = new Map<number, any>()
+        await Promise.all(
+            seriesRaw
+                .filter((s: any) => availableSet.has(s.id))
+                .map(async (s: any) => {
+                    const sd = await readSerieData(s.id)
+                    if (sd) serieDataMap.set(s.id, sd)
+                })
+        )
 
-        res.json({ series: seriesList.map((serie: any) => {
-                // Fallback par titre normalisé si l'ID ne matche pas (Kaï→Kai migration)
-                const serieTorrents = byId.get(serie.id)
-                    ?? byNormTitle.get(normalizeTitle(serie.title ?? serie.show_title ?? ''))
-                    ?? []
+        res.json({ series: seriesRaw.map((serie: any) => {
+                const hasTorrents = availableSet.has(serie.id)
+                const serieData   = serieDataMap.get(serie.id) ?? null
                 return {
                     ...serie,
-                    torrent_count : serieTorrents.length,
-                    has_torrents  : serieTorrents.length > 0,
-                    download_state: computeSerieDownloadState(serieTorrents, organized, activeTorrents),
+                    torrent_count : serieData ? extractTorrentsFromSerieData(serieData).length : 0,
+                    has_torrents  : hasTorrents,
+                    download_state: computeSerieDownloadState(serieData, organized, activeTorrents),
                 }
             })})
     } catch (err) {
@@ -230,98 +400,22 @@ app.get('/api/series', requireAuth, async (_req, res) => {
 app.get('/api/series/:id', requireAuth, async (req, res) => {
     const id = Number(req.params.id)
     try {
-        const [serie, seasonsData] = await Promise.all([fankaiGet(`/series/${id}`), fankaiGet(`/series/${id}/seasons`)])
+        const [serieRaw, seasonsData, serieData] = await Promise.all([
+            fankaiGet(`/series/${id}`),
+            fankaiGet(`/series/${id}/seasons`),
+            readSerieData(id),
+        ])
+        const serie   = normalizeSerie(serieRaw)
         const seasons = Array.isArray(seasonsData) ? seasonsData : (seasonsData.seasons ?? [])
+
+        // Fetch épisodes depuis l'API Fankai (avec original_filename, thumb_image, etc.)
         const seasonsWithEpisodes = await Promise.all(seasons.map(async (season: any) => {
-            const epsData = await fankaiGet(`/seasons/${season.id}/episodes`)
-            return { ...season, episodes: Array.isArray(epsData) ? epsData : (epsData.episodes ?? []) }
+            const epsData  = await fankaiGet(`/seasons/${season.id}/episodes`)
+            const episodes = (Array.isArray(epsData) ? epsData : (epsData.episodes ?? [])).map(normalizeEpisode)
+            return { ...normalizeSeason(season), episodes }
         }))
 
-        const allTorrents  = readTorrents()
-        const normApiTitle = normalizeTitle(serie.title ?? serie.show_title ?? '')
-        const torrents     = allTorrents.filter(t =>
-            t.serie_id === id ||
-            normalizeTitle(t.serie_title ?? t.show_title ?? '') === normApiTitle
-        )
-        const allSeasonIds = new Set<number>(seasonsWithEpisodes.filter((s: any) => s.season_number !== 0).map((s: any) => s.id))
-        const availableEpisodeIds  = new Set<number>()
-        const availableBySnEn      = new Set<string>()  // "sn:en"
-        const episodeTorrentMap: Record<number, any> = {}
-        const episodeTorrentMapBySnEn: Record<string, any> = {}
-        const seasonTorrentMap : Record<number, any> = {}   // keyed by season_id (scraper)
-        const seasonTorrentMapBySn: Record<number, any> = {} // keyed by season_number (fallback)
-        const integraleTorrents: any[] = []
-        const packEpisodesTorrents: any[] = []
-
-        for (const t of torrents) {
-            const ref = { torrent_url: t.torrent_url, magnet: t.magnet, type: t.type, raw: t.raw, manual: t.manual ?? false }
-            for (const ep of t.resolved_episodes ?? []) {
-                availableEpisodeIds.add(ep.episode_id)
-                const snEnKey = `${ep.season_number}:${ep.episode_number}`
-                availableBySnEn.add(snEnKey)
-                if (t.type === 'episode') {
-                    episodeTorrentMap[ep.episode_id] = ref
-                    episodeTorrentMapBySnEn[snEnKey] = ref
-                }
-            }
-            if (t.type === 'pack_saison') {
-                const rs: any[] = t.resolved_seasons ?? []
-                if (rs.length > 1) {
-                    packEpisodesTorrents.push(t)
-                } else {
-                    const sids = rs.length > 0 ? rs.map((r: any) => r.season_id) : [t.season_id]
-                    for (const sid of sids) { if (sid) seasonTorrentMap[sid] = ref }
-                    const sns = rs.length > 0 ? rs.map((r: any) => r.season_number) : [t.season_number]
-                    for (const sn of sns) { if (sn != null) seasonTorrentMapBySn[sn] = ref }
-                }
-            } else if (t.type === 'pack_integrale') {
-                integraleTorrents.push(t)
-            } else if (t.type === 'pack_episodes') {
-                packEpisodesTorrents.push(t)
-            }
-        }
-
-        // ── DEBUG ──────────────────────────────────────────────
-        console.log(`[debug /api/series/${id}] serie="${serie.title}" allSeasonIds=`, [...allSeasonIds])
-        console.log(`[debug /api/series/${id}] seasonTorrentMap=`, seasonTorrentMap)
-        console.log(`[debug /api/series/${id}] seasons from API:`, seasonsWithEpisodes.map((s: any) => ({ id: s.id, season_number: s.season_number, title: s.title })))
-        console.log(`[debug /api/series/${id}] torrents matched:`, torrents.map(t => ({ raw: t.raw, type: t.type, season_id: t.season_id, resolved_seasons: t.resolved_seasons })))
-        // ── END DEBUG ──────────────────────────────────────────
-
-        let promotedIntegrale: any = null
-        if (integraleTorrents.length === 0 && allSeasonIds.size > 0) {
-            for (const t of torrents.filter(t => t.type === 'pack_saison')) {
-                const rs: any[] = t.resolved_seasons ?? []
-                const tIds = new Set<number>(rs.length > 0 ? rs.map((r: any) => r.season_id) : t.season_id ? [t.season_id] : [])
-                if ([...allSeasonIds].every(sid => tIds.has(sid))) { promotedIntegrale = t; break }
-            }
-        }
-
-        if (integraleTorrents.length > 0 || promotedIntegrale) {
-            for (const key of Object.keys(seasonTorrentMap)) delete seasonTorrentMap[Number(key)]
-            if (promotedIntegrale) {
-                const idx = packEpisodesTorrents.indexOf(promotedIntegrale)
-                if (idx !== -1) packEpisodesTorrents.splice(idx, 1)
-            }
-        }
-
-        function packEpisodesLabel(t: any): string {
-            const eps: any[] = t.resolved_episodes ?? []
-            if (!eps.length) return t.raw
-            const bySeason = new Map<number, number[]>()
-            for (const ep of eps) {
-                const sn = ep.season_number ?? 0
-                if (!bySeason.has(sn)) bySeason.set(sn, [])
-                bySeason.get(sn)!.push(ep.episode_number)
-            }
-            return [...bySeason.entries()].sort(([a], [b]) => a - b).map(([sn, nums]) => {
-                const s = nums.sort((a, b) => a - b)
-                const label = sn === 0 ? 'S0' : `S${sn}`
-                return s[0] === s[s.length-1] ? `${label} Ep ${s[0]}` : `${label} Eps ${s[0]}-${s[s.length-1]}`
-            }).join(' · ')
-        }
-
-        // Charger organized.json pour les badges d'état
+        // Charger organized.json
         let organized: Record<string, Record<string, string>> = {}
         try {
             const orgPath = path.join(DATA_DIR, 'organized.json')
@@ -329,53 +423,104 @@ app.get('/api/series/:id', requireAuth, async (req, res) => {
                 organized = JSON.parse(fs.readFileSync(orgPath, 'utf-8'))
         } catch {}
 
-        const organizedEpisodeIds = new Set<number>()
-        const organizedBySnEn     = new Set<string>()
-        for (const t of torrents) {
-            const hash  = t.infohash?.toLowerCase()
-            const files = t.torrent_files ?? []
-            const orgFiles = organized[hash] ?? {}
-            if (Object.keys(orgFiles).length === 0) continue
-            for (const ep of t.resolved_episodes ?? []) {
-                const epFile = files.find((f: any) =>
-                    f.episode_ids?.includes(ep.episode_id) || f.episode_number === ep.episode_number
-                )
-                if (epFile ? orgFiles[epFile.filename] : Object.keys(orgFiles).length > 0) {
-                    organizedEpisodeIds.add(ep.episode_id)
-                    organizedBySnEn.add(`${ep.season_number}:${ep.episode_number}`)
+        // ── Construire les maps torrent depuis series/{id}.json ───────────
+        const availableEpisodeIds   = new Set<number>()
+        const episodeTorrentMap     : Record<number, any> = {}  // episode_id → ref
+        const seasonTorrentMapBySn  : Record<number, any> = {}  // season_number → ref
+        const integraleTorrents     : any[] = []
+        const packEpisodesTorrents  : any[] = []
+        const organizedEpisodeIds   = new Set<number>()
+
+        if (serieData) {
+            // ── Torrents niveau série (pack_integrale) ──────────────────
+            for (const [i, t] of (serieData.torrents ?? []).entries()) {
+                const ref = { torrent_url: t.torrent_url, magnet: t.magnet, type: 'pack_integrale', raw: t.title, manual: t.manual ?? false }
+                integraleTorrents.push({ ...t, raw: t.title, _torrentIdx: i })
+
+                // Marquer les épisodes disponibles via paths[i]
+                const resolved = buildResolvedEpisodes(serieData, i)
+                for (const ep of resolved) availableEpisodeIds.add(ep.episode_id)
+
+                // Vérifier organisés
+                const orgFiles = organized[t.infohash?.toLowerCase()] ?? {}
+                for (const ep of resolved) {
+                    if (orgFiles[ep.filename]) organizedEpisodeIds.add(ep.episode_id)
                 }
             }
+
+            // ── Torrents niveau saison (pack_saison) ────────────────────
+            for (const season of serieData.seasons ?? []) {
+                for (const [i, t] of (season.torrents ?? []).entries()) {
+                    const ref = { torrent_url: t.torrent_url, magnet: t.magnet, type: 'pack_saison', raw: t.title, manual: t.manual ?? false }
+                    seasonTorrentMapBySn[season.season_number] = ref
+
+                    const resolved = buildResolvedEpisodes(serieData, i, season.season_number)
+                    for (const ep of resolved) availableEpisodeIds.add(ep.episode_id)
+
+                    const orgFiles = organized[t.infohash?.toLowerCase()] ?? {}
+                    for (const ep of resolved) {
+                        if (orgFiles[ep.filename]) organizedEpisodeIds.add(ep.episode_id)
+                    }
+                }
+
+                // ── Torrents niveau épisode ─────────────────────────────
+                for (const ep of season.episodes ?? []) {
+                    for (const [i, t] of (ep.torrents ?? []).entries()) {
+                        const ref = { torrent_url: t.torrent_url, magnet: t.magnet, type: 'episode', raw: t.title, manual: t.manual ?? false }
+                        episodeTorrentMap[ep.id] = ref
+                        availableEpisodeIds.add(ep.id)
+
+                        const orgFiles = organized[t.infohash?.toLowerCase()] ?? {}
+                        const filename = (ep.paths ?? [])[i]?.split('/').pop()
+                        if (filename && orgFiles[filename]) organizedEpisodeIds.add(ep.id)
+                    }
+                }
+            }
+
+            // Pack_saison multi-saisons → packEpisodesTorrents si couvre plusieurs saisons
+            // (cas où un seul torrent couvre plusieurs saisons mais pas toutes → affiché en hero)
+            // Pour l'instant on le traite comme pack_integrale si au niveau série
         }
 
+        // ── Promotion intégrale ───────────────────────────────────────────
+        // Si pas de pack_integrale explicite mais un pack_saison couvre toutes les saisons
+        // → déjà géré car on met les torrents série en integraleTorrents directement
+
+        // ── Enrichissement des saisons API ───────────────────────────────
         const enrichedSeasons = seasonsWithEpisodes.map((season: any) => {
-            const eps = season.episodes.map((ep: any) => ({
-                ...ep,
-                available : availableEpisodeIds.has(ep.id)
-                    || availableBySnEn.has(`${season.season_number}:${ep.episode_number}`),
-                torrent   : episodeTorrentMap[ep.id]
-                    ?? episodeTorrentMapBySnEn[`${season.season_number}:${ep.episode_number}`]
-                    ?? null,
-                organized : organizedEpisodeIds.has(ep.id)
-                    || organizedBySnEn.has(`${season.season_number}:${ep.episode_number}`),
-            }))
+            const eps = season.episodes.map((ep: any) => {
+                // Chercher le torrent : niveau épisode d'abord, sinon le torrent de saison/intégrale sert juste de disponibilité
+                const epTorrent = episodeTorrentMap[ep.id] ?? null
+                // original_filename vient de l'API Fankai directement
+                return {
+                    ...ep,
+                    available : availableEpisodeIds.has(ep.id),
+                    torrent   : epTorrent,
+                    organized : organizedEpisodeIds.has(ep.id),
+                }
+            })
             const total    = eps.filter((e: any) => e.available).length
             const orgCount = eps.filter((e: any) => e.organized).length
             const seasonOrganizedState =
-                orgCount === 0              ? 'none'     :
-                    orgCount >= total && total > 0 ? 'complete' : 'partial'
+                orgCount === 0                     ? 'none'     :
+                    orgCount >= total && total > 0     ? 'complete' : 'partial'
             return {
                 ...season,
-                torrent              : seasonTorrentMap[season.id] ?? seasonTorrentMapBySn[season.season_number] ?? null,
-                organized_state      : seasonOrganizedState,
-                organized_count      : orgCount,
-                episodes             : eps,
+                torrent         : seasonTorrentMapBySn[season.season_number] ?? null,
+                organized_state : seasonOrganizedState,
+                organized_count : orgCount,
+                episodes        : eps,
             }
         })
 
+        // ── Hero bundles ──────────────────────────────────────────────────
+        function packEpisodesLabel(t: any): string {
+            return t.raw ?? t.title ?? 'Pack'
+        }
+
         const heroBundles: any[] = [
-            ...integraleTorrents.map(t => ({ label: 'Intégrale', torrent_url: t.torrent_url, magnet: t.magnet, raw: t.raw })),
-            ...(promotedIntegrale ? [{ label: 'Intégrale', torrent_url: promotedIntegrale.torrent_url, magnet: promotedIntegrale.magnet, raw: promotedIntegrale.raw }] : []),
-            ...packEpisodesTorrents.map(t => ({ label: packEpisodesLabel(t), torrent_url: t.torrent_url, magnet: t.magnet, raw: t.raw }))
+            ...integraleTorrents.map(t => ({ label: 'Intégrale', torrent_url: t.torrent_url, magnet: t.magnet, raw: t.title ?? t.raw })),
+            ...packEpisodesTorrents.map(t => ({ label: packEpisodesLabel(t), torrent_url: t.torrent_url, magnet: t.magnet, raw: t.title ?? t.raw }))
         ]
 
         res.json({ serie, seasons: enrichedSeasons, torrents_integrale: heroBundles })
@@ -405,19 +550,24 @@ app.get('/api/downloads', requireAuth, async (_req, res) => {
                 organized = JSON.parse(fs.readFileSync(orgPath, 'utf-8'))
         } catch {}
 
-        let torrentFinal: any[] = []
-        try {
-            const tfPath = path.join(DATA_DIR, 'torrent_final.json')
-            if (fs.existsSync(tfPath))
-                torrentFinal = JSON.parse(fs.readFileSync(tfPath, 'utf-8'))
-        } catch {}
-
-        const enriched = torrents.map((t: any) => {
+        const enriched = await Promise.all(torrents.map(async (t: any) => {
             const orgFiles  = organized[t.hash] ?? {}
-            const meta      = torrentFinal.find((m: any) =>
-                m.infohash?.toLowerCase() === t.hash?.toLowerCase()
-            )
-            const totalFiles = (meta?.torrent_files?.length ?? 0) || 1
+            // Chercher les métadonnées via le cache GitHub
+            let totalFiles = 1
+            try {
+                const availableIds = await readAvailable()
+                for (const id of availableIds) {
+                    const sd = await readSerieData(id)
+                    if (!sd) continue
+                    const allT = extractTorrentsFromSerieData(sd)
+                    const match = allT.find((st: any) => st.infohash?.toLowerCase() === t.hash?.toLowerCase())
+                    if (match) {
+                        const resolved = buildResolvedEpisodes(sd, match._torrentIdx, match.season_number)
+                        totalFiles = resolved.length || 1
+                        break
+                    }
+                }
+            } catch {}
             const doneFiles  = Object.keys(orgFiles).length
             let organizeState: 'none' | 'partial' | 'done' = 'none'
             if (doneFiles >= totalFiles) organizeState = 'done'
@@ -427,7 +577,7 @@ app.get('/api/downloads', requireAuth, async (_req, res) => {
             const errorFiles = notif?.errorFiles ?? []
 
             return { ...t, organizeState, organizeProgress: { done: doneFiles, total: totalFiles }, errorFiles }
-        })
+        }))
 
         res.json(enriched)
     } catch (err) {
@@ -469,7 +619,8 @@ app.post('/api/organize', requireAuth, async (req, res) => {
         return
     }
     try {
-        const result = await organizeTorrent(hash, name, save_path)
+        const seriesData = await loadEnrichedSeriesData()
+        const result     = await organizeTorrent(hash, name, save_path, seriesData)
         res.json(result)
     } catch (err) {
         res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
@@ -513,27 +664,21 @@ app.get('/api/browse', requireAuth, (req, res) => {
     }
 })
 
-app.get('/api/torrents/status', requireAuth, (_req, res) => {
+app.get('/api/torrents/status', requireAuth, async (_req, res) => {
     try {
-        if (!fs.existsSync(TORRENTS_PATH)) { res.json({ exists: false, count: 0, empty: true }); return }
-        const raw = fs.readFileSync(TORRENTS_PATH, 'utf-8').trim()
-        if (!raw || raw === '[]') { res.json({ exists: true, count: 0, empty: true }); return }
-        const data = JSON.parse(raw)
-        const count = Array.isArray(data) ? data.length : 0
-        res.json({ exists: true, count, empty: count === 0 })
+        const available = await readAvailable()
+        res.json({ exists: available.length > 0, count: available.length, empty: available.length === 0 })
     } catch { res.json({ exists: false, count: 0, empty: true }) }
 })
 
-// ── Update torrent_final.json ──────────────────────────────────
+// ── Update : vide le cache pour forcer le rechargement depuis GitHub ──────────
 app.post('/api/update', requireAuth, async (_req, res) => {
     try {
-        const response = await fetch(GITHUB_RAW_URL)
-        if (!response.ok) throw new Error(`GitHub a répondu ${response.status}`)
-        const data = await response.json() as unknown[]
-        if (!Array.isArray(data)) throw new Error('Format invalide')
-        fs.mkdirSync(path.dirname(TORRENTS_PATH), { recursive: true })
-        fs.writeFileSync(TORRENTS_PATH, JSON.stringify(data, null, 2), 'utf-8')
-        res.json({ ok: true, count: data.length })
+        cacheClear()
+        // Pré-charger available.json pour vérifier que GitHub répond
+        const availableIds = await readAvailable()
+        if (!Array.isArray(availableIds)) throw new Error('available.json invalide')
+        res.json({ ok: true, count: availableIds.length })
     } catch (err) {
         res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
     }
@@ -543,7 +688,8 @@ app.post('/api/scan', requireAuth, async (_req, res) => {
     try {
         const { mediaPath } = readSettings()
         const ORGANIZED_PATH = path.join(DATA_DIR, 'organized.json')
-        const result = await scanMediaPath(mediaPath, TORRENTS_PATH, ORGANIZED_PATH)
+        const seriesData = await loadEnrichedSeriesData()
+        const result = await scanMediaPath(mediaPath, ORGANIZED_PATH, seriesData)
         logger.info('api', `Scan manuel: ${result.found} fichiers scannés, ${result.added} ajoutés`)
         res.json({ ok: true, ...result })
     } catch (err) {
@@ -560,34 +706,23 @@ if (fs.existsSync(PUBLIC_PATH)) {
 
 // ── Start ──────────────────────────────────────────────────────
 app.listen(PORT, async () => {
-    // Télécharger torrent_final.json si absent
-    if (!fs.existsSync(TORRENTS_PATH)) {
-        try {
-            console.log('[fankarr] torrent_final.json absent → téléchargement...')
-            const response = await fetch(GITHUB_RAW_URL)
-            if (!response.ok) throw new Error(`GitHub a répondu ${response.status}`)
-            const data = await response.json() as unknown[]
-            if (!Array.isArray(data)) throw new Error('Format invalide')
-            fs.mkdirSync(path.dirname(TORRENTS_PATH), { recursive: true })
-            fs.writeFileSync(TORRENTS_PATH, JSON.stringify(data, null, 2), 'utf-8')
-            console.log(`[fankarr] ${data.length} torrents téléchargés`)
-        } catch (err) {
-            console.warn(`[fankarr] ⚠ Téléchargement échoué: ${err instanceof Error ? err.message : err}`)
-        }
+    console.log(`[fankarr] Serveur sur http://localhost:${PORT}`)
+    console.log(`[fankarr] Cache GitHub TTL: 6h — premier fetch au démarrage...`)
+
+    // Pré-chauffer le cache available.json au démarrage
+    try {
+        const available = await readAvailable()
+        console.log(`[fankarr] ${available.length} séries disponibles (via GitHub)`)
+    } catch (err) {
+        console.warn(`[fankarr] ⚠ Impossible de charger available.json: ${err instanceof Error ? err.message : err}`)
     }
 
-    try {
-        const data  = JSON.parse(fs.readFileSync(TORRENTS_PATH, 'utf-8'))
-        const count = Array.isArray(data) ? data.length : 0
-        if (count === 0) console.warn('[fankarr] ⚠ torrent_final.json est vide')
-        else console.log(`[fankarr] ${count} torrents chargés`)
-    } catch { console.warn('[fankarr] ⚠ torrent_final.json introuvable ou illisible') }
-    console.log(`[fankarr] Serveur sur http://localhost:${PORT}`)
-
-    // Scan initial du mediaPath pour reconnaître les fichiers déjà présents
+    // Scan initial du mediaPath
     const ORGANIZED_PATH = path.join(DATA_DIR, 'organized.json')
     const { mediaPath } = readSettings()
-    scanMediaPath(mediaPath, TORRENTS_PATH, ORGANIZED_PATH).catch(err =>
+    loadEnrichedSeriesData().then(seriesData =>
+        scanMediaPath(mediaPath, ORGANIZED_PATH, seriesData)
+    ).catch(err =>
         logger.error('organize', `scanMediaPath échoué: ${err}`)
     )
 
@@ -596,8 +731,10 @@ app.listen(PORT, async () => {
     const autoOrganize = async () => {
         try {
             const { category } = readSettings()
+            const seriesData   = await loadEnrichedSeriesData()
             await autoOrganizeAll(
                 () => dispatchList(category ?? 'fankai'),
+                seriesData,
                 (result) => {
                     if (result.done > 0 || result.errors > 0) {
                         pushNotif({ ...result, at: new Date().toISOString() })
