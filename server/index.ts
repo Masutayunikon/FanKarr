@@ -545,7 +545,7 @@ app.get('/api/series/:id', requireAuth, async (req, res) => {
 
 // ── Download ───────────────────────────────────────────────────
 app.post('/api/download', requireAuth, async (req, res) => {
-    const url = req.body.torrent_url ?? req.body.magnet
+    const url = req.body.magnet ?? req.body.torrent_url
     if (!url) { res.status(400).json({ error: 'torrent_url ou magnet requis' }); return }
     const results = await dispatchDownload(url)
     res.status(results.every((r: any) => r.ok) ? 200 : 207).json({ results })
