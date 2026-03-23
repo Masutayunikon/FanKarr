@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.3](https://github.com/Masutayunikon/FanKarr/compare/v2.1.2...v2.1.3) (2026-03-23)
+
+
+### Bug Fixes
+
+* use magnet before torrent ([ed4665a](https://github.com/Masutayunikon/FanKarr/commit/ed4665a378d15c0b45a2be32d612e41082a43df1))
+
 ## [2.1.2](https://github.com/Masutayunikon/FanKarr/compare/v2.1.1...v2.1.2) (2026-03-23)
 
 
