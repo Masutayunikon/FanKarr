@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.1](https://github.com/Masutayunikon/FanKarr/compare/v2.1.0...v2.1.1) (2026-03-23)
+
+
+### Bug Fixes
+
+* torrent path to hash ([d9e453b](https://github.com/Masutayunikon/FanKarr/commit/d9e453b486b9fd85b69ee134bee2bd6a1a6d3702))
+
 ## [2.1.0](https://github.com/Masutayunikon/FanKarr/compare/v2.0.0...v2.1.0) (2026-03-23)
 
 
