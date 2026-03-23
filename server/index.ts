@@ -192,22 +192,36 @@ function extractTorrentsFromSerieData(sd: any): any[] {
 }
 
 // Construit resolved_episodes pour un torrent à partir des paths[torrentIdx]
-// paths[i] = chemin du fichier dans le torrent i → on extrait le filename
-function buildResolvedEpisodes(sd: any, torrentIdx: number, seasonFilter?: number): any[] {
+// Construit les épisodes résolus pour un torrent donné par son infohash
+function buildResolvedEpisodes(sd: any, hash: string, seasonFilter?: number): any[] {
     const resolved: any[] = []
+    const h = hash.toLowerCase()
+
     for (const season of sd.seasons ?? []) {
         if (seasonFilter !== undefined && season.season_number !== seasonFilter) continue
         for (const ep of season.episodes ?? []) {
-            const filePath = (ep.paths ?? [])[torrentIdx]
+            const paths: any[] = ep.paths ?? []
+
+            // Nouveau format { infohash, path } ou legacy string
+            let filePath: string | null = null
+            for (const p of paths) {
+                if (typeof p === 'string') {
+                    if (!filePath) filePath = p  // legacy fallback
+                } else if (p?.infohash?.toLowerCase() === h) {
+                    filePath = p.path
+                    break
+                }
+            }
             if (!filePath) continue
+
             const filename = filePath.split('/').pop() ?? filePath
             resolved.push({
-                episode_id    : ep.id,
-                episode_number: ep.episode_number,
-                season_number : season.season_number,
-                season_id     : season.id,
+                episode_id       : ep.id,
+                episode_number   : ep.episode_number,
+                season_number    : season.season_number,
+                season_id        : season.id,
                 filename,
-                original_filename: filename, // sera enrichi depuis l'API si besoin
+                original_filename: filename,
             })
         }
     }
@@ -331,7 +345,7 @@ function computeSerieDownloadState(
         if (!hash) continue
         const orgFiles = organized[hash] ?? {}
         if (Object.keys(orgFiles).length === 0) continue
-        const resolved = buildResolvedEpisodes(serieData, t._torrentIdx, t.season_number)
+        const resolved = buildResolvedEpisodes(serieData, hash, t.season_number)
         for (const ep of resolved) {
             if (orgFiles[ep.filename]) organizedEpisodeIds.add(ep.episode_id)
         }
@@ -433,15 +447,13 @@ app.get('/api/series/:id', requireAuth, async (req, res) => {
 
         if (serieData) {
             // ── Torrents niveau série (pack_integrale) ──────────────────
-            for (const [i, t] of (serieData.torrents ?? []).entries()) {
+            for (const t of (serieData.torrents ?? [])) {
                 const ref = { torrent_url: t.torrent_url, magnet: t.magnet, type: 'pack_integrale', raw: t.title, manual: t.manual ?? false }
-                integraleTorrents.push({ ...t, raw: t.title, _torrentIdx: i })
+                integraleTorrents.push({ ...t, raw: t.title })
 
-                // Marquer les épisodes disponibles via paths[i]
-                const resolved = buildResolvedEpisodes(serieData, i)
+                const resolved = buildResolvedEpisodes(serieData, t.infohash)
                 for (const ep of resolved) availableEpisodeIds.add(ep.episode_id)
 
-                // Vérifier organisés
                 const orgFiles = organized[t.infohash?.toLowerCase()] ?? {}
                 for (const ep of resolved) {
                     if (orgFiles[ep.filename]) organizedEpisodeIds.add(ep.episode_id)
@@ -450,11 +462,11 @@ app.get('/api/series/:id', requireAuth, async (req, res) => {
 
             // ── Torrents niveau saison (pack_saison) ────────────────────
             for (const season of serieData.seasons ?? []) {
-                for (const [i, t] of (season.torrents ?? []).entries()) {
+                for (const t of (season.torrents ?? [])) {
                     const ref = { torrent_url: t.torrent_url, magnet: t.magnet, type: 'pack_saison', raw: t.title, manual: t.manual ?? false }
                     seasonTorrentMapBySn[season.season_number] = ref
 
-                    const resolved = buildResolvedEpisodes(serieData, i, season.season_number)
+                    const resolved = buildResolvedEpisodes(serieData, t.infohash, season.season_number)
                     for (const ep of resolved) availableEpisodeIds.add(ep.episode_id)
 
                     const orgFiles = organized[t.infohash?.toLowerCase()] ?? {}
@@ -465,13 +477,15 @@ app.get('/api/series/:id', requireAuth, async (req, res) => {
 
                 // ── Torrents niveau épisode ─────────────────────────────
                 for (const ep of season.episodes ?? []) {
-                    for (const [i, t] of (ep.torrents ?? []).entries()) {
+                    for (const t of (ep.torrents ?? [])) {
                         const ref = { torrent_url: t.torrent_url, magnet: t.magnet, type: 'episode', raw: t.title, manual: t.manual ?? false }
                         episodeTorrentMap[ep.id] = ref
                         availableEpisodeIds.add(ep.id)
 
                         const orgFiles = organized[t.infohash?.toLowerCase()] ?? {}
-                        const filename = (ep.paths ?? [])[i]?.split('/').pop()
+                        const paths: any[] = ep.paths ?? []
+                        const match = paths.find((p: any) => typeof p === 'object' && p.infohash?.toLowerCase() === t.infohash?.toLowerCase())
+                        const filename = match ? match.path.split('/').pop() : null
                         if (filename && orgFiles[filename]) organizedEpisodeIds.add(ep.id)
                     }
                 }
@@ -562,7 +576,7 @@ app.get('/api/downloads', requireAuth, async (_req, res) => {
                     const allT = extractTorrentsFromSerieData(sd)
                     const match = allT.find((st: any) => st.infohash?.toLowerCase() === t.hash?.toLowerCase())
                     if (match) {
-                        const resolved = buildResolvedEpisodes(sd, match._torrentIdx, match.season_number)
+                        const resolved = buildResolvedEpisodes(sd, match.infohash, match.season_number)
                         totalFiles = resolved.length || 1
                         break
                     }
