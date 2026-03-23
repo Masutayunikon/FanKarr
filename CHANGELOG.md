@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.1.0](https://github.com/Masutayunikon/FanKarr/compare/v2.0.0...v2.1.0) (2026-03-23)
+
+
+### ⚠ BREAKING CHANGES
+
+* **organize:** le format paths[] dans series/{id}.json passe de string[] à { infohash: string, path: string }[] — nécessite une mise à jour du scraper.
+
+### Bug Fixes
+
+* **organize:** buildFileMap matche par infohash au lieu d'index ou titre ([43ac2ed](https://github.com/Masutayunikon/FanKarr/commit/43ac2ed2e85d9e769735547817f19100d3d7f980))
+* **organize:** migration vers paths { infohash, path } pour le matching fichiers ([43ac2ed](https://github.com/Masutayunikon/FanKarr/commit/43ac2ed2e85d9e769735547817f19100d3d7f980))
+* **organize:** scanMediaPath adapté au nouveau format paths[] ([43ac2ed](https://github.com/Masutayunikon/FanKarr/commit/43ac2ed2e85d9e769735547817f19100d3d7f980))
+* **organize:** source fichier via save_path qBittorrent + fullPath relatif ([43ac2ed](https://github.com/Masutayunikon/FanKarr/commit/43ac2ed2e85d9e769735547817f19100d3d7f980))
+* remove logo ([48416c4](https://github.com/Masutayunikon/FanKarr/commit/48416c4fef3a964b05aa135ffd9e80d5dec9a81a))
+
 ## [2.0.0](https://github.com/Masutayunikon/FanKarr/compare/v1.14.0...v2.0.0) (2026-03-23)
 
 
