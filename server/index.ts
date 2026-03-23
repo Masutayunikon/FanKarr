@@ -206,9 +206,9 @@ function buildResolvedEpisodes(sd: any, hash: string, seasonFilter?: number): an
             let filePath: string | null = null
             for (const p of paths) {
                 if (typeof p === 'string') {
-                    if (!filePath) filePath = p  // legacy fallback
+                    if (!filePath) filePath = p.replace(/\\/g, '/')  // legacy fallback
                 } else if (p?.infohash?.toLowerCase() === h) {
-                    filePath = p.path
+                    filePath = p.path.replace(/\\/g, '/')
                     break
                 }
             }

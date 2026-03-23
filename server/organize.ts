@@ -54,9 +54,13 @@ export async function scanMediaPath(
         for (const season of sd.seasons ?? []) {
             for (const ep of season.episodes ?? []) {
                 for (const p of ep.paths ?? []) {
+                    if (typeof p === 'string') {
+                        // Legacy : pas d'infohash disponible, on skip pour le scan
+                        continue
+                    }
                     const hash = p.infohash?.toLowerCase()
                     if (!hash || !p.path) continue
-                    const filename = p.path.split('/').pop()
+                    const filename = p.path.replace(/\\/g, '/').split('/').pop()
                     if (filename) filenameIndex.set(filename, hash)
                 }
             }

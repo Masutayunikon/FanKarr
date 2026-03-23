@@ -80,7 +80,7 @@ function findTorrentByHash(hash: string, seriesData: any[]): { torrent: any; ser
 }
 
 // Construit la map filename → { season_number, original_filename, fullPath }
-// en matchant par infohash dans ep.paths[]
+// Supporte les deux formats : { infohash, path } et string (legacy)
 function buildFileMap(
     serieData    : any,
     hash         : string,
@@ -92,14 +92,25 @@ function buildFileMap(
     for (const season of serieData.seasons ?? []) {
         if (seasonFilter !== undefined && season.season_number !== seasonFilter) continue
         for (const ep of season.episodes ?? []) {
-            const match = (ep.paths ?? []).find((p: any) => p.infohash?.toLowerCase() === h)
-            if (!match) continue
-            const filename = match.path.split('/').pop() ?? match.path
+            const paths: any[] = ep.paths ?? []
+            let matchedPath: string | null = null
+
+            for (const p of paths) {
+                if (typeof p === 'string') {
+                    if (!matchedPath) matchedPath = p.replace(/\\/g, '/')
+                } else if (p?.infohash?.toLowerCase() === h) {
+                    matchedPath = p.path.replace(/\\/g, '/')
+                    break
+                }
+            }
+
+            if (!matchedPath) continue
+            const filename = matchedPath.split('/').pop() ?? matchedPath
             const original = ep.original_filename ?? filename
             map.set(filename, {
                 season_number    : season.season_number,
                 original_filename: original,
-                fullPath         : match.path,
+                fullPath         : matchedPath,
             })
         }
     }
@@ -224,8 +235,12 @@ async function organizeTorrent(hash: string, name: string, savePath: string, ser
     if (torrent._episode) {
         const ep      = torrent._episode
         const season  = torrent._season
-        const match   = (ep.paths ?? []).find((p: any) => p.infohash?.toLowerCase() === hash.toLowerCase())
-        const filePath = match?.path ?? null
+        const paths: any[] = ep.paths ?? []
+        let filePath: string | null = null
+        for (const p of paths) {
+            if (typeof p === 'string') { if (!filePath) filePath = p.replace(/\\/g, '/') }
+            else if (p?.infohash?.toLowerCase() === hash.toLowerCase()) { filePath = p.path.replace(/\\/g, '/'); break }
+        }
         const filename = filePath?.split('/').pop() ?? name
         const original = ep.original_filename ?? filename
         const destDir  = path.join(mediaPath, serieTitle, seasonFolder(season.season_number ?? 1))
