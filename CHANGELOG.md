@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.2](https://github.com/Masutayunikon/FanKarr/compare/v2.1.1...v2.1.2) (2026-03-23)
+
+
+### Bug Fixes
+
+* path now work on every device ([cfc3440](https://github.com/Masutayunikon/FanKarr/commit/cfc3440a95cb73802778e01d5f256f473e0cc952))
+
 ## [2.1.1](https://github.com/Masutayunikon/FanKarr/compare/v2.1.0...v2.1.1) (2026-03-23)
 
 
