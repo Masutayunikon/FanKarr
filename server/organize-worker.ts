@@ -79,19 +79,28 @@ function findTorrentByHash(hash: string, seriesData: any[]): { torrent: any; ser
     return null
 }
 
-// Construit la map filename → { season_number, original_filename }
-// depuis les paths[] de la série en utilisant l'index du torrent
-function buildFileMap(serieData: any, torrentIdx: number, seasonFilter?: number): Map<string, { season_number: number; original_filename: string }> {
-    const map = new Map<string, { season_number: number; original_filename: string }>()
+// Construit la map filename → { season_number, original_filename, fullPath }
+// en matchant par infohash dans ep.paths[]
+function buildFileMap(
+    serieData    : any,
+    hash         : string,
+    seasonFilter?: number
+): Map<string, { season_number: number; original_filename: string; fullPath: string }> {
+    const map = new Map<string, { season_number: number; original_filename: string; fullPath: string }>()
+    const h = hash.toLowerCase()
+
     for (const season of serieData.seasons ?? []) {
         if (seasonFilter !== undefined && season.season_number !== seasonFilter) continue
         for (const ep of season.episodes ?? []) {
-            const filePath = (ep.paths ?? [])[torrentIdx]
-            if (!filePath) continue
-            const filename = filePath.split('/').pop() ?? filePath
-            // original_filename vient de l'API Fankai (passé dans ep directement si disponible)
+            const match = (ep.paths ?? []).find((p: any) => p.infohash?.toLowerCase() === h)
+            if (!match) continue
+            const filename = match.path.split('/').pop() ?? match.path
             const original = ep.original_filename ?? filename
-            map.set(filename, { season_number: season.season_number, original_filename: original })
+            map.set(filename, {
+                season_number    : season.season_number,
+                original_filename: original,
+                fullPath         : match.path,
+            })
         }
     }
     return map
@@ -202,37 +211,21 @@ async function organizeTorrent(hash: string, name: string, savePath: string, ser
     }
 
     const { torrent, serieData } = found
-    const serieTitle = serieData.title ?? serieData.show_title ?? name
-    log(`[organize] ✓ Trouvé : ${torrent.title ?? name} — série: ${serieTitle}`)
-
-    // Déterminer l'index du torrent dans sa hiérarchie
-    let torrentIdx = 0
-    let seasonFilter: number | undefined
-    if (torrent._episode) {
-        // Torrent niveau épisode : paths[0] est le seul fichier
-        torrentIdx    = (torrent._episode.torrents ?? []).findIndex((t: any) => t.infohash?.toLowerCase() === hash.toLowerCase())
-        seasonFilter  = torrent._season?.season_number
-    } else if (torrent._season) {
-        torrentIdx    = (torrent._season.torrents ?? []).findIndex((t: any) => t.infohash?.toLowerCase() === hash.toLowerCase())
-        seasonFilter  = torrent._season.season_number
-    } else {
-        torrentIdx    = (serieData.torrents ?? []).findIndex((t: any) => t.infohash?.toLowerCase() === hash.toLowerCase())
-    }
-
-    // Construire la map filename → { season_number, original_filename }
-    const fileMap = buildFileMap(serieData, torrentIdx, seasonFilter)
+    const serieTitle    = serieData.title ?? serieData.show_title ?? name
+    const torrentTitle  = torrent.title ?? name
+    log(`[organize] ✓ Trouvé : ${torrentTitle} — série: ${serieTitle}`)
 
     // ── NFO/images depuis GitLab ──────────────────────────────
     if (nfoSupport) {
-        const serieDestRoot = path.join(mediaPath, serieTitle)
-        await downloadGitlabFolder(serieTitle, serieDestRoot)
+        await downloadGitlabFolder(serieTitle, path.join(mediaPath, serieTitle))
     }
 
     // ── Cas torrent épisode unique ────────────────────────────
     if (torrent._episode) {
-        const ep       = torrent._episode
-        const season   = torrent._season
-        const filePath = (ep.paths ?? [])[torrentIdx]
+        const ep      = torrent._episode
+        const season  = torrent._season
+        const match   = (ep.paths ?? []).find((p: any) => p.infohash?.toLowerCase() === hash.toLowerCase())
+        const filePath = match?.path ?? null
         const filename = filePath?.split('/').pop() ?? name
         const original = ep.original_filename ?? filename
         const destDir  = path.join(mediaPath, serieTitle, seasonFolder(season.season_number ?? 1))
@@ -240,12 +233,16 @@ async function organizeTorrent(hash: string, name: string, savePath: string, ser
 
         if (isOrganized(hash, filename)) return { ...result, total: 1, skipped: 1 }
 
-        const candidates = [
-            path.join(savePath, name, filename),
+        const candidates = filePath ? [
+            path.join(savePath, filePath),
+            path.join(completePath, filePath),
             path.join(savePath, filename),
-            path.join(completePath, name, filename),
+            path.join(completePath, filename),
+        ] : [
+            path.join(savePath, filename),
             path.join(completePath, filename),
         ]
+
         let src: string | null = null
         for (const c of candidates) { if (fs.existsSync(c)) { src = c; break } }
 
@@ -268,7 +265,10 @@ async function organizeTorrent(hash: string, name: string, savePath: string, ser
         return { ...result, total: 1, done: 1 }
     }
 
-    // ── Pack saison / intégrale : itérer sur les fichiers ─────
+    // ── Pack saison / intégrale ───────────────────────────────
+    const seasonFilter = torrent._season?.season_number
+    const fileMap = buildFileMap(serieData, hash, seasonFilter)
+
     if (fileMap.size === 0) {
         warn(`[organize] Aucun fichier mappé pour ${name}`)
         return result
@@ -276,13 +276,15 @@ async function organizeTorrent(hash: string, name: string, savePath: string, ser
 
     result.total = fileMap.size
 
-    for (const [filename, { season_number, original_filename }] of fileMap) {
+    for (const [filename, { season_number, original_filename, fullPath }] of fileMap) {
         if (isOrganized(hash, filename)) { result.skipped++; continue }
 
+        // Source : on utilise save_path + fullPath (chemin relatif exact dans le torrent)
+        // save_path vient de qBittorrent → résiste aux renommages de dossier
         const candidates = [
-            path.join(savePath, name, filename),
+            path.join(savePath, fullPath),
+            path.join(completePath, fullPath),
             path.join(savePath, filename),
-            path.join(completePath, name, filename),
             path.join(completePath, filename),
         ]
         let src: string | null = null
@@ -339,9 +341,9 @@ parentPort?.on('message', async (msg: any) => {
         }
 
         // Vérifier si déjà tout organisé
-        const { serieData } = found
-        const torrentIdx = (serieData.torrents ?? []).findIndex((st: any) => st.infohash?.toLowerCase() === t.hash.toLowerCase())
-        const fileMap = buildFileMap(serieData, torrentIdx)
+        const { torrent, serieData } = found
+        const seasonFilter   = torrent._season?.season_number
+        const fileMap        = buildFileMap(serieData, t.hash, seasonFilter)
         const allDone = fileMap.size > 0
             ? [...fileMap.keys()].every(f => organized[t.hash]?.[f])
             : !!organized[t.hash]?.[t.name]

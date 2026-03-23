@@ -51,39 +51,12 @@ export async function scanMediaPath(
     // Construire index filename → infohash depuis les seriesData
     const filenameIndex = new Map<string, string>()  // filename → infohash
     for (const sd of seriesData) {
-        // Torrents niveau série
-        for (const [i, t] of (sd.torrents ?? []).entries()) {
-            const hash = t.infohash?.toLowerCase()
-            if (!hash) continue
-            for (const season of sd.seasons ?? []) {
-                for (const ep of season.episodes ?? []) {
-                    const filePath = (ep.paths ?? [])[i]
-                    if (!filePath) continue
-                    const filename = filePath.split('/').pop()
-                    if (filename) filenameIndex.set(filename, hash)
-                }
-            }
-        }
-        // Torrents niveau saison
         for (const season of sd.seasons ?? []) {
-            for (const [i, t] of (season.torrents ?? []).entries()) {
-                const hash = t.infohash?.toLowerCase()
-                if (!hash) continue
-                for (const ep of season.episodes ?? []) {
-                    const filePath = (ep.paths ?? [])[i]
-                    if (!filePath) continue
-                    const filename = filePath.split('/').pop()
-                    if (filename) filenameIndex.set(filename, hash)
-                }
-            }
-            // Torrents niveau épisode
             for (const ep of season.episodes ?? []) {
-                for (const [i, t] of (ep.torrents ?? []).entries()) {
-                    const hash = t.infohash?.toLowerCase()
-                    if (!hash) continue
-                    const filePath = (ep.paths ?? [])[i]
-                    if (!filePath) continue
-                    const filename = filePath.split('/').pop()
+                for (const p of ep.paths ?? []) {
+                    const hash = p.infohash?.toLowerCase()
+                    if (!hash || !p.path) continue
+                    const filename = p.path.split('/').pop()
                     if (filename) filenameIndex.set(filename, hash)
                 }
             }
