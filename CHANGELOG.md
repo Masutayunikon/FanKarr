@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.3.0](https://github.com/Masutayunikon/FanKarr/compare/v2.2.0...v2.3.0) (2026-03-24)
+
+
+### Features
+
+* **catalogue:** badge IMPORTÉ et refresh automatique post-import ([0cf3446](https://github.com/Masutayunikon/FanKarr/commit/0cf344667baccd44c946cee507c4343286783d3f))
+* **catalogue:** tri du catalogue avec 4 options ([0cf3446](https://github.com/Masutayunikon/FanKarr/commit/0cf344667baccd44c946cee507c4343286783d3f))
+* **downloads:** bouton Organiser tout renommé Importer tout ([0cf3446](https://github.com/Masutayunikon/FanKarr/commit/0cf344667baccd44c946cee507c4343286783d3f))
+* **organize:** nommage des fichiers selon original_filename ou formatted_name ([0cf3446](https://github.com/Masutayunikon/FanKarr/commit/0cf344667baccd44c946cee507c4343286783d3f))
+* **settings:** ajout du toggle import automatique (activé par défaut) ([0cf3446](https://github.com/Masutayunikon/FanKarr/commit/0cf344667baccd44c946cee507c4343286783d3f))
+* **settings:** textes génériques sans mention de logiciels spécifiques ([0cf3446](https://github.com/Masutayunikon/FanKarr/commit/0cf344667baccd44c946cee507c4343286783d3f))
+
+
+### Bug Fixes
+
+* add config directory to .gitignore ([2d8749a](https://github.com/Masutayunikon/FanKarr/commit/2d8749ae7bc2986871fb402c2a4242bcb87d3a77))
+
 ## [2.2.0](https://github.com/Masutayunikon/FanKarr/compare/v2.1.3...v2.2.0) (2026-03-23)
 
 
