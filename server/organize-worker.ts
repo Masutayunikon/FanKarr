@@ -26,12 +26,12 @@ function error(msg: string) { parentPort?.postMessage({ type: 'log', level: 'err
 function debug(msg: string) { parentPort?.postMessage({ type: 'log', level: 'debug', msg }) }
 
 // ─── Settings ─────────────────────────────────────────────────
-function readSettings(): { mediaPath: string; completePath: string; organizeMode: string; nfoSupport: boolean } {
+function readSettings(): { mediaPath: string; completePath: string; organizeMode: string; nfoSupport: boolean; usePlexTitles: boolean } {
     try {
         const p = path.join(DATA_DIR, 'settings.json')
-        if (!fs.existsSync(p)) return { mediaPath: '', completePath: '', organizeMode: 'hardlink', nfoSupport: false }
+        if (!fs.existsSync(p)) return { mediaPath: '', completePath: '', organizeMode: 'hardlink', nfoSupport: false, usePlexTitles: false }
         return JSON.parse(fs.readFileSync(p, 'utf-8'))
-    } catch { return { mediaPath: '', completePath: '', organizeMode: 'hardlink', nfoSupport: false } }
+    } catch { return { mediaPath: '', completePath: '', organizeMode: 'hardlink', nfoSupport: false, usePlexTitles: false } }
 }
 
 // ─── Organized log ────────────────────────────────────────────
@@ -94,7 +94,7 @@ function buildFileMap(
     serieData    : any,
     hash         : string,
     nfoSupport   : boolean,
-    seasonFilter?: number
+    seasonFilter?: number,
 ): Map<string, { season_number: number; original_filename: string; fullPath: string }> {
     const map = new Map<string, { season_number: number; original_filename: string; fullPath: string }>()
     const h = hash.toLowerCase()
