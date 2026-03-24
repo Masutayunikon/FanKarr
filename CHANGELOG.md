@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.3](https://github.com/Masutayunikon/FanKarr/compare/v2.3.2...v2.3.3) (2026-03-24)
+
+
+### Bug Fixes
+
+* recuperation des episodes avec un delai ([dfc6c13](https://github.com/Masutayunikon/FanKarr/commit/dfc6c1300e3dd8323e422ce3e71465bac77f94cf))
+
 ## [2.3.2](https://github.com/Masutayunikon/FanKarr/compare/v2.3.1...v2.3.2) (2026-03-24)
 
 
