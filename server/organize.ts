@@ -9,6 +9,7 @@ import path   from 'path'
 import { Worker } from 'worker_threads'
 import { logger } from './logger.js'
 import { DATA_DIR } from './config.js'
+import { readSettings } from './settings.js'
 
 const ORGANIZED_PATH = path.join(DATA_DIR, 'organized.json')
 
