@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.2](https://github.com/Masutayunikon/FanKarr/compare/v2.3.1...v2.3.2) (2026-03-24)
+
+
+### Bug Fixes
+
+* badge catalogue sur les series importé ([f070f17](https://github.com/Masutayunikon/FanKarr/commit/f070f1754ef616874cfb081eb2fefadad602c221))
+
 ## [2.3.1](https://github.com/Masutayunikon/FanKarr/compare/v2.3.0...v2.3.1) (2026-03-24)
 
 
