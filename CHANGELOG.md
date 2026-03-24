@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.4.0](https://github.com/Masutayunikon/FanKarr/compare/v2.3.3...v2.4.0) (2026-03-24)
+
+
+### Features
+
+* **settings:** option titres optimisés Plex (title_for_plex) ([54dfe6b](https://github.com/Masutayunikon/FanKarr/commit/54dfe6b595c65a77b50dc3b4853182b594df0d9b))
+
+
+### Bug Fixes
+
+* **catalogue:** activeTorrents filtre désormais uniquement state=downloading ([54dfe6b](https://github.com/Masutayunikon/FanKarr/commit/54dfe6b595c65a77b50dc3b4853182b594df0d9b))
+* **organize:** retry sur les erreurs réseau dans enrichSeriesDataWithOriginalFilenames ([54dfe6b](https://github.com/Masutayunikon/FanKarr/commit/54dfe6b595c65a77b50dc3b4853182b594df0d9b))
+* **organize:** sanitisation des caractères spéciaux dans les noms de dossiers ([54dfe6b](https://github.com/Masutayunikon/FanKarr/commit/54dfe6b595c65a77b50dc3b4853182b594df0d9b))
+
 ## [2.3.3](https://github.com/Masutayunikon/FanKarr/compare/v2.3.2...v2.3.3) (2026-03-24)
 
 
