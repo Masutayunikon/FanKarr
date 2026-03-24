@@ -154,6 +154,25 @@
           </p>
         </div>
 
+        <!-- Titres Plex -->
+        <div>
+          <label class="text-[10px] text-[#5a7a94] tracking-widest block mb-2">NOMS DE DOSSIERS</label>
+          <div class="flex items-center gap-3">
+            <button @click="form.usePlexTitles = !form.usePlexTitles"
+                    class="relative shrink-0 w-11 h-6 rounded-full transition-colors cursor-pointer"
+                    :class="form.usePlexTitles ? 'bg-[#e8513a]' : 'bg-[#1e2d3d]'">
+              <span class="absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform duration-200"
+                    :class="form.usePlexTitles ? 'translate-x-5' : 'translate-x-0'" />
+            </button>
+            <span class="text-xs text-[#c8d8e8]">Utiliser les titres optimisés Plex</span>
+          </div>
+          <p class="text-[10px] text-[#5a7a94] mt-1.5">
+            Utilise <span class="text-white">title_for_plex</span> pour les noms de dossiers —
+            évite les caractères spéciaux (ex: <span class="text-white">Kaguya-sama - Love is War Henshū</span>
+            au lieu de <span class="text-white">Kaguya-sama : Love is War Henshū</span>)
+          </p>
+        </div>
+
         <!-- Support NFO -->
         <div>
           <label class="text-[10px] text-[#5a7a94] tracking-widest block mb-2">NFO / MÉTADONNÉES</label>
@@ -277,6 +296,7 @@ const form = ref({
   organizeMode: 'hardlink' as 'hardlink' | 'move',
   nfoSupport  : false,
   autoImport  : true,
+  usePlexTitles: false,
 })
 
 const saving     = ref(false)

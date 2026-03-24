@@ -42,8 +42,8 @@ app.get('/api/settings', requireAuth, (_req, res) => {
     res.json(readSettings())
 })
 app.post('/api/settings', requireAuth, (req, res) => {
-    const { mediaPath, completePath, organizeMode, category, nfoSupport, autoImport } = req.body
-    res.json(writeSettings({ mediaPath, completePath, organizeMode, category, nfoSupport, autoImport }))
+    const { mediaPath, completePath, organizeMode, category, nfoSupport, autoImport, usePlexTitles } = req.body
+    res.json(writeSettings({ mediaPath, completePath, organizeMode, category, nfoSupport, autoImport, usePlexTitles }))
 })
 
 // ── Torrent clients ────────────────────────────────────────────
@@ -284,6 +284,13 @@ async function enrichSeriesDataWithOriginalFilenames(seriesData: any[]): Promise
     for (const sd of seriesData) {
         if (!sd) { results.push(sd); continue }
 
+        // Fetcher title_for_plex depuis l'API série
+        let title_for_plex: string | null = null
+        try {
+            const serieApi = await fankaiGet(`/series/${sd.id}`)
+            title_for_plex = serieApi.title_for_plex ?? null
+        } catch {}
+
         const enrichedSeasons: any[] = []
         for (const season of sd.seasons ?? []) {
             let epsData: any[] = []
@@ -326,7 +333,7 @@ async function enrichSeriesDataWithOriginalFilenames(seriesData: any[]): Promise
             enrichedSeasons.push({ ...season, episodes: enrichedEpisodes })
         }
 
-        results.push({ ...sd, seasons: enrichedSeasons })
+        results.push({ ...sd, title_for_plex, seasons: enrichedSeasons })
     }
 
     return results

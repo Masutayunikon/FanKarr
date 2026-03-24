@@ -118,12 +118,18 @@ function buildFileMap(
             const filename = matchedPath.split('/').pop() ?? matchedPath
 
             // nfoSupport → original_filename (correspond aux .nfo GitLab)
-            // sinon → formatted_name de l'API (nommage Jellyfin/Plex standardisé)
+            // sinon → formatted_name de l'API, ou fallback original_filename
+            const fmtName = ep.formatted_name?.trim()
+                ? ep.formatted_name.replace(/[<>:"/\\|?*]/g, '') + '.mkv'
+                : null
+
+            if (!nfoSupport && !fmtName) {
+                warn(`[organize] formatted_name manquant pour ep ${ep.id} (ep ${ep.episode_number}) — fallback original_filename`)
+            }
+
             const destName = nfoSupport
                 ? (ep.original_filename ?? filename)
-                : (ep.formatted_name
-                    ? ep.formatted_name.replace(/[<>:"/\\|?*]/g, '') + '.mkv'
-                    : (ep.original_filename ?? filename))
+                : (fmtName ?? ep.original_filename ?? filename)
 
             map.set(filename, {
                 season_number    : season.season_number,
@@ -243,6 +249,16 @@ function tryHardlink(src: string, dest: string): boolean {
     }
 }
 
+// ─── Sanitise un nom de dossier ──────────────────────────────
+// Remplace les caractères interdits sur les systèmes de fichiers communs
+function sanitizeDirName(name: string): string {
+    return name
+        .replace(/:/g, ' -')      // "Kaguya-sama : Love" → "Kaguya-sama - Love"
+        .replace(/[<>"/\\|?*]/g, '') // autres caractères interdits
+        .replace(/\s+/g, ' ')     // espaces multiples
+        .trim()
+}
+
 // ─── Organise un torrent ──────────────────────────────────────
 async function organizeTorrent(hash: string, name: string, savePath: string, seriesData: any[]) {
     const { mediaPath, completePath, organizeMode, nfoSupport } = readSettings()
@@ -258,7 +274,13 @@ async function organizeTorrent(hash: string, name: string, savePath: string, ser
     }
 
     const { torrent, serieData } = found
-    const serieTitle    = serieData.title ?? serieData.show_title ?? name
+    const { usePlexTitles } = readSettings()
+    const rawTitle   = serieData.title ?? serieData.show_title ?? name
+    const serieTitle = sanitizeDirName(
+        usePlexTitles && serieData.title_for_plex
+            ? serieData.title_for_plex
+            : rawTitle
+    )
     const torrentTitle  = torrent.title ?? name
     log(`[organize] ✓ Trouvé : ${torrentTitle} — série: ${serieTitle}`)
 
@@ -278,11 +300,12 @@ async function organizeTorrent(hash: string, name: string, savePath: string, ser
             else if (p?.infohash?.toLowerCase() === hash.toLowerCase()) { filePath = p.path.replace(/\\/g, '/'); break }
         }
         const filename = filePath?.split('/').pop() ?? name
+        const fmtName  = ep.formatted_name?.trim()
+            ? ep.formatted_name.replace(/[<>:"/\\|?*]/g, '') + '.mkv'
+            : null
         const destName = nfoSupport
             ? (ep.original_filename ?? filename)
-            : (ep.formatted_name
-                ? ep.formatted_name.replace(/[<>:"/\\|?*]/g, '') + '.mkv'
-                : (ep.original_filename ?? filename))
+            : (fmtName ?? ep.original_filename ?? filename)
         const destDir  = path.join(mediaPath, serieTitle, seasonFolder(season.season_number ?? 1))
         const dest     = path.join(destDir, destName)
 

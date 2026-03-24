@@ -10,7 +10,8 @@ export interface Settings {
     organizeMode  : 'hardlink' | 'move'
     category      : string
     nfoSupport    : boolean
-    autoImport    : boolean   // import automatique quand un torrent passe en seeding
+    autoImport    : boolean
+    usePlexTitles : boolean   // utilise title_for_plex pour les noms de dossiers
 }
 
 const defaults: Settings = {
@@ -20,6 +21,7 @@ const defaults: Settings = {
     category     : 'fankai',
     nfoSupport   : false,
     autoImport   : true,
+    usePlexTitles: false,
 }
 
 export function readSettings(): Settings {
