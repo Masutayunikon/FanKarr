@@ -383,7 +383,7 @@ app.get('/api/series', requireAuth, async (_req, res) => {
             const { category } = readSettings()
             const active = await dispatchList(category ?? 'fankai')
             for (const t of active) {
-                if (t.hash) activeTorrents.add(t.hash.toLowerCase())
+                if (t.hash && t.state === 'downloading') activeTorrents.add(t.hash.toLowerCase())
             }
         } catch {}
 
