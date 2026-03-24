@@ -9,7 +9,8 @@ export interface Settings {
     completePath  : string
     organizeMode  : 'hardlink' | 'move'
     category      : string
-    nfoSupport    : boolean   // téléchargement NFO/images depuis GitLab Fankai Pack
+    nfoSupport    : boolean
+    autoImport    : boolean   // import automatique quand un torrent passe en seeding
 }
 
 const defaults: Settings = {
@@ -18,6 +19,7 @@ const defaults: Settings = {
     organizeMode : 'hardlink',
     category     : 'fankai',
     nfoSupport   : false,
+    autoImport   : true,
 }
 
 export function readSettings(): Settings {

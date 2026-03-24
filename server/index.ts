@@ -42,8 +42,8 @@ app.get('/api/settings', requireAuth, (_req, res) => {
     res.json(readSettings())
 })
 app.post('/api/settings', requireAuth, (req, res) => {
-    const { mediaPath, completePath, organizeMode, category, nfoSupport } = req.body
-    res.json(writeSettings({ mediaPath, completePath, organizeMode, category, nfoSupport }))
+    const { mediaPath, completePath, organizeMode, category, nfoSupport, autoImport } = req.body
+    res.json(writeSettings({ mediaPath, completePath, organizeMode, category, nfoSupport, autoImport }))
 })
 
 // ── Torrent clients ────────────────────────────────────────────
@@ -288,16 +288,20 @@ async function enrichSeriesDataWithOriginalFilenames(seriesData: any[]): Promise
                 epsData = Array.isArray(res) ? res : (res.episodes ?? [])
             } catch { return season }
 
-            // Index episode_id → original_filename
-            const origMap = new Map<number, string>()
+            // Index episode_id → original_filename + formatted_name
+            const origMap = new Map<number, { original_filename: string; formatted_name: string }>()
             for (const ep of epsData) {
-                if (ep.id && ep.original_filename) origMap.set(ep.id, ep.original_filename)
+                if (ep.id) origMap.set(ep.id, {
+                    original_filename: ep.original_filename ?? '',
+                    formatted_name   : ep.formatted_name ?? '',
+                })
             }
 
             // Injecter dans les épisodes du serieData
             const enrichedEpisodes = (season.episodes ?? []).map((ep: any) => ({
                 ...ep,
-                original_filename: origMap.get(ep.id) ?? null,
+                original_filename: origMap.get(ep.id)?.original_filename ?? null,
+                formatted_name   : origMap.get(ep.id)?.formatted_name    ?? null,
             }))
 
             return { ...season, episodes: enrichedEpisodes }

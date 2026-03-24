@@ -122,13 +122,17 @@ export async function scanMediaPath(
 }
 
 /**
- * Auto-organisation — appelée depuis index.ts avec les seriesData du cache GitHub.
+ * Auto-import — appelée depuis index.ts avec les seriesData du cache GitHub.
  */
 export async function autoOrganizeAll(
     listFn     : () => Promise<any[]>,
     seriesData : any[],
     onResult  ?: (r: { hash: string; name: string; done: number; skipped: number; errors: number; errorFiles: { file: string; error: string }[] }) => void
 ): Promise<void> {
+    // Vérifier si l'import auto est activé
+    const { autoImport } = readSettings()
+    if (!autoImport) return
+
     if (workerRunning) {
         console.log('[organize] Worker déjà en cours, skip')
         return

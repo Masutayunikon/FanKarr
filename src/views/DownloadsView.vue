@@ -10,11 +10,9 @@
         <h1 class="text-xl font-black text-white font-sans">Téléchargements</h1>
       </div>
       <div class="flex items-center gap-3">
-        <button
-            @click="organizeAll"
-            :disabled="organizingAll"
-            class="border border-[#1e2d3d] text-[#5a7a94] px-4 py-1.5 text-xs tracking-widest hover:border-green-500 hover:text-green-500 transition-colors cursor-pointer disabled:opacity-50">
-          {{ organizingAll ? '...' : 'ORGANISER TOUT' }}
+        <button @click="importAll" :disabled="importingAll"
+                class="border border-[#1e2d3d] text-[#5a7a94] px-4 py-1.5 text-xs tracking-widest hover:border-green-500 hover:text-green-500 transition-colors cursor-pointer disabled:opacity-50">
+          {{ importingAll ? '...' : 'IMPORTER TOUT' }}
         </button>
         <div class="flex items-center gap-2 text-[10px] text-[#5a7a94] tracking-widest">
           <div class="w-1.5 h-1.5 rounded-full" :class="polling ? 'bg-green-500 animate-pulse' : 'bg-[#1e2d3d]'"/>
@@ -38,49 +36,39 @@
     <!-- Onglets -->
     <div class="flex items-center justify-between mb-4">
       <div class="flex gap-0 border border-[#1e2d3d]">
-        <button
-            @click="activeTab = 'active'"
-            class="px-5 py-2 text-xs tracking-widest transition-colors cursor-pointer"
-            :class="activeTab === 'active'
-            ? 'bg-[#e8513a] text-white border-[#e8513a]'
-            : 'text-[#5a7a94] hover:text-white'">
+        <button @click="activeTab = 'active'"
+                class="px-5 py-2 text-xs tracking-widest transition-colors cursor-pointer"
+                :class="activeTab === 'active' ? 'bg-[#e8513a] text-white' : 'text-[#5a7a94] hover:text-white'">
           EN COURS
-          <span v-if="activeTorrents.length > 0"
-                class="ml-1.5 bg-white/20 text-[9px] px-1.5 py-0.5 rounded-full">
+          <span v-if="activeTorrents.length > 0" class="ml-1.5 bg-white/20 text-[9px] px-1.5 py-0.5 rounded-full">
             {{ activeTorrents.length }}
           </span>
         </button>
-        <button
-            @click="activeTab = 'done'"
-            class="px-5 py-2 text-xs tracking-widest transition-colors cursor-pointer border-l border-[#1e2d3d]"
-            :class="activeTab === 'done'
-            ? 'bg-[#e8513a] text-white'
-            : 'text-[#5a7a94] hover:text-white'">
+        <button @click="activeTab = 'done'"
+                class="px-5 py-2 text-xs tracking-widest transition-colors cursor-pointer border-l border-[#1e2d3d]"
+                :class="activeTab === 'done' ? 'bg-[#e8513a] text-white' : 'text-[#5a7a94] hover:text-white'">
           TERMINÉS
-          <span v-if="doneTorrents.length > 0"
-                class="ml-1.5 bg-white/20 text-[9px] px-1.5 py-0.5 rounded-full">
+          <span v-if="doneTorrents.length > 0" class="ml-1.5 bg-white/20 text-[9px] px-1.5 py-0.5 rounded-full">
             {{ doneTorrents.length }}
           </span>
         </button>
       </div>
 
-      <!-- Toggle masquer organisés (onglet TERMINÉS uniquement) -->
       <div v-if="activeTab === 'done'" class="flex items-center gap-2">
-        <button @click="hideOrganized = !hideOrganized"
+        <button @click="hideImported = !hideImported"
                 class="relative shrink-0 w-8 h-4 rounded-full transition-colors cursor-pointer"
-                :class="hideOrganized ? 'bg-[#e8513a]' : 'bg-[#1e2d3d]'">
+                :class="hideImported ? 'bg-[#e8513a]' : 'bg-[#1e2d3d]'">
           <span class="absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform duration-200"
-                :class="hideOrganized ? 'translate-x-4' : 'translate-x-0'" />
+                :class="hideImported ? 'translate-x-4' : 'translate-x-0'" />
         </button>
-        <span class="text-[10px] text-[#5a7a94] tracking-widest">MASQUER ORGANISÉS</span>
+        <span class="text-[10px] text-[#5a7a94] tracking-widest">MASQUER IMPORTÉS</span>
       </div>
     </div>
 
     <!-- Pas de clients -->
     <div v-if="noClients" class="flex flex-col items-center justify-center gap-3 min-h-64 text-[#5a7a94]">
       <p class="text-sm">Aucun client torrent configuré</p>
-      <router-link to="/settings"
-                   class="text-[10px] tracking-widest text-[#e8513a] hover:opacity-75 transition-opacity">
+      <router-link to="/settings" class="text-[10px] tracking-widest text-[#e8513a] hover:opacity-75 transition-opacity">
         CONFIGURER →
       </router-link>
     </div>
@@ -99,37 +87,30 @@
       <p class="text-[11px]">
         {{ activeTab === 'active'
           ? 'Les torrents avec la catégorie « fankai » apparaîtront ici'
-          : hideOrganized ? 'Tous les torrents terminés sont organisés' : '' }}
+          : hideImported ? 'Tous les torrents terminés sont importés' : '' }}
       </p>
     </div>
 
     <!-- Liste torrents -->
     <div v-else class="flex flex-col gap-2">
-      <div v-for="t in visibleTorrents" :key="t.hash"
-           class="bg-[#0d1219] border border-[#1e2d3d] p-4">
+      <div v-for="t in visibleTorrents" :key="t.hash" class="bg-[#0d1219] border border-[#1e2d3d] p-4">
 
-        <!-- Ligne principale -->
         <div class="flex items-start justify-between gap-4 mb-3">
           <div class="flex-1 min-w-0">
             <p class="text-sm text-white font-medium truncate">{{ t.name }}</p>
             <div class="flex items-center gap-3 mt-1">
-              <span class="text-[10px] tracking-widest px-2 py-0.5 border"
-                    :class="stateBadge(t.state).class">
+              <span class="text-[10px] tracking-widest px-2 py-0.5 border" :class="stateBadge(t.state).class">
                 {{ stateBadge(t.state).label }}
               </span>
               <span class="text-[10px] text-[#5a7a94]">{{ t.client_name }}</span>
             </div>
           </div>
-
           <div class="text-right shrink-0">
             <p class="text-sm font-bold text-white">{{ t.progress }}%</p>
-            <p class="text-[10px] text-[#5a7a94] mt-0.5">
-              {{ formatSize(t.downloaded) }} / {{ formatSize(t.size) }}
-            </p>
+            <p class="text-[10px] text-[#5a7a94] mt-0.5">{{ formatSize(t.downloaded) }} / {{ formatSize(t.size) }}</p>
           </div>
         </div>
 
-        <!-- Barre de progression -->
         <div class="h-1 bg-[#1e2d3d] rounded-full overflow-hidden mb-2">
           <div class="h-full rounded-full transition-all duration-500"
                :class="t.state === 'seeding' ? 'bg-green-500' :
@@ -138,7 +119,6 @@
                :style="{ width: `${t.progress}%` }"/>
         </div>
 
-        <!-- Infos bas -->
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-4 text-[10px] text-[#5a7a94]">
             <span v-if="t.state === 'downloading'">↓ {{ formatSpeed(t.speed) }}</span>
@@ -146,7 +126,6 @@
             <span v-if="t.state === 'seeding'" class="text-green-500">✓ Complété</span>
           </div>
 
-          <!-- Badge organisation (seulement pour les terminés) -->
           <div v-if="t.state === 'seeding'" class="flex items-center gap-2">
             <div v-if="t.errorFiles?.length > 0" class="relative group/err">
               <span class="text-[9px] tracking-widest px-2 py-0.5 border border-red-500/40 text-red-400 cursor-default">
@@ -164,19 +143,19 @@
             </div>
 
             <span class="text-[9px] tracking-widest px-2 py-0.5 border"
-                  :class="t.organizeState === 'done'    ? 'border-green-500/40 text-green-500' :
-                        t.organizeState === 'partial'  ? 'border-yellow-500/40 text-yellow-500' :
-                                                         'border-[#1e2d3d] text-[#5a7a94]'">
-              {{ t.organizeState === 'done'    ? `ORGANISÉ (${t.organizeProgress?.done}/${t.organizeProgress?.total})` :
+                  :class="t.organizeState === 'done'   ? 'border-green-500/40 text-green-500' :
+                        t.organizeState === 'partial' ? 'border-yellow-500/40 text-yellow-500' :
+                                                        'border-red-500/40 text-red-400'">
+              {{ t.organizeState === 'done'   ? `IMPORTÉ (${t.organizeProgress?.done}/${t.organizeProgress?.total})` :
                 t.organizeState === 'partial' ? `EN COURS (${t.organizeProgress?.done}/${t.organizeProgress?.total})` :
-                    'NON ORGANISÉ' }}
+                    'NON IMPORTÉ' }}
             </span>
 
             <button v-if="t.organizeState !== 'done'"
-                    @click="organize(t)"
-                    :disabled="organizing[t.hash]"
+                    @click="importTorrent(t)"
+                    :disabled="importing[t.hash]"
                     class="text-[9px] tracking-widest px-3 py-1 border transition-colors cursor-pointer border-[#1e2d3d] text-[#5a7a94] hover:border-[#e8513a] hover:text-[#e8513a] disabled:opacity-50">
-              {{ organizing[t.hash] ? '...' : 'ORGANISER' }}
+              {{ importing[t.hash] ? '...' : 'IMPORTER' }}
             </button>
           </div>
         </div>
@@ -191,18 +170,17 @@ import { useToast } from '@/composables/useToast'
 
 const { add: toast } = useToast()
 
-const torrents      = ref<any[]>([])
-const loading       = ref(true)
-const polling       = ref(true)
-const noClients     = ref(false)
-const organizing    = ref<Record<string, boolean>>({})
-const organizingAll = ref(false)
-const activeTab     = ref<'active' | 'done'>('active')
-const hideOrganized = ref(false)
+const torrents     = ref<any[]>([])
+const loading      = ref(true)
+const polling      = ref(true)
+const noClients    = ref(false)
+const importing    = ref<Record<string, boolean>>({})
+const importingAll = ref(false)
+const activeTab    = ref<'active' | 'done'>('active')
+const hideImported = ref(false)
 
 let pollInterval: ReturnType<typeof setInterval> | null = null
 
-// ── Filtres onglets ────────────────────────────────────────────
 const activeTorrents = computed(() =>
     torrents.value.filter(t => ['downloading', 'paused', 'checking', 'error', 'unknown'].includes(t.state))
 )
@@ -213,11 +191,10 @@ const doneTorrents = computed(() =>
 
 const visibleTorrents = computed(() => {
   if (activeTab.value === 'active') return activeTorrents.value
-  if (hideOrganized.value) return doneTorrents.value.filter(t => t.organizeState !== 'done')
+  if (hideImported.value) return doneTorrents.value.filter(t => t.organizeState !== 'done')
   return doneTorrents.value
 })
 
-// ── Stats ──────────────────────────────────────────────────────
 const stats = computed(() => [
   { label: 'EN COURS',  value: torrents.value.filter(t => t.state === 'downloading').length },
   { label: 'COMPLÉTÉS', value: torrents.value.filter(t => t.state === 'seeding').length },
@@ -225,7 +202,6 @@ const stats = computed(() => [
   { label: 'ERREURS',   value: torrents.value.filter(t => t.state === 'error').length },
 ])
 
-// ── Fetch ──────────────────────────────────────────────────────
 async function fetchTorrents() {
   try {
     const res = await fetch('/api/downloads', { credentials: 'include' })
@@ -234,7 +210,6 @@ async function fetchTorrents() {
     torrents.value  = await res.json()
     noClients.value = false
   } catch {
-    // silencieux en polling
   } finally {
     loading.value = false
   }
@@ -258,46 +233,44 @@ function togglePolling() {
 onMounted(startPolling)
 onUnmounted(stopPolling)
 
-// ── Organiser un torrent ───────────────────────────────────────
-async function organize(torrent: any) {
-  organizing.value[torrent.hash] = true
+async function importTorrent(torrent: any) {
+  importing.value[torrent.hash] = true
   try {
     const res = await fetch('/api/organize', {
-      method : 'POST',
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify({ hash: torrent.hash, save_path: torrent.save_path, name: torrent.name })
     })
     if (res.ok) {
-      toast(`${torrent.name} organisé ✓`, 'success')
+      toast(`${torrent.name} importé ✓`, 'success')
       await fetchTorrents()
     } else {
       const { error } = await res.json()
-      toast(error ?? 'Erreur lors de l\'organisation', 'error')
+      toast(error ?? "Erreur lors de l'import", 'error')
     }
   } catch {
     toast('Impossible de contacter le serveur', 'error')
   } finally {
-    organizing.value[torrent.hash] = false
+    importing.value[torrent.hash] = false
   }
 }
 
-// ── Organiser tout ─────────────────────────────────────────────
-async function organizeAll() {
-  const toOrganize = doneTorrents.value.filter(t => t.organizeState !== 'done')
-  if (toOrganize.length === 0) {
-    toast('Tous les torrents sont déjà organisés', 'success')
+async function importAll() {
+  const toImport = doneTorrents.value.filter(t => t.organizeState !== 'done')
+  if (toImport.length === 0) {
+    toast('Tous les torrents sont déjà importés', 'success')
     return
   }
 
-  organizingAll.value = true
+  importingAll.value = true
   let done = 0
   let errors = 0
 
-  for (const t of toOrganize) {
+  for (const t of toImport) {
     try {
       const res = await fetch('/api/organize', {
-        method : 'POST',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ hash: t.hash, save_path: t.save_path, name: t.name })
@@ -309,14 +282,13 @@ async function organizeAll() {
     }
   }
 
-  organizingAll.value = false
+  importingAll.value = false
   await fetchTorrents()
 
-  if (errors === 0) toast(`${done} torrent(s) organisé(s) ✓`, 'success')
+  if (errors === 0) toast(`${done} torrent(s) importé(s) ✓`, 'success')
   else toast(`${done} OK, ${errors} erreur(s)`, 'error')
 }
 
-// ── Helpers affichage ──────────────────────────────────────────
 function stateBadge(state: string) {
   const map: Record<string, { label: string; class: string }> = {
     downloading: { label: 'TÉLÉCHARGEMENT', class: 'border-[#e8513a]/40 text-[#e8513a]' },
@@ -336,9 +308,7 @@ function formatSize(bytes: number): string {
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`
 }
 
-function formatSpeed(bps: number): string {
-  return `${formatSize(bps)}/s`
-}
+function formatSpeed(bps: number): string { return `${formatSize(bps)}/s` }
 
 function formatEta(seconds: number): string {
   if (seconds < 0 || seconds > 86400 * 7) return '∞'

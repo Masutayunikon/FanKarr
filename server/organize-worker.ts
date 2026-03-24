@@ -89,9 +89,11 @@ function findTorrentByHash(hash: string, seriesData: any[]): { torrent: any; ser
 
 // Construit la map filename → { season_number, original_filename, fullPath }
 // Supporte les deux formats : { infohash, path } et string (legacy)
+// destFilename : original_filename si nfoSupport, formatted_name sinon
 function buildFileMap(
     serieData    : any,
     hash         : string,
+    nfoSupport   : boolean,
     seasonFilter?: number
 ): Map<string, { season_number: number; original_filename: string; fullPath: string }> {
     const map = new Map<string, { season_number: number; original_filename: string; fullPath: string }>()
@@ -114,10 +116,18 @@ function buildFileMap(
 
             if (!matchedPath) continue
             const filename = matchedPath.split('/').pop() ?? matchedPath
-            const original = ep.original_filename ?? filename
+
+            // nfoSupport → original_filename (correspond aux .nfo GitLab)
+            // sinon → formatted_name de l'API (nommage Jellyfin/Plex standardisé)
+            const destName = nfoSupport
+                ? (ep.original_filename ?? filename)
+                : (ep.formatted_name
+                    ? ep.formatted_name.replace(/[<>:"/\\|?*]/g, '') + '.mkv'
+                    : (ep.original_filename ?? filename))
+
             map.set(filename, {
                 season_number    : season.season_number,
-                original_filename: original,
+                original_filename: destName,
                 fullPath         : matchedPath,
             })
         }
@@ -268,9 +278,13 @@ async function organizeTorrent(hash: string, name: string, savePath: string, ser
             else if (p?.infohash?.toLowerCase() === hash.toLowerCase()) { filePath = p.path.replace(/\\/g, '/'); break }
         }
         const filename = filePath?.split('/').pop() ?? name
-        const original = ep.original_filename ?? filename
+        const destName = nfoSupport
+            ? (ep.original_filename ?? filename)
+            : (ep.formatted_name
+                ? ep.formatted_name.replace(/[<>:"/\\|?*]/g, '') + '.mkv'
+                : (ep.original_filename ?? filename))
         const destDir  = path.join(mediaPath, serieTitle, seasonFolder(season.season_number ?? 1))
-        const dest     = path.join(destDir, original)
+        const dest     = path.join(destDir, destName)
 
         if (isOrganized(hash, filename)) return { ...result, total: 1, skipped: 1 }
 
@@ -302,13 +316,13 @@ async function organizeTorrent(hash: string, name: string, savePath: string, ser
             }
         }
         markOrganized(hash, filename)
-        log(`[organize] ✓ ${original} → Saison ${season.season_number}`)
+        log(`[organize] ✓ ${destName} → Saison ${season.season_number}`)
         return { ...result, total: 1, done: 1 }
     }
 
     // ── Pack saison / intégrale ───────────────────────────────
     const seasonFilter = torrent._season?.season_number
-    const fileMap = buildFileMap(serieData, hash, seasonFilter)
+    const fileMap = buildFileMap(serieData, hash, nfoSupport, seasonFilter)
 
     if (fileMap.size === 0) {
         warn(`[organize] Aucun fichier mappé pour ${name}`)
@@ -371,6 +385,7 @@ parentPort?.on('message', async (msg: any) => {
     const torrents: any[]   = msg.torrents
     const seriesData: any[] = msg.seriesData ?? []
     const organized = loadOrganized()
+    const { nfoSupport } = readSettings()
 
     for (const t of torrents) {
         if (t.state !== 'seeding') continue
@@ -384,7 +399,7 @@ parentPort?.on('message', async (msg: any) => {
         // Vérifier si déjà tout organisé
         const { torrent, serieData } = found
         const seasonFilter   = torrent._season?.season_number
-        const fileMap        = buildFileMap(serieData, t.hash, seasonFilter)
+        const fileMap        = buildFileMap(serieData, t.hash, nfoSupport, seasonFilter)
         const allDone = fileMap.size > 0
             ? [...fileMap.keys()].every(f => organized[t.hash]?.[f])
             : !!organized[t.hash]?.[t.name]

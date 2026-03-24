@@ -15,7 +15,7 @@
       <div>
         <div class="text-[10px] text-[#e8513a] tracking-widest mb-1">DONNÉES MANQUANTES</div>
         <p class="text-sm text-[#a0b4c4]">
-          {{ torrentsStatus.exists ? 'Le fichier de torrents est vide.' : 'Aucun fichier de torrents trouvé.' }}
+          {{ torrentsStatus.exists ? 'Le catalogue est vide.' : 'Aucun catalogue trouvé.' }}
           Téléchargez les données pour utiliser Fankarr.
         </p>
       </div>
@@ -28,9 +28,9 @@
     <!-- Données torrents -->
     <div class="bg-[#0d1219] border border-[#1e2d3d] p-6 mb-4">
       <div class="text-[10px] text-[#e8513a] tracking-widest mb-1">DONNÉES</div>
-      <h2 class="text-sm font-bold text-white mb-1">Torrents Fankai</h2>
+      <h2 class="text-sm font-bold text-white mb-1">Catalogue Fankai</h2>
       <p class="text-[11px] text-[#5a7a94] mb-5">
-        {{ torrentsStatus.empty ? 'Aucune donnée chargée' : `${torrentsStatus.count} torrents chargés` }}
+        {{ torrentsStatus.empty ? 'Aucune donnée chargée' : `${torrentsStatus.count} séries disponibles` }}
       </p>
       <button @click="update" :disabled="updating"
               class="bg-[#e8513a] text-white px-6 py-2.5 text-xs tracking-widest hover:opacity-85 transition-opacity disabled:opacity-50 cursor-pointer">
@@ -78,17 +78,17 @@
       </div>
     </div>
 
-    <!-- Médias & Organisation -->
+    <!-- Médias & Import -->
     <div class="bg-[#0d1219] border border-[#1e2d3d] p-6 mb-4">
       <div class="text-[10px] text-[#e8513a] tracking-widest mb-1">MÉDIAS</div>
-      <h2 class="text-sm font-bold text-white mb-6">Organisation</h2>
+      <h2 class="text-sm font-bold text-white mb-6">Import</h2>
 
       <div class="flex flex-col gap-5">
 
         <!-- Dossier complétion -->
         <div>
           <div class="flex items-center gap-2 mb-1.5">
-            <label class="text-[10px] text-[#5a7a94] tracking-widest">DOSSIER COMPLÉTION</label>
+            <label class="text-[10px] text-[#5a7a94] tracking-widest">DOSSIER TÉLÉCHARGEMENTS</label>
             <span v-if="isDocker" class="text-[9px] tracking-widest text-[#3a8fe8] border border-[#3a8fe8]/40 px-1.5 py-0.5">DOCKER</span>
           </div>
           <button @click="openPicker('completePath')"
@@ -96,13 +96,13 @@
                   :class="form.completePath ? 'text-white' : 'text-[#5a7a94]'">
             {{ form.completePath || '/' }}
           </button>
-          <p class="text-[10px] text-[#5a7a94] mt-1.5">Dossier de complétion de qBittorrent</p>
+          <p class="text-[10px] text-[#5a7a94] mt-1.5">Dossier où sont déposés les fichiers téléchargés</p>
         </div>
 
-        <!-- Dossier Jellyfin -->
+        <!-- Dossier médiathèque -->
         <div>
           <div class="flex items-center gap-2 mb-1.5">
-            <label class="text-[10px] text-[#5a7a94] tracking-widest">DOSSIER JELLYFIN</label>
+            <label class="text-[10px] text-[#5a7a94] tracking-widest">MÉDIATHÈQUE FANKAI</label>
             <span v-if="isDocker" class="text-[9px] tracking-widest text-[#3a8fe8] border border-[#3a8fe8]/40 px-1.5 py-0.5">DOCKER</span>
           </div>
           <button @click="openPicker('mediaPath')"
@@ -110,12 +110,12 @@
                   :class="form.mediaPath ? 'text-white' : 'text-[#5a7a94]'">
             {{ form.mediaPath || '/' }}
           </button>
-          <p class="text-[10px] text-[#5a7a94] mt-1.5">Dossier racine de la bibliothèque Fankai dans Jellyfin</p>
+          <p class="text-[10px] text-[#5a7a94] mt-1.5">Dossier racine de votre médiathèque Fankai (Jellyfin, Kodi, Plex…)</p>
         </div>
 
-        <!-- Mode organisation -->
+        <!-- Mode import -->
         <div>
-          <label class="text-[10px] text-[#5a7a94] tracking-widest block mb-2">MODE</label>
+          <label class="text-[10px] text-[#5a7a94] tracking-widest block mb-2">MODE D'IMPORT</label>
           <div class="flex gap-2">
             <button @click="form.organizeMode = 'hardlink'"
                     class="px-5 py-2 text-xs tracking-widest border transition-colors cursor-pointer"
@@ -129,11 +129,28 @@
                     :class="form.organizeMode === 'move'
                   ? 'border-[#e8513a] text-[#e8513a] bg-[#e8513a]/5'
                   : 'border-[#1e2d3d] text-[#5a7a94] hover:border-[#5a7a94]'">
-              MOVE
+              DÉPLACER
             </button>
           </div>
           <p class="text-[10px] text-[#5a7a94] mt-1.5">
-            <span class="text-white">Hardlink recommandé</span> — le fichier reste dans qBittorrent pour le ratio
+            <span class="text-white">Hardlink recommandé</span> — le fichier reste dans le client torrent pour le ratio
+          </p>
+        </div>
+
+        <!-- Import automatique -->
+        <div>
+          <label class="text-[10px] text-[#5a7a94] tracking-widest block mb-2">IMPORT AUTOMATIQUE</label>
+          <div class="flex items-center gap-3">
+            <button @click="form.autoImport = !form.autoImport"
+                    class="relative shrink-0 w-11 h-6 rounded-full transition-colors cursor-pointer"
+                    :class="form.autoImport ? 'bg-[#e8513a]' : 'bg-[#1e2d3d]'">
+              <span class="absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform duration-200"
+                    :class="form.autoImport ? 'translate-x-5' : 'translate-x-0'" />
+            </button>
+            <span class="text-xs text-[#c8d8e8]">Importer automatiquement dès qu'un téléchargement est terminé</span>
+          </div>
+          <p class="text-[10px] text-[#5a7a94] mt-1.5">
+            Vérifie toutes les 5 minutes si de nouveaux fichiers sont prêts à être importés
           </p>
         </div>
 
@@ -151,7 +168,7 @@
           </div>
           <p class="text-[10px] text-[#5a7a94] mt-1.5">
             Pour les lecteurs sans agent Fankai (Kodi, Infuse, etc.) — télécharge les métadonnées depuis
-            <span class="text-white">fankai_pack</span> au moment de l'organisation
+            <span class="text-white">fankai_pack</span> lors de l'import
           </p>
         </div>
 
@@ -162,7 +179,7 @@
           </button>
           <button type="button" @click="scan" :disabled="scanning"
                   class="border border-[#1e2d3d] text-[#5a7a94] px-6 py-2.5 text-xs tracking-widest hover:border-[#e8513a] hover:text-[#e8513a] transition-colors disabled:opacity-50 cursor-pointer">
-            {{ scanning ? 'SCAN...' : 'ANALYSER BIBLIOTHÈQUE' }}
+            {{ scanning ? 'SCAN...' : 'ANALYSER MÉDIATHÈQUE' }}
           </button>
           <span v-if="scanResult" class="text-[10px]"
                 :class="scanResult.added > 0 ? 'text-green-400' : 'text-[#5a7a94]'">
@@ -200,7 +217,7 @@
 
         <div class="mb-4">
           <label class="text-[10px] text-[#5a7a94] tracking-widest block mb-1.5">NOM</label>
-          <input v-model="modal.name" placeholder="Mon qBittorrent"
+          <input v-model="modal.name" placeholder="Mon client torrent"
                  class="w-full bg-[#121920] border border-[#1e2d3d] text-white px-3 py-2.5 text-sm outline-none focus:border-[#e8513a] transition-colors"/>
         </div>
 
@@ -259,11 +276,12 @@ const form = ref({
   completePath: '',
   organizeMode: 'hardlink' as 'hardlink' | 'move',
   nfoSupport  : false,
+  autoImport  : true,
 })
 
-const saving    = ref(false)
-const updating  = ref(false)
-const scanning  = ref(false)
+const saving     = ref(false)
+const updating   = ref(false)
+const scanning   = ref(false)
 const scanResult = ref<{ found: number; added: number } | null>(null)
 
 // ── Folder picker ──────────────────────────────────────────────
@@ -272,23 +290,19 @@ const picker = ref<{ open: boolean; field: 'completePath' | 'mediaPath'; current
 })
 
 function openPicker(field: 'completePath' | 'mediaPath') {
-  picker.value = {
-    open       : true,
-    field,
-    currentPath: (form.value as any)[field] || '/',
-  }
+  picker.value = { open: true, field, currentPath: (form.value as any)[field] || '/' }
 }
 
 function onPickerSelect(path: string) {
   (form.value as any)[picker.value.field] = path
   picker.value.open = false
 }
-const isDocker  = ref(false)
-const torrentsStatus = ref({ exists: false, count: 0, empty: true })
 
-const clients          = ref<any[]>([])
+const isDocker       = ref(false)
+const torrentsStatus = ref({ exists: false, count: 0, empty: true })
+const clients        = ref<any[]>([])
 const availableClients = ref<any[]>([])
-const healthStatus     = ref<Record<string, boolean | null>>({})
+const healthStatus   = ref<Record<string, boolean | null>>({})
 
 const modal = ref({
   open   : false,
@@ -333,9 +347,7 @@ async function refreshHealth(uuid: string) {
   try {
     const res = await fetch(`/api/torrent-clients/${uuid}/healthcheck`, { credentials: 'include' })
     healthStatus.value[uuid] = res.ok ? (await res.json()).online : false
-  } catch {
-    healthStatus.value[uuid] = false
-  }
+  } catch { healthStatus.value[uuid] = false }
 }
 
 // ── Test / delete clients ──────────────────────────────────────
@@ -362,9 +374,7 @@ function openAddModal() {
   modal.value = { open: true, name: '', type: '', config: {}, testing: false, saving: false, tested: false }
 }
 
-function closeModal() {
-  modal.value.open = false
-}
+function closeModal() { modal.value.open = false }
 
 function onTypeChange() {
   modal.value.config = {}
@@ -382,9 +392,7 @@ async function testNewClient() {
   modal.value.tested  = false
   try {
     const res = await fetch('/api/torrent-clients/test-config', {
-      method : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ type: modal.value.type, config: modal.value.config })
     })
     const { ok, message } = await res.json()
@@ -402,14 +410,8 @@ async function saveClient() {
   modal.value.saving = true
   try {
     const res = await fetch('/api/torrent-clients', {
-      method : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({
-        name  : modal.value.name || clientLabel(modal.value.type),
-        type  : modal.value.type,
-        config: modal.value.config
-      })
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ name: modal.value.name || clientLabel(modal.value.type), type: modal.value.type, config: modal.value.config })
     })
     if (res.ok) {
       const client = await res.json()
@@ -426,7 +428,7 @@ async function saveClient() {
   }
 }
 
-// ── Données torrents ───────────────────────────────────────────
+// ── Données ────────────────────────────────────────────────────
 async function update() {
   updating.value = true
   try {
@@ -434,7 +436,7 @@ async function update() {
     if (res.ok) {
       const { count } = await res.json()
       torrentsStatus.value = { exists: true, count, empty: count === 0 }
-      toast(`${count} torrents téléchargés ✓`, 'success')
+      toast(`${count} séries chargées ✓`, 'success')
     } else {
       const { error } = await res.json()
       toast(error ?? 'Erreur lors de la mise à jour', 'error')
@@ -446,7 +448,7 @@ async function update() {
   }
 }
 
-// ── Scan bibliothèque ──────────────────────────────────────────
+// ── Scan ───────────────────────────────────────────────────────
 async function scan() {
   scanning.value  = true
   scanResult.value = null
@@ -457,12 +459,12 @@ async function scan() {
       scanResult.value = { found: data.found, added: data.added }
       toast(
           data.added > 0
-              ? `${data.found} fichiers scannés — ${data.added} ajoutés`
-              : `${data.found} fichiers scannés — rien de nouveau`,
+              ? `${data.found} fichiers analysés — ${data.added} ajoutés`
+              : `${data.found} fichiers analysés — rien de nouveau`,
           'success'
       )
     } else {
-      toast('Erreur lors du scan', 'error')
+      toast('Erreur lors de l\'analyse', 'error')
     }
   } catch {
     toast('Impossible de contacter le serveur', 'error')
@@ -471,14 +473,12 @@ async function scan() {
   }
 }
 
-// ── Sauvegarder settings ───────────────────────────────────────
+// ── Sauvegarder ────────────────────────────────────────────────
 async function save() {
   saving.value = true
   try {
     const res = await fetch('/api/settings', {
-      method : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify(form.value)
     })
     if (res.ok) toast('Configuration sauvegardée', 'success')
