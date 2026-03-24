@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.1](https://github.com/Masutayunikon/FanKarr/compare/v2.3.0...v2.3.1) (2026-03-24)
+
+
+### Bug Fixes
+
+* add readsettings import ([ceb8e64](https://github.com/Masutayunikon/FanKarr/commit/ceb8e64a55937e20e27c1fb64865aba59516d518))
+
 ## [2.3.0](https://github.com/Masutayunikon/FanKarr/compare/v2.2.0...v2.3.0) (2026-03-24)
 
 
