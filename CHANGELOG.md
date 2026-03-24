@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.1](https://github.com/Masutayunikon/FanKarr/compare/v2.4.0...v2.4.1) (2026-03-24)
+
+
+### Bug Fixes
+
+* add usePlexTitles to return function ([381e327](https://github.com/Masutayunikon/FanKarr/commit/381e3274344c59cc80ba6230d30c96e5c5637ea5))
+
 ## [2.4.0](https://github.com/Masutayunikon/FanKarr/compare/v2.3.3...v2.4.0) (2026-03-24)
 
 
