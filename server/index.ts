@@ -279,16 +279,36 @@ function normalizeEpisode(ep: any): any {
 // Fetche /seasons/{id}/episodes pour chaque saison et injecte original_filename
 // dans chaque épisode du serieData, indexé par episode_id
 async function enrichSeriesDataWithOriginalFilenames(seriesData: any[]): Promise<any[]> {
-    return Promise.all(seriesData.map(async (sd) => {
-        if (!sd) return sd
-        const enrichedSeasons = await Promise.all((sd.seasons ?? []).map(async (season: any) => {
+    const results: any[] = []
+
+    for (const sd of seriesData) {
+        if (!sd) { results.push(sd); continue }
+
+        const enrichedSeasons: any[] = []
+        for (const season of sd.seasons ?? []) {
             let epsData: any[] = []
             try {
-                const res = await fankaiGet(`/seasons/${season.id}/episodes`)
-                epsData = Array.isArray(res) ? res : (res.episodes ?? [])
-            } catch { return season }
+                // 2 tentatives en cas d'erreur réseau ponctuelle
+                let lastErr: any
+                for (let attempt = 0; attempt < 2; attempt++) {
+                    try {
+                        const res = await fankaiGet(`/seasons/${season.id}/episodes`)
+                        epsData = Array.isArray(res) ? res : (res.episodes ?? [])
+                        break
+                    } catch (e) {
+                        lastErr = e
+                        if (attempt === 0) await new Promise(r => setTimeout(r, 500))
+                    }
+                }
+                if (epsData.length === 0 && lastErr) throw lastErr
+            } catch {
+                enrichedSeasons.push(season)
+                continue
+            }
 
-            // Index episode_id → original_filename + formatted_name
+            // Petit délai pour ne pas saturer l'API
+            await new Promise(r => setTimeout(r, 50))
+
             const origMap = new Map<number, { original_filename: string; formatted_name: string }>()
             for (const ep of epsData) {
                 if (ep.id) origMap.set(ep.id, {
@@ -297,17 +317,19 @@ async function enrichSeriesDataWithOriginalFilenames(seriesData: any[]): Promise
                 })
             }
 
-            // Injecter dans les épisodes du serieData
             const enrichedEpisodes = (season.episodes ?? []).map((ep: any) => ({
                 ...ep,
                 original_filename: origMap.get(ep.id)?.original_filename ?? null,
                 formatted_name   : origMap.get(ep.id)?.formatted_name    ?? null,
             }))
 
-            return { ...season, episodes: enrichedEpisodes }
-        }))
-        return { ...sd, seasons: enrichedSeasons }
-    }))
+            enrichedSeasons.push({ ...season, episodes: enrichedEpisodes })
+        }
+
+        results.push({ ...sd, seasons: enrichedSeasons })
+    }
+
+    return results
 }
 
 // Helper réutilisable : charge + enrichit toutes les seriesData du cache
