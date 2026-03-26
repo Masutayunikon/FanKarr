@@ -511,7 +511,7 @@ app.get('/api/series/:id', requireAuth, async (req, res) => {
                 // ── Torrents niveau épisode ─────────────────────────────
                 for (const ep of season.episodes ?? []) {
                     for (const t of (ep.torrents ?? [])) {
-                        const ref = { torrent_url: t.torrent_url, magnet: t.magnet, type: 'episode', raw: t.title, manual: t.manual ?? false }
+                        const ref = { torrent_url: t.torrent_url, magnet: t.magnet, type: 'episode', raw: t.title, manual: t.manual ?? false, fankai: t.fankai ?? true }
                         episodeTorrentMap[ep.id] = ref
                         availableEpisodeIds.add(ep.id)
 
@@ -536,13 +536,38 @@ app.get('/api/series/:id', requireAuth, async (req, res) => {
         // ── Enrichissement des saisons API ───────────────────────────────
         const enrichedSeasons = seasonsWithEpisodes.map((season: any) => {
             const eps = season.episodes.map((ep: any) => {
-                // Chercher le torrent : niveau épisode d'abord, sinon le torrent de saison/intégrale sert juste de disponibilité
                 const epTorrent = episodeTorrentMap[ep.id] ?? null
-                // original_filename vient de l'API Fankai directement
+
+                // Si pas de torrent épisode, chercher le fankai du torrent qui couvre cet épisode via paths
+                let fankai: boolean | null = epTorrent ? (epTorrent.fankai ?? true) : null
+                if (fankai === null && serieData) {
+                    // Chercher dans les torrents série/saison quel torrent a un path pour cet épisode
+                    outer: for (const sd_season of serieData.seasons ?? []) {
+                        for (const sdEp of sd_season.episodes ?? []) {
+                            if (sdEp.id !== ep.id) continue
+                            for (const p of sdEp.paths ?? []) {
+                                const ih = typeof p === 'object' ? p.infohash?.toLowerCase() : null
+                                if (!ih) continue
+                                // Chercher dans les torrents série
+                                for (const t of serieData.torrents ?? []) {
+                                    if (t.infohash?.toLowerCase() === ih) { fankai = t.fankai ?? true; break outer }
+                                }
+                                // Chercher dans les torrents saison
+                                for (const s of serieData.seasons ?? []) {
+                                    for (const t of s.torrents ?? []) {
+                                        if (t.infohash?.toLowerCase() === ih) { fankai = t.fankai ?? true; break outer }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 return {
                     ...ep,
                     available : availableEpisodeIds.has(ep.id),
-                    torrent   : epTorrent,
+                    torrent   : epTorrent ? { ...epTorrent, fankai: fankai ?? true } : null,
+                    fankai    : fankai,
                     organized : organizedEpisodeIds.has(ep.id),
                 }
             })

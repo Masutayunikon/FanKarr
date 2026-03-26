@@ -60,7 +60,7 @@
               {{ data.serie.plot }}
             </p>
 
-            <!-- Boutons hero : intégrale, pack_saison promu, pack_episodes -->
+            <!-- Boutons hero -->
             <div class="flex flex-wrap gap-2 mt-1">
               <button
                   v-for="(t, i) in data.torrents_integrale"
@@ -138,14 +138,14 @@
                         ? 'bg-green-500/10 text-green-400'
                         : 'bg-yellow-500/10 text-yellow-500'">
                     {{ season.organized_state === 'complete'
-                      ? `✓ ${season.organized_count} organisé${season.organized_count > 1 ? 's' : ''}`
-                      : `${season.organized_count}/${seasonAvailableCount(season)} organisés` }}
+                      ? `✓ ${season.organized_count} importé${season.organized_count > 1 ? 's' : ''}`
+                      : `${season.organized_count}/${seasonAvailableCount(season)} importés` }}
                   </span>
                 </p>
               </div>
             </div>
 
-            <!-- Bouton pack_saison sur le header -->
+            <!-- Bouton pack_saison -->
             <button
                 class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition"
                 :class="[
@@ -157,7 +157,7 @@
                 @click="season.torrent && download(`season-${season.id}`, season.torrent.torrent_url, season.torrent.magnet)"
             >
               <DownloadIcon :spinning="downloading.has(`season-${season.id}`)" :size="12" />
-              {{ season.organized_state === 'complete' ? 'Organisé ✓' : isAlreadyQueued(season.torrent) ? 'Déjà ajouté' : downloaded.has(`season-${season.id}`) ? 'Envoyé ✓' : 'Saison entière' }}
+              {{ season.organized_state === 'complete' ? 'Importé ✓' : isAlreadyQueued(season.torrent) ? 'Déjà ajouté' : downloaded.has(`season-${season.id}`) ? 'Envoyé ✓' : 'Saison entière' }}
             </button>
           </div>
 
@@ -188,7 +188,6 @@
                 :key="ep.id"
                 class="px-5 py-3 hover:bg-white/[0.02] transition"
             >
-              <!-- Ligne principale -->
               <div class="flex items-center gap-4">
                 <!-- Thumbnail -->
                 <div class="shrink-0 w-24 aspect-video rounded-lg overflow-hidden bg-zinc-800 hidden sm:block">
@@ -208,29 +207,29 @@
                   </div>
                   <div class="flex items-center gap-3 mt-0.5">
                     <span v-if="ep.aired" class="text-xs text-zinc-600">{{ formatDate(ep.aired) }}</span>
-                    <span v-if="ep.duration" class="text-xs text-zinc-600">{{ ep.duration }} min</span>
+                    <span v-if="ep.duration" class="text-xs text-zinc-600">{{ formatDuration(ep.duration) }}</span>
                   </div>
                 </div>
 
-                <!-- Badges + bouton download -->
+                <!-- Badges + bouton -->
                 <div class="shrink-0 flex items-center gap-2">
 
-                  <!-- Badge Hors Fankai (torrent manuel) -->
+                  <!-- Badge Hors Fankai -->
                   <span
-                      v-if="ep.torrent?.manual"
+                      v-if="ep.fankai === false || ep.torrent?.fankai === false"
                       title="Ce fichier ne provient pas du catalogue Fan-Kai officiel"
                       class="text-[10px] px-2 py-0.5 rounded-full border bg-purple-500/10 text-purple-400 border-purple-500/20"
                   >
                     Hors Fankai
                   </span>
 
-                  <!-- Badge organisé -->
+                  <!-- Badge importé -->
                   <span v-if="ep.organized"
                         class="text-[10px] px-2 py-0.5 rounded-full border bg-green-500/10 text-green-400 border-green-500/20">
-                    ✓ organisé
+                    ✓ importé
                   </span>
 
-                  <!-- Badge téléchargé à 100% -->
+                  <!-- Badge téléchargé -->
                   <span v-if="torrentProgress(extractHash(ep.torrent))?.progress === 100"
                         class="text-[10px] px-2 py-0.5 rounded-full border bg-green-500/10 text-green-400 border-green-500/20">
                     ✓ téléchargé
@@ -263,7 +262,7 @@
                 </div>
               </div>
 
-              <!-- Barre progression épisode (seulement si < 100%) -->
+              <!-- Barre progression épisode -->
               <div v-if="torrentProgress(extractHash(ep.torrent)) && torrentProgress(extractHash(ep.torrent))!.progress < 100"
                    class="mt-2 sm:pl-28">
                 <div class="flex items-center justify-between text-[10px] text-zinc-500 mb-1">
@@ -308,7 +307,6 @@ import { useRoute } from 'vue-router'
 import { useSeriesStore } from '@/stores/series'
 import type { Season } from '@/stores/series'
 
-// ── Composant icône download ──────────────────────────────────
 const DownloadIcon = defineComponent({
   props: { spinning: Boolean, size: { type: Number, default: 14 } },
   setup(props) {
@@ -320,7 +318,6 @@ const DownloadIcon = defineComponent({
   }
 })
 
-// ── Setup ─────────────────────────────────────────────────────
 const route = useRoute()
 const store = useSeriesStore()
 
@@ -329,7 +326,6 @@ const downloading      = ref<Set<string>>(new Set())
 const downloaded       = ref<Set<string>>(new Set())
 const toast            = ref<{ type: 'success' | 'error'; message: string } | null>(null)
 
-// ── Progression downloads ──────────────────────────────────────
 interface ActiveTorrent { hash: string; progress: number; state: string; name: string }
 const activeTorrents = ref<ActiveTorrent[]>([])
 let pollTimer: ReturnType<typeof setInterval> | null = null
@@ -360,7 +356,6 @@ function extractHash(torrent: { magnet?: string | null; torrent_url?: string | n
   return m ? m[1].toLowerCase() : null
 }
 
-// ── Data ───────────────────────────────────────────────────────
 const data = computed(() => store.currentSerie)
 
 function seasonAvailableCount(season: Season) {
@@ -375,6 +370,15 @@ function toggleSeason(id: number) {
 function formatDate(d: string) {
   if (!d) return ''
   return new Date(d).toLocaleDateString('fr-FR', { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+// Durée en secondes → "1h 23min" ou "45 min"
+function formatDuration(seconds: number): string {
+  if (!seconds || seconds <= 0) return ''
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  if (h > 0) return m > 0 ? `${h}h ${m}min` : `${h}h`
+  return `${m} min`
 }
 
 function showToast(type: 'success' | 'error', message: string) {
