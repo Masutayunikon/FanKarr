@@ -3,8 +3,8 @@
  */
 
 import type { TorrentClientDriver, TorrentInfo } from './index.js'
+import { logger } from '../logger.js'
 
-// Mapping état qBittorrent → état normalisé
 function mapState(state: string): TorrentInfo['state'] {
     if (['downloading', 'metaDL', 'queuedDL', 'stalledDL', 'forcedDL'].includes(state)) return 'downloading'
     if (['uploading', 'queuedUP', 'stalledUP', 'forcedUP'].includes(state))              return 'seeding'
@@ -29,7 +29,7 @@ async function qbLogin(config: Record<string, string | number>): Promise<string>
     if (text !== 'Ok.') throw new Error(`Login échoué : ${text}`)
 
     const cookie = res.headers.get('set-cookie') ?? ''
-    const sid = cookie.match(/SID=([^;]+)/)?.[1]
+    const sid    = cookie.match(/SID=([^;]+)/)?.[1]
     if (!sid) throw new Error('Cookie SID introuvable')
     return sid
 }
@@ -39,19 +39,22 @@ const QB: TorrentClientDriver = {
         id    : 'qbittorrent',
         label : 'qBittorrent',
         fields: [
-            { key: 'url',      label: 'URL WebUI',     type: 'url',      placeholder: 'http://localhost:8080', required: true },
-            { key: 'username', label: 'Identifiant',   type: 'text',     placeholder: 'admin',                required: true },
-            { key: 'password', label: 'Mot de passe',  type: 'password', placeholder: '••••••••',             required: true },
-            { key: 'category', label: 'Catégorie',     type: 'text',     placeholder: 'fankai',               required: false, default: 'fankai' },
+            { key: 'url',      label: 'URL WebUI',    type: 'url',      placeholder: 'http://localhost:8080', required: true },
+            { key: 'username', label: 'Identifiant',  type: 'text',     placeholder: 'admin',                required: true },
+            { key: 'password', label: 'Mot de passe', type: 'password', placeholder: '••••••••',             required: true },
+            { key: 'category', label: 'Catégorie',    type: 'text',     placeholder: 'fankai',               required: false, default: 'fankai' },
         ],
     },
 
     async test(config) {
         try {
             await qbLogin(config)
+            logger.info('qbittorrent', `Test de connexion réussi sur ${config.url}`)
             return { ok: true, message: 'Connexion réussie' }
         } catch (err) {
-            return { ok: false, message: err instanceof Error ? err.message : 'Erreur inconnue' }
+            const msg = err instanceof Error ? err.message : 'Erreur inconnue'
+            logger.warn('qbittorrent', `Test de connexion échoué sur ${config.url} : ${msg}`)
+            return { ok: false, message: msg }
         }
     },
 
@@ -59,23 +62,26 @@ const QB: TorrentClientDriver = {
         try {
             const sid = await qbLogin(config)
             const res = await fetch(`${config.url}/api/v2/app/version`, {
-                headers: { Cookie: `SID=${sid}` }
+                headers: { Cookie: `SID=${sid}` },
             })
             if (!res.ok) return { online: false }
-            return { online: true, version: (await res.text()).trim() }
-        } catch {
+            const version = (await res.text()).trim()
+            logger.debug('qbittorrent', `Healthcheck OK — version ${version}`)
+            return { online: true, version }
+        } catch (err) {
+            logger.debug('qbittorrent', `Healthcheck échoué : ${err instanceof Error ? err.message : err}`)
             return { online: false }
         }
     },
 
     async list(config, category) {
-        const sid = await qbLogin(config)
+        const sid    = await qbLogin(config)
         const params = new URLSearchParams()
         if (category) params.set('category', category)
         const res = await fetch(`${config.url}/api/v2/torrents/info?${params}`, {
-            headers: { Cookie: `SID=${sid}` }
+            headers: { Cookie: `SID=${sid}` },
         })
-        if (!res.ok) throw new Error(`qB list échoué: ${res.status}`)
+        if (!res.ok) throw new Error(`qB list échoué : ${res.status}`)
         const data: any[] = await res.json()
         return data.map(t => ({
             hash      : t.hash,
@@ -92,7 +98,7 @@ const QB: TorrentClientDriver = {
     },
 
     async add(config, url) {
-        const sid = await qbLogin(config)
+        const sid  = await qbLogin(config)
         const form = new FormData()
         form.append('urls', url)
         if (config.category) form.append('category', String(config.category))
@@ -104,6 +110,7 @@ const QB: TorrentClientDriver = {
         })
         const text = await res.text()
         if (text !== 'Ok.') throw new Error(`Ajout échoué : ${text}`)
+        logger.info('qbittorrent', `Torrent ajouté avec succès (catégorie: ${config.category ?? 'aucune'})`)
     },
 }
 

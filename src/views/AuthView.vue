@@ -1,69 +1,49 @@
 <template>
-  <div class="min-h-screen bg-[#080c10] flex items-center justify-center px-4">
+  <div class="min-h-screen bg-shell flex items-center justify-center px-4">
     <div class="w-full max-w-sm">
+
       <!-- Logo -->
-      <div class="flex items-baseline gap-1 mb-8 justify-center">
-        <span class="font-sans text-3xl font-black text-white tracking-tight">Fank</span>
-        <span class="font-sans text-3xl font-black text-[#e8513a] tracking-tight">Arr</span>
+      <div class="flex items-center justify-center gap-2.5 mb-8">
+        <svg class="w-8 h-8" viewBox="0 0 130 135" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path fill="var(--gold)" d="m113.85,12.8c-1.94,3.57-3.8,7.09-5.76,10.55-3.6,6.35-7.31,12.65-10.9,19.01-1.69,3-3.22,6.08-4.44,9.49,3.25-2.46,6.44-5.03,9.78-7.36,2.92-2.04,5.95-3.96,9.07-5.67,8.59-4.72,19.29-1.78,24.4,6.54.42.68,1.3,1.16,1.52,1.87.26.83.05,2.62,0,2.62-3.94.13-3.45,5.79-7.59,5.89-3.46.08-6.9,1.25-10.37,1.37-6.78.25-13.48.64-19.32,4.57-1.91,1.29-3.5,3.05-4.97,4.36.21.86.19,1.13.3,1.2,4.42,2.7,8.79,5.49,13.31,8,2.11,1.17,3.66,3.77,2.82,6.63-1.18,3.97-2.64,7.86-4.04,11.76-.48,1.33-1.11,2.61-1.88,4.41,5.87,2.14,11.63,4.26,17.41,6.35,3.43,1.24,6.86,2.47,10.31,3.65,7.38,2.52,9.16,9.54,11.52,15.53,1.04,2.65-.75,6.75-2.11,9.81-.46,1.04-3.53,1.22-5.42,1.26-1.78.03-3.57-.64-4.46-.83-5.97-8.4-11.54-15.98-23.28-14.7.1-.32.21-.65.31-.97,2.32-.52,4.64-1.05,6.97-1.57.03-.22.06-.45.09-.67-2.97-1.18-5.94-2.37-8.92-3.52-1.33-.52-2.7-.93-4.03-1.45-4.83-1.9-4.79-1.89-8.26,2.27-4.31,5.17-10.22,8.13-16.3,11.01.69-.84,1.31-1.75,2.1-2.48.76-.71,1.69-1.22,2.26-2.29-4.9,1.87-9.81,3.74-14.71,5.61-.13-.22-.26-.45-.39-.67.86-.62,1.72-1.24,2.58-1.85-.04-.17-.08-.34-.12-.51-2.94.65-5.93,1.11-8.8,2-4.18,1.29-8.27,2.87-12.38,4.38-2.59.95-5.12,1.51-7.19-.14,11.84-9.4,25.16-17.2,36.59-28.93-4.21-3.65-8.1-7.01-11.98-10.38.15-.43.3-.87.45-1.3,1.61-.09,3.3-.55,4.81-.21,4.14.92,8.21,2.18,12.66,3.4,3.58-6.6,7.1-13.29,7.3-20.58-6.68-2.65-9.79,4.13-15.7,5.76,2.55-2.92,4.54-5.19,6.52-7.46-.2-.17-.39-.33-.59-.5-5.58,4.28-16.89,16.06-24.16,29.07-.19-.29-.37-.59-.55-.87-.81,1.46-1.57,2.83-2.33,4.21l-1.04-.35c1.58-5.71,2.86-11.53,4.81-17.11,2.67-7.67,6.32-15.02,8.71-22.76,4.87-15.8,13.75-29.67,20.7-44.45.65-1.38,1.28-2.77,1.88-4.17,1.58-3.68,3.97-7.37-.47-11.13.3-.16.59-.33.89-.49,7.13,4.08,14.25,8.15,22.38,12.8Z"/>
+          <path fill="var(--gold)" d="m7.03,71.72c.25-.48.39-1.21.77-1.38,1.1-.49,2.62-1.38,3.41-.98,2.58,1.28,4.8.38,7.06-.48,2.76-1.04,5.57-2.05,8.14-3.47,1.22-.67,2.63-2.19,2.77-3.46,1.03-9.65,3.6-18.83,7.54-27.67.24-.53.3-1.14-.17-2.03-1.01,1.63-1.78,3.49-3.08,4.85-2.08,2.21-4.42,4.2-6.82,6.07-1.39,1.09-3.02,2.05-4.7,2.54-1.31.39-3.26.51-4.24-.2-4.32-3.13-8.38-6.6-12.71-10.09,2.03-2.48,3.73-4.2,7.18-3.5,1.74.36,4.04-.43,5.67-1.4,5.43-3.21,10.65-6.79,16.01-10.13,5.58-3.48,11.45-3.46,17.13-.53,4.5,2.32,8.73,5.19,13.03,7.9,1.47.93,2.35,2.23,1.34,4.11-2.08,3.88-4.01,7.85-6.22,11.66-1.95,3.37-4.2,6.56-6.47,10.06,2.04.96,3.78,1.67,5.4,2.58,2.25,1.27,3.25,3.24,2.97,5.87-.33,3.15-1.59,5.64-4.68,6.84-.84.33-1.83.72-2.65.56-5.8-1.1-9.79,2.93-14.43,5.04-1.2.54-2.19,1.83-2.95,2.99-3.3,5.08-8.83,6.7-13.83,9.17-.53.26-1.22.74-1.34,1.24-1.76,7.82-3.45,15.65-4.58,24.09,4.1-2.32,8.19-4.65,12.29-6.97.12.15.23.31.35.46-1.05,1.17-2.1,2.34-3.15,3.52l.5.66c5.73-2.61,10.97-5.98,15.24-10.87.28.22.57.43.85.65-1.83,3.39-3.78,6.72-5.44,10.2-.95,1.99-1.38,4.21-2.13,6.3-.48,1.33-.84,2.82-1.71,3.86-2.61,3.13-5.46,6.06-8.19,9.09-.45.5-.76,1.12-1.14,1.68-.66.99-1.21,2.09-2.02,2.94-.39.41-1.58.71-1.85.46-2.26-2.14-5.5,2.25-7.78-1.52-1.9-3.13-5.35-5.33-7.23-8.47-2.37-3.95-5.75-7.84-5.14-12.85.51-4.17,2.16-8.18,2.89-12.34,1.43-8.11,2.6-16.27,3.82-24.42.14-.95-.11-1.95-.19-2.93.14.09.29.17.43.26Z"/>
+        </svg>
+        <span class="text-2xl font-bold text-primary tracking-wide">FanKarr</span>
       </div>
 
       <!-- Card -->
-      <div class="bg-[#0d1219] border border-[#1e2d3d] p-8">
-        <div class="text-[10px] text-[#e8513a] tracking-widest mb-1">
-          {{ isSetup ? 'PREMIÈRE CONNEXION' : 'CONNEXION' }}
+      <div class="settings-card p-8 flex flex-col gap-5">
+        <div>
+          <p class="text-xs text-accent font-medium mb-1">
+            {{ isSetup ? 'Première connexion' : 'Connexion' }}
+          </p>
+          <h1 class="text-lg font-semibold text-primary">
+            {{ isSetup ? 'Créer un compte' : 'Bon retour' }}
+          </h1>
         </div>
-        <h1 class="text-lg font-black text-white font-sans mb-6">
-          {{ isSetup ? 'Créer un compte' : 'Bon retour' }}
-        </h1>
 
-        <!-- Form -->
         <div class="flex flex-col gap-4">
           <div>
-            <label class="text-[10px] text-[#5a7a94] tracking-widest block mb-1.5">IDENTIFIANT</label>
-            <input
-                v-model="username"
-                type="text"
-                placeholder="admin"
-                class="w-full bg-[#121920] border border-[#1e2d3d] text-white px-3 py-2.5 text-sm outline-none focus:border-[#e8513a] transition-colors"
-                @keyup.enter="submit"
-            />
+            <label class="settings-label mb-1.5">Identifiant</label>
+            <input v-model="username" type="text" placeholder="admin" class="settings-input" @keyup.enter="submit" />
           </div>
-
           <div>
-            <label class="text-[10px] text-[#5a7a94] tracking-widest block mb-1.5">MOT DE PASSE</label>
-            <input
-                v-model="password"
-                type="password"
-                placeholder="••••••••"
-                class="w-full bg-[#121920] border border-[#1e2d3d] text-white px-3 py-2.5 text-sm outline-none focus:border-[#e8513a] transition-colors"
-                @keyup.enter="submit"
-            />
+            <label class="settings-label mb-1.5">Mot de passe</label>
+            <input v-model="password" type="password" placeholder="••••••••" class="settings-input" @keyup.enter="submit" />
           </div>
-
           <div v-if="isSetup">
-            <label class="text-[10px] text-[#5a7a94] tracking-widest block mb-1.5">CONFIRMER</label>
-            <input
-                v-model="confirm"
-                type="password"
-                placeholder="••••••••"
-                class="w-full bg-[#121920] border border-[#1e2d3d] text-white px-3 py-2.5 text-sm outline-none focus:border-[#e8513a] transition-colors"
-                @keyup.enter="submit"
-            />
+            <label class="settings-label mb-1.5">Confirmer</label>
+            <input v-model="confirm" type="password" placeholder="••••••••" class="settings-input" @keyup.enter="submit" />
           </div>
 
-          <!-- Error -->
-          <div v-if="error" class="text-[#e8513a] text-xs">{{ error }}</div>
+          <p v-if="error" class="text-xs text-red-400">{{ error }}</p>
 
-          <!-- Submit -->
-          <button
-              @click="submit"
-              :disabled="submitting"
-              class="w-full bg-[#e8513a] text-white py-2.5 text-xs tracking-widest font-bold hover:opacity-85 transition-opacity disabled:opacity-50 cursor-pointer mt-2"
-          >
-            {{ submitting ? '...' : isSetup ? 'CRÉER LE COMPTE' : 'SE CONNECTER' }}
+          <button @click="submit" :disabled="submitting" class="btn-primary w-full py-2.5 mt-1">
+            {{ submitting ? '...' : isSetup ? 'Créer le compte' : 'Se connecter' }}
           </button>
         </div>
       </div>
+
     </div>
   </div>
 </template>
@@ -74,42 +54,28 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
-const auth = useAuthStore()
+const auth   = useAuthStore()
 
-const username = ref('')
-const password = ref('')
-const confirm = ref('')
-const error = ref<string | null>(null)
+const username   = ref('')
+const password   = ref('')
+const confirm    = ref('')
+const error      = ref<string | null>(null)
 const submitting = ref(false)
 
 const isSetup = computed(() => !auth.setup)
 
 async function submit() {
   error.value = null
-
-  if (!username.value || !password.value) {
-    error.value = 'Tous les champs sont requis'
-    return
-  }
-
-  if (isSetup.value && password.value !== confirm.value) {
-    error.value = 'Les mots de passe ne correspondent pas'
-    return
-  }
+  if (!username.value || !password.value) { error.value = 'Tous les champs sont requis'; return }
+  if (isSetup.value && password.value !== confirm.value) { error.value = 'Les mots de passe ne correspondent pas'; return }
 
   submitting.value = true
-
   const err = isSetup.value
       ? await auth.setupAccount(username.value, password.value)
       : await auth.login(username.value, password.value)
-
   submitting.value = false
 
-  if (err) {
-    error.value = err
-    return
-  }
-
+  if (err) { error.value = err; return }
   await router.push('/')
 }
 </script>

@@ -4,8 +4,8 @@
  * Lance l'organizer dans un Worker Thread dédié pour ne pas bloquer Express.
  */
 
-import fs     from 'fs'
-import path   from 'path'
+import fs   from 'fs'
+import path from 'path'
 import { Worker } from 'worker_threads'
 import { logger } from './logger.js'
 import { DATA_DIR } from './config.js'
@@ -13,10 +13,7 @@ import { readSettings } from './settings.js'
 
 const ORGANIZED_PATH = path.join(DATA_DIR, 'organized.json')
 
-// Un seul worker à la fois
 let workerRunning = false
-
-// État précédent des torrents pour détecter les passages downloading → seeding
 const _prevStates = new Map<string, string>()
 
 function resolveWorkerPath(): string {
@@ -33,10 +30,8 @@ export interface OrganizeResult {
     errors  : { file: string; error: string }[]
 }
 
-/**
- * Scan initial du mediaPath au démarrage.
- * Construit l'index filename → infohash depuis les seriesData passées en paramètre.
- */
+// ── Scan initial ──────────────────────────────────────────────
+
 export async function scanMediaPath(
     mediaPath    : string,
     organizedPath: string,
@@ -45,20 +40,18 @@ export async function scanMediaPath(
     const result = { found: 0, added: 0 }
 
     if (!fs.existsSync(mediaPath)) {
-        logger.warn('organize', `scanMediaPath: ${mediaPath} inexistant, skip`)
+        logger.warn('organize', `Dossier médiathèque introuvable : ${mediaPath}`)
         return result
     }
 
-    // Construire index filename → infohash depuis les seriesData
-    const filenameIndex = new Map<string, string>()  // filename → infohash
+    logger.info('organize', `Scan de la médiathèque : ${mediaPath}`)
+
+    const filenameIndex = new Map<string, string>()
     for (const sd of seriesData) {
         for (const season of sd.seasons ?? []) {
             for (const ep of season.episodes ?? []) {
                 for (const p of ep.paths ?? []) {
-                    if (typeof p === 'string') {
-                        // Legacy : pas d'infohash disponible, on skip pour le scan
-                        continue
-                    }
+                    if (typeof p === 'string') continue
                     const hash = p.infohash?.toLowerCase()
                     if (!hash || !p.path) continue
                     const filename = p.path.replace(/\\/g, '/').split('/').pop()
@@ -68,7 +61,6 @@ export async function scanMediaPath(
         }
     }
 
-    // Charger organized.json existant
     let organized: Record<string, Record<string, string>> = {}
     try {
         if (fs.existsSync(organizedPath))
@@ -100,7 +92,6 @@ export async function scanMediaPath(
 
     walk(mediaPath)
 
-    // Nettoyer les entrées orphelines
     let removed = 0
     for (const [hash, files] of Object.entries(organized)) {
         for (const filename of Object.keys(files)) {
@@ -114,28 +105,29 @@ export async function scanMediaPath(
 
     if (result.added > 0 || removed > 0) {
         fs.writeFileSync(organizedPath, JSON.stringify(organized, null, 2), 'utf-8')
-        logger.info('organize', `scanMediaPath: ${result.found} fichiers, ${result.added} ajoutés, ${removed} orphelins supprimés`)
+        logger.info('organize', `Scan terminé — ${result.found} fichiers, ${result.added} ajoutés, ${removed} orphelins supprimés`)
     } else {
-        logger.info('organize', `scanMediaPath: ${result.found} fichiers scannés, rien de nouveau`)
+        logger.info('organize', `Scan terminé — ${result.found} fichiers, rien de nouveau`)
     }
 
     return result
 }
 
-/**
- * Auto-import — appelée depuis index.ts avec les seriesData du cache GitHub.
- */
+// ── Auto-import ───────────────────────────────────────────────
+
 export async function autoOrganizeAll(
     listFn     : () => Promise<any[]>,
     seriesData : any[],
     onResult  ?: (r: { hash: string; name: string; done: number; skipped: number; errors: number; errorFiles: { file: string; error: string }[] }) => void
 ): Promise<void> {
-    // Vérifier si l'import auto est activé
     const { autoImport } = readSettings()
-    if (!autoImport) return
+    if (!autoImport) {
+        logger.debug('organize', 'Import automatique désactivé — skip')
+        return
+    }
 
     if (workerRunning) {
-        console.log('[organize] Worker déjà en cours, skip')
+        logger.debug('organize', 'Worker déjà en cours — skip')
         return
     }
 
@@ -143,7 +135,7 @@ export async function autoOrganizeAll(
     try {
         torrents = await listFn()
     } catch (err) {
-        console.error('[organize] Impossible de récupérer la liste des torrents:', err)
+        logger.error('organize', `Impossible de récupérer la liste des torrents : ${err instanceof Error ? err.message : err}`)
         return
     }
 
@@ -159,7 +151,6 @@ export async function autoOrganizeAll(
 
     for (const t of torrents) _prevStates.set(t.hash, t.state)
 
-    // Charger organized.json pour vérifier s'il reste des torrents non organisés
     let organized: Record<string, Record<string, string>> = {}
     try {
         const orgPath = path.join(DATA_DIR, 'organized.json')
@@ -175,21 +166,31 @@ export async function autoOrganizeAll(
     if (seedingCount === 0) return
 
     if (newlySeeding.length > 0 && !isFirstRun) {
-        console.log(`[organize] ${newlySeeding.length} nouveau(x) torrent(s) terminé(s) → lancement worker`)
+        logger.info('organize', `${newlySeeding.length} torrent(s) terminé(s) → lancement de l'import automatique`)
+        for (const t of newlySeeding) {
+            logger.debug('organize', `Nouveau seeding : "${t.name}"`)
+        }
     } else {
-        console.log(`[organize] Lancement worker (${seedingCount} torrents en seeding)`)
+        logger.debug('organize', `Lancement worker (${seedingCount} torrents en seeding, vérification initiale)`)
     }
-    workerRunning = true
 
-    const worker = new Worker(resolveWorkerPath())
+    workerRunning = true
+    const worker  = new Worker(resolveWorkerPath())
 
     worker.on('message', (msg: any) => {
         if (msg.type === 'log') {
-            if (msg.level === 'error') console.error(msg.msg)
-            else if (msg.level === 'warn') console.warn(msg.msg)
-            else console.log(msg.msg)
+            logger[msg.level as 'info' | 'warn' | 'error' | 'debug']?.('organize-worker', msg.msg)
         } else if (msg.type === 'result') {
-            console.log(`[organize] ${msg.name} → ${msg.done} OK, ${msg.skipped} skippés, ${msg.errors.length} erreurs`)
+            if (msg.errors.length > 0) {
+                logger.warn('organize', `"${msg.name}" — ${msg.done} importé(s), ${msg.skipped} skippé(s), ${msg.errors.length} erreur(s)`)
+                for (const e of msg.errors) {
+                    logger.error('organize', `Erreur sur "${e.file}" : ${e.error}`)
+                }
+            } else if (msg.done > 0) {
+                logger.info('organize', `"${msg.name}" — ${msg.done} fichier(s) importé(s), ${msg.skipped} skippé(s)`)
+            } else {
+                logger.debug('organize', `"${msg.name}" — rien à importer (${msg.skipped} skippé(s))`)
+            }
             onResult?.({
                 hash      : msg.hash,
                 name      : msg.name,
@@ -199,27 +200,34 @@ export async function autoOrganizeAll(
                 errorFiles: msg.errors,
             })
         } else if (msg.type === 'done') {
-            console.log('[organize] Worker terminé')
+            logger.debug('organize', 'Worker terminé')
             workerRunning = false
             worker.terminate()
         }
     })
 
-    worker.on('error', (err) => { console.error('[organize] Worker erreur:', err); workerRunning = false })
-    worker.on('exit',  (code) => { if (code !== 0) console.error(`[organize] Worker exit ${code}`); workerRunning = false })
+    worker.on('error', (err) => {
+        logger.error('organize', `Worker erreur : ${err.message}`)
+        workerRunning = false
+    })
+    worker.on('exit', (code) => {
+        if (code !== 0) logger.error('organize', `Worker exit avec code ${code}`)
+        workerRunning = false
+    })
 
     worker.postMessage({ type: 'run', torrents, seriesData })
 }
 
-/**
- * Organisation manuelle d'un torrent.
- */
+// ── Import manuel ─────────────────────────────────────────────
+
 export async function organizeTorrent(
     hash      : string,
     name      : string,
     savePath  : string,
     seriesData: any[]
 ): Promise<OrganizeResult> {
+    logger.info('organize', `Import manuel lancé pour "${name}" (${hash})`)
+
     return new Promise((resolve, reject) => {
         const worker      = new Worker(resolveWorkerPath())
         const fakeTorrent = { hash, name, save_path: savePath, state: 'seeding' }
@@ -227,22 +235,34 @@ export async function organizeTorrent(
 
         worker.on('message', (msg: any) => {
             if (msg.type === 'log') {
-                if (msg.level === 'error') console.error(msg.msg)
-                else if (msg.level === 'warn') console.warn(msg.msg)
-                else console.log(msg.msg)
+                logger[msg.level as 'info' | 'warn' | 'error' | 'debug']?.('organize-worker', msg.msg)
             } else if (msg.type === 'result') {
                 result.total   = msg.total
                 result.skipped = msg.skipped
                 result.done    = msg.done
                 result.errors  = msg.errors
+                if (msg.errors.length > 0) {
+                    logger.warn('organize', `Import "${name}" — ${msg.done} OK, ${msg.errors.length} erreur(s)`)
+                    for (const e of msg.errors) {
+                        logger.error('organize', `Erreur sur "${e.file}" : ${e.error}`)
+                    }
+                } else {
+                    logger.info('organize', `Import "${name}" terminé — ${msg.done} fichier(s) importé(s), ${msg.skipped} skippé(s)`)
+                }
             } else if (msg.type === 'done') {
                 worker.terminate()
                 resolve(result)
             }
         })
 
-        worker.on('error', (err) => { worker.terminate(); reject(err) })
-        worker.on('exit',  (code) => { if (code !== 0) reject(new Error(`Worker exit ${code}`)) })
+        worker.on('error', (err) => {
+            logger.error('organize', `Worker erreur lors de l'import de "${name}" : ${err.message}`)
+            worker.terminate()
+            reject(err)
+        })
+        worker.on('exit', (code) => {
+            if (code !== 0) reject(new Error(`Worker exit ${code}`))
+        })
 
         worker.postMessage({ type: 'run', torrents: [fakeTorrent], seriesData })
     })

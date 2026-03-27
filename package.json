@@ -17,17 +17,20 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.2.1",
+    "@vueuse/core": "^14.2.1",
+    "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
+    "lucide-vue-next": "^1.0.0",
     "node-fetch": "^3.3.2",
     "pinia": "^3.0.4",
     "tailwindcss": "^4.2.1",
     "vue": "^3.5.25",
-    "vue-router": "^5.0.3",
-    "bcryptjs": "^3.0.3"
+    "vue-router": "^5.0.3"
   },
   "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
     "@types/cookie-parser": "^1.4.8",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.9",
@@ -38,7 +41,6 @@
     "tsx": "^4.21.0",
     "typescript": "~5.9.3",
     "vite": "^7.3.1",
-    "vue-tsc": "^3.1.5",
-    "@types/bcrypt": "^5.0.2"
+    "vue-tsc": "^3.1.5"
   }
 }

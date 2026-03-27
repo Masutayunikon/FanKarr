@@ -5,12 +5,13 @@ import jwt from 'jsonwebtoken'
 import type { Request, Response, NextFunction } from 'express'
 import { JWT_SECRET } from './secret.js'
 import { DATA_DIR } from './config.js'
+import { logger } from './logger.js'
 
-const DATA_PATH = path.join(DATA_DIR, 'auth.json')
+const DATA_PATH  = path.join(DATA_DIR, 'auth.json')
 const SALT_ROUNDS = 10
 
 interface AuthData {
-    username: string
+    username    : string
     passwordHash: string
 }
 
@@ -32,25 +33,25 @@ function writeAuth(data: AuthData): void {
 // GET /api/auth/status
 export function authStatus(req: Request, res: Response): void {
     const existing = readAuth()
-    const token = req.cookies?.fankarr_token
+    const token    = req.cookies?.fankarr_token
 
     let loggedIn = false
     if (token) {
         try {
             jwt.verify(token, JWT_SECRET)
             loggedIn = true
-        } catch {}
+        } catch {
+            logger.debug('auth', 'Token invalide ou expiré')
+        }
     }
 
-    res.json({
-        setup: !!existing,
-        loggedIn
-    })
+    res.json({ setup: !!existing, loggedIn })
 }
 
 // POST /api/auth/setup
 export function authSetup(req: Request, res: Response): void {
     if (readAuth()) {
+        logger.warn('auth', 'Tentative de setup alors qu\'un compte existe déjà')
         res.status(400).json({ error: 'Un compte existe déjà' })
         return
     }
@@ -63,6 +64,7 @@ export function authSetup(req: Request, res: Response): void {
 
     const passwordHash = bcrypt.hashSync(password, SALT_ROUNDS)
     writeAuth({ username, passwordHash })
+    logger.info('auth', `Compte créé pour "${username}"`)
 
     const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: '1d' })
     res.cookie('fankarr_token', token, { httpOnly: true, sameSite: 'lax' })
@@ -84,17 +86,26 @@ export function authLogin(req: Request, res: Response): void {
     }
 
     if (username !== auth.username || !bcrypt.compareSync(password, auth.passwordHash)) {
+        logger.warn('auth', `Échec de connexion pour "${username}"`)
         res.status(401).json({ error: 'Identifiants incorrects' })
         return
     }
 
     const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: '1d' })
     res.cookie('fankarr_token', token, { httpOnly: true, sameSite: 'lax' })
+    logger.info('auth', `Connexion réussie pour "${username}"`)
     res.json({ success: true })
 }
 
 // POST /api/auth/logout
-export function authLogout(_req: Request, res: Response): void {
+export function authLogout(req: Request, res: Response): void {
+    const token = req.cookies?.fankarr_token
+    if (token) {
+        try {
+            const payload = jwt.verify(token, JWT_SECRET) as any
+            logger.info('auth', `Déconnexion de "${payload.username}"`)
+        } catch {}
+    }
     res.clearCookie('fankarr_token')
     res.json({ success: true })
 }
@@ -103,6 +114,7 @@ export function authLogout(_req: Request, res: Response): void {
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
     const token = req.cookies?.fankarr_token
     if (!token) {
+        logger.debug('auth', `Accès refusé — non authentifié (${req.method} ${req.path})`)
         res.status(401).json({ error: 'Non authentifié' })
         return
     }
@@ -110,6 +122,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
         jwt.verify(token, JWT_SECRET)
         next()
     } catch {
+        logger.warn('auth', `Token invalide sur (${req.method} ${req.path})`)
         res.status(401).json({ error: 'Token invalide' })
     }
 }

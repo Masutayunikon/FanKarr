@@ -1,1 +1,149 @@
 @import "tailwindcss";
+
+/* ─── Tokens custom consommables via Tailwind v4 ─── */
+@theme {
+    --color-accent:        var(--accent);
+    --color-accent-hover:  var(--accent-hover);
+    --color-accent-dim:    var(--accent-dim);
+    --color-accent-muted:  var(--accent-muted);
+
+    --color-shell:         var(--bg-shell);
+    --color-sidebar:       var(--bg-sidebar);
+    --color-main:          var(--bg-main);
+    --color-card:          var(--bg-card);
+    --color-hover:         var(--bg-hover);
+    --color-active:        var(--bg-active);
+
+    --color-border:        var(--border);
+    --color-border-light:  var(--border-light);
+
+    --color-primary:       var(--text-primary);
+    --color-secondary:     var(--text-secondary);
+    --color-muted:         var(--text-muted);
+
+    --color-gold:          var(--gold);
+}
+
+/* ─── Thème Indigo Électrique (défaut) ─── */
+:root,
+[data-theme="indigo"] {
+    --accent:         #7B7EF8;
+    --accent-hover:   #9496fa;
+    --accent-dim:     #1c1c38;
+    --accent-muted:   rgba(123, 126, 248, 0.15);
+
+    --bg-shell:       #111116;
+    --bg-sidebar:     #0d0d14;
+    --bg-main:        #16161e;
+    --bg-card:        #111116;
+    --bg-hover:       #1c1c28;
+    --bg-active:      #22223a;
+
+    --border:         #2a2a3a;
+    --border-light:   #1e1e2e;
+
+    --text-primary:   #e8e8f8;
+    --text-secondary: #9898b8;
+    --text-muted:     #55556a;
+
+    --gold:           #f5c842;
+}
+
+/* ─── Thème Crimson Night ─── */
+[data-theme="crimson"] {
+    --accent:         #E74C3C;
+    --accent-hover:   #f06050;
+    --accent-dim:     #2a0e0e;
+    --accent-muted:   rgba(231, 76, 60, 0.15);
+
+    --bg-shell:       #110e0e;
+    --bg-sidebar:     #0d0a0a;
+    --bg-main:        #161010;
+    --bg-card:        #110e0e;
+    --bg-hover:       #1e1414;
+    --bg-active:      #2a1616;
+
+    --border:         #2e2020;
+    --border-light:   #201616;
+
+    --text-primary:   #f0e8e8;
+    --text-secondary: #b89898;
+    --text-muted:     #6a5555;
+
+    --gold:           #f5c842;
+}
+
+/* ─── Thème Teal Froid ─── */
+[data-theme="teal"] {
+    --accent:         #00CDBF;
+    --accent-hover:   #1de8da;
+    --accent-dim:     #001e1c;
+    --accent-muted:   rgba(0, 205, 191, 0.15);
+
+    --bg-shell:       #0a0f0f;
+    --bg-sidebar:     #060c0c;
+    --bg-main:        #0e1616;
+    --bg-card:        #0a0f0f;
+    --bg-hover:       #101e1e;
+    --bg-active:      #142828;
+
+    --border:         #1a2e2e;
+    --border-light:   #121e1e;
+
+    --text-primary:   #e0f0f0;
+    --text-secondary: #88b0b0;
+    --text-muted:     #4a6868;
+
+    --gold:           #f5c842;
+}
+
+/* ─── Base globale ─── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #app {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background: var(--bg-main);
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ─── Composants réutilisables ─── */
+@layer components {
+    .btn-primary {
+        @apply bg-accent text-white px-4 py-2 text-sm rounded-lg
+        hover:bg-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer;
+    }
+
+    .btn-secondary {
+        @apply border border-border text-secondary px-4 py-2 text-sm rounded-lg
+        hover:border-accent hover:text-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer;
+    }
+
+    .btn-ghost {
+        @apply text-muted px-2 py-1 text-sm rounded-md
+        hover:text-primary hover:bg-hover transition-colors cursor-pointer;
+    }
+
+    .settings-card {
+        @apply bg-card border border-border rounded-xl p-4;
+    }
+
+    .settings-label {
+        @apply text-xs text-muted block;
+    }
+
+    .settings-input {
+        @apply w-full bg-shell border border-border text-primary text-sm px-3 py-2.5 rounded-lg
+        outline-none focus:border-accent transition-colors;
+    }
+}

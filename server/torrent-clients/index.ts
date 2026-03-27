@@ -2,14 +2,13 @@
  * Torrent Client Registry
  * =======================
  * Interface commune + registry de tous les clients disponibles.
- * Chaque client expose son schema de configuration (FieldDef[])
- * pour que le frontend génère le formulaire dynamiquement.
  */
 
 import { randomUUID } from 'crypto'
 import fs from 'fs'
 import path from 'path'
 import { DATA_DIR } from '../config.js'
+import { logger } from '../logger.js'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -22,36 +21,32 @@ export interface FieldDef {
     default?    : string | number
 }
 
-/** Définition statique d'un type de client (ce qu'il expose au front) */
 export interface TorrentClientDefinition {
-    id     : string      // "qbittorrent", "transmission", etc.
-    label  : string      // "qBittorrent"
-    fields : FieldDef[]  // schema du formulaire
+    id     : string
+    label  : string
+    fields : FieldDef[]
 }
 
-/** Instance sauvegardée d'un client configuré par l'utilisateur */
 export interface SavedClient {
-    uuid  : string   // identifiant unique de cette instance
-    name  : string   // nom custom donné par l'utilisateur
-    type  : string   // id du TorrentClientDefinition
+    uuid  : string
+    name  : string
+    type  : string
     config: Record<string, string | number>
 }
 
-/** État normalisé d'un torrent (commun à tous les clients) */
 export interface TorrentInfo {
     hash      : string
     name      : string
     state     : 'downloading' | 'seeding' | 'paused' | 'checking' | 'error' | 'unknown'
-    progress  : number        // 0-100
-    size      : number        // bytes
-    downloaded: number        // bytes
-    speed     : number        // bytes/s
-    eta       : number        // secondes, -1 si inconnu
-    save_path : string        // dossier de complétion
+    progress  : number
+    size      : number
+    downloaded: number
+    speed     : number
+    eta       : number
+    save_path : string
     category  : string
 }
 
-/** Interface que chaque client doit implémenter */
 export interface TorrentClientDriver {
     definition  : TorrentClientDefinition
     test        : (config: Record<string, string | number>) => Promise<{ ok: boolean; message: string }>
@@ -66,6 +61,7 @@ const drivers = new Map<string, TorrentClientDriver>()
 
 export function registerDriver(driver: TorrentClientDriver) {
     drivers.set(driver.definition.id, driver)
+    logger.debug('torrent-clients', `Driver enregistré : ${driver.definition.label}`)
 }
 
 export function getDriver(type: string): TorrentClientDriver | undefined {
@@ -76,7 +72,7 @@ export function getAvailableClients(): TorrentClientDefinition[] {
     return [...drivers.values()].map(d => d.definition)
 }
 
-// ─── Persistence (clients enregistrés) ────────────────────────────────────────
+// ─── Persistence ──────────────────────────────────────────────────────────────
 
 const CLIENTS_PATH = path.join(DATA_DIR, 'torrent_clients.json')
 
@@ -103,14 +99,17 @@ export function addClient(name: string, type: string, config: Record<string, str
     const client: SavedClient = { uuid: randomUUID(), name, type, config }
     clients.push(client)
     saveClients(clients)
+    logger.info('torrent-clients', `Client ajouté : "${name}" (${type})`)
     return client
 }
 
 export function removeClient(uuid: string): boolean {
-    const clients = loadClients()
+    const clients  = loadClients()
+    const target   = clients.find(c => c.uuid === uuid)
     const filtered = clients.filter(c => c.uuid !== uuid)
     if (filtered.length === clients.length) return false
     saveClients(filtered)
+    logger.info('torrent-clients', `Client supprimé : "${target?.name}" (${target?.type})`)
     return true
 }
 
@@ -118,7 +117,6 @@ export function getClient(uuid: string): SavedClient | undefined {
     return loadClients().find(c => c.uuid === uuid)
 }
 
-/** Masque les champs password pour l'envoi au front */
 export function sanitizeClient(client: SavedClient, definition?: TorrentClientDefinition): SavedClient {
     if (!definition) definition = getDriver(client.type)?.definition
     if (!definition) return client
@@ -131,35 +129,40 @@ export function sanitizeClient(client: SavedClient, definition?: TorrentClientDe
     return { ...client, config }
 }
 
-// ─── Dispatch download vers tous les clients ──────────────────────────────────
+// ─── Dispatch download ─────────────────────────────────────────────────────────
 
 export async function dispatchDownload(url: string): Promise<{ uuid: string; name: string; ok: boolean; error?: string }[]> {
     const clients = loadClients()
+
+    if (clients.length === 0) {
+        logger.warn('torrent-clients', 'Aucun client configuré — téléchargement impossible')
+        return []
+    }
+
     const results = []
 
     for (const client of clients) {
         const driver = getDriver(client.type)
         if (!driver) {
+            logger.error('torrent-clients', `Driver "${client.type}" introuvable pour le client "${client.name}"`)
             results.push({ uuid: client.uuid, name: client.name, ok: false, error: `Driver "${client.type}" introuvable` })
             continue
         }
         try {
             await driver.add(client.config, url)
+            logger.info('torrent-clients', `Téléchargement envoyé à "${client.name}"`)
             results.push({ uuid: client.uuid, name: client.name, ok: true })
         } catch (err) {
-            results.push({
-                uuid : client.uuid,
-                name : client.name,
-                ok   : false,
-                error: err instanceof Error ? err.message : 'Erreur inconnue'
-            })
+            const msg = err instanceof Error ? err.message : 'Erreur inconnue'
+            logger.error('torrent-clients', `Échec envoi vers "${client.name}" : ${msg}`)
+            results.push({ uuid: client.uuid, name: client.name, ok: false, error: msg })
         }
     }
 
     return results
 }
 
-// ─── Dispatch list vers tous les clients ─────────────────────────────────────
+// ─── Dispatch list ─────────────────────────────────────────────────────────────
 
 export async function dispatchList(category?: string): Promise<(TorrentInfo & { client_uuid: string; client_name: string })[]> {
     const clients = loadClients()
@@ -169,14 +172,14 @@ export async function dispatchList(category?: string): Promise<(TorrentInfo & { 
         const driver = getDriver(client.type)
         if (!driver) continue
         try {
-            // La catégorie du client est prioritaire sur la catégorie globale
             const clientCategory = (client.config.category as string) || category
             const torrents = await driver.list(client.config, clientCategory)
             for (const t of torrents) {
                 results.push({ ...t, client_uuid: client.uuid, client_name: client.name })
             }
         } catch (err) {
-            console.error(`[torrent-clients] list() échoué pour ${client.name}:`, err)
+            const msg = err instanceof Error ? err.message : 'Erreur inconnue'
+            logger.error('torrent-clients', `Impossible de récupérer la liste depuis "${client.name}" : ${msg}`)
         }
     }
 
