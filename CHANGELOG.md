@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.0.0](https://github.com/Masutayunikon/FanKarr/compare/v2.4.1...v3.0.0) (2026-03-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* nouvelle architecture frontend avec layout sidebar, système de thèmes et routes restructurées
+
+### Features
+
+* hors-fankai badge and fix series datetime and typo ([9d4500a](https://github.com/Masutayunikon/FanKarr/commit/9d4500a3834455b5dd72663c8eeb2d1c54b240e2))
+* refonte complète du frontend et amélioration des logs serveur ([ed38a2d](https://github.com/Masutayunikon/FanKarr/commit/ed38a2d07d977bd3d3bb41da6f2aad8b70e7f359))
+
 ## [2.4.1](https://github.com/Masutayunikon/FanKarr/compare/v2.4.0...v2.4.1) (2026-03-24)
 
 
