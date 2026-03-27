@@ -187,36 +187,10 @@ function normalizeEpisode(ep: any): any {
     return { ...ep, thumb_image: imgProxy(ep.thumb_image ?? ep.thumbnail ?? null, 400) }
 }
 
-async function enrichSeriesDataWithOriginalFilenames(seriesData: any[]): Promise<any[]> {
-    return Promise.all(seriesData.map(async (sd) => {
-        if (!sd) return sd
-        const [serieApi, enrichedSeasons] = await Promise.all([
-            fankaiGet(`/series/${sd.id}`).catch(() => null),
-            Promise.all((sd.seasons ?? []).map(async (season: any) => {
-                let epsData: any[] = []
-                try {
-                    let lastErr: any
-                    for (let attempt = 0; attempt < 2; attempt++) {
-                        try { const res = await fankaiGet(`/seasons/${season.id}/episodes`); epsData = Array.isArray(res) ? res : (res.episodes ?? []); break }
-                        catch (e) { lastErr = e; if (attempt === 0) await new Promise(r => setTimeout(r, 500)) }
-                    }
-                    if (epsData.length === 0 && lastErr) throw lastErr
-                } catch { return season }
-                const origMap = new Map<number, { original_filename: string; formatted_name: string }>()
-                for (const ep of epsData) {
-                    if (ep.id) origMap.set(ep.id, { original_filename: ep.original_filename ?? '', formatted_name: ep.formatted_name ?? '' })
-                }
-                return { ...season, episodes: (season.episodes ?? []).map((ep: any) => ({ ...ep, original_filename: origMap.get(ep.id)?.original_filename ?? null, formatted_name: origMap.get(ep.id)?.formatted_name ?? null })) }
-            }))
-        ])
-        return { ...sd, title_for_plex: serieApi?.title_for_plex ?? null, seasons: enrichedSeasons }
-    }))
-}
-
 async function loadEnrichedSeriesData(): Promise<any[]> {
     const ids   = await readAvailable()
     const allSd = await Promise.all(ids.map(id => readSerieData(id)))
-    return enrichSeriesDataWithOriginalFilenames(allSd.filter(Boolean))
+    return allSd.filter(Boolean)
 }
 
 function computeSerieDownloadState(serieData: any | null, organized: Record<string, Record<string, string>>, activeTorrents: Set<string>): 'none' | 'downloading' | 'partial' | 'complete' {
