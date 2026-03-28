@@ -41,8 +41,8 @@ app.get('/api/settings', requireAuth, (_req, res) => {
     res.json(readSettings())
 })
 app.post('/api/settings', requireAuth, (req, res) => {
-    const { mediaPath, completePath, organizeMode, category, nfoSupport, autoImport, usePlexTitles } = req.body
-    const updated = writeSettings({ mediaPath, completePath, organizeMode, category, nfoSupport, autoImport, usePlexTitles })
+    const { mediaPath, completePath, organizeMode, category, nfoSupport, autoImport } = req.body
+    const updated = writeSettings({ mediaPath, completePath, organizeMode, category, nfoSupport, autoImport })
     logger.info('api', 'Paramètres mis à jour')
     res.json(updated)
 })

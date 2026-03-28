@@ -73,12 +73,6 @@
       />
 
       <SettingsToggle
-          v-model="form.usePlexTitles"
-          label="Titres optimisés Plex"
-          description="Utilise title_for_plex pour les noms de dossiers — évite les caractères spéciaux."
-      />
-
-      <SettingsToggle
           v-model="form.nfoSupport"
           label="NFO / Métadonnées"
           description="Télécharge les NFO et images depuis GitLab lors de l'import (Kodi, Infuse, etc.)."
@@ -133,7 +127,6 @@ const form = ref({
   organizeMode : 'hardlink' as 'hardlink' | 'move',
   nfoSupport   : false,
   autoImport   : true,
-  usePlexTitles: false,
 })
 
 const picker = ref<{ open: boolean; field: 'completePath' | 'mediaPath'; currentPath: string }>({

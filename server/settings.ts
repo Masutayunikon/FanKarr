@@ -5,23 +5,21 @@ import { DATA_DIR } from './config.js'
 const DATA_PATH = path.join(DATA_DIR, 'settings.json')
 
 export interface Settings {
-    mediaPath     : string
-    completePath  : string
-    organizeMode  : 'hardlink' | 'move'
-    category      : string
-    nfoSupport    : boolean
-    autoImport    : boolean
-    usePlexTitles : boolean   // utilise title_for_plex pour les noms de dossiers
+    mediaPath    : string
+    completePath : string
+    organizeMode : 'hardlink' | 'move'
+    category     : string
+    nfoSupport   : boolean
+    autoImport   : boolean
 }
 
 const defaults: Settings = {
-    mediaPath    : '',
-    completePath : '',
-    organizeMode : 'hardlink',
-    category     : 'fankai',
-    nfoSupport   : false,
-    autoImport   : true,
-    usePlexTitles: false,
+    mediaPath   : '',
+    completePath: '',
+    organizeMode: 'hardlink',
+    category    : 'fankai',
+    nfoSupport  : false,
+    autoImport  : true,
 }
 
 export function readSettings(): Settings {

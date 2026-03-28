@@ -20,12 +20,12 @@ function error(msg: string) { parentPort?.postMessage({ type: 'log', level: 'err
 function debug(msg: string) { parentPort?.postMessage({ type: 'log', level: 'debug', msg }) }
 
 // ─── Settings ─────────────────────────────────────────────────
-function readSettings(): { mediaPath: string; completePath: string; organizeMode: string; nfoSupport: boolean; usePlexTitles: boolean } {
+function readSettings(): { mediaPath: string; completePath: string; organizeMode: string; nfoSupport: boolean } {
     try {
         const p = path.join(DATA_DIR, 'settings.json')
-        if (!fs.existsSync(p)) return { mediaPath: '', completePath: '', organizeMode: 'hardlink', nfoSupport: false, usePlexTitles: false }
+        if (!fs.existsSync(p)) return { mediaPath: '', completePath: '', organizeMode: 'hardlink', nfoSupport: false }
         return JSON.parse(fs.readFileSync(p, 'utf-8'))
-    } catch { return { mediaPath: '', completePath: '', organizeMode: 'hardlink', nfoSupport: false, usePlexTitles: false } }
+    } catch { return { mediaPath: '', completePath: '', organizeMode: 'hardlink', nfoSupport: false } }
 }
 
 // ─── Organized log ────────────────────────────────────────────
@@ -271,13 +271,8 @@ async function organizeTorrent(hash: string, name: string, savePath: string, ser
     }
 
     const { torrent, serieData } = found
-    const { usePlexTitles } = readSettings()
     const rawTitle   = serieData.title ?? serieData.show_title ?? name
-    const serieTitle = sanitizeDirName(
-        usePlexTitles && serieData.title_for_plex
-            ? serieData.title_for_plex
-            : rawTitle
-    )
+    const serieTitle = sanitizeDirName(rawTitle)
 
     debug(`Série identifiée : "${serieTitle}" (mode: ${organizeMode}${nfoSupport ? ', NFO' : ''})`)
 

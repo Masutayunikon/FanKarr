@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.1.0](https://github.com/Masutayunikon/FanKarr/compare/v3.0.0...v3.1.0) (2026-03-27)
+
+
+### Features
+
+* use original_name and formated_name from scraper to bypass timeout ([1b693fc](https://github.com/Masutayunikon/FanKarr/commit/1b693fc53b9ca3a830c952c3f2c101bf1da7d27e))
+
 ## [3.0.0](https://github.com/Masutayunikon/FanKarr/compare/v2.4.1...v3.0.0) (2026-03-27)
 
 
