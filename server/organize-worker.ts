@@ -49,26 +49,42 @@ function isOrganized(hash: string, filename: string): boolean {
 
 // ─── Lookup torrent dans les seriesData ───────────────────────
 function findTorrentByHash(hash: string, seriesData: any[]): { torrent: any; serieData: any } | null {
+    const h = hash.toLowerCase()
     for (const sd of seriesData) {
+        // Niveau série (pack intégrale)
         for (const t of sd.torrents ?? []) {
-            if (t.infohash?.toLowerCase() === hash.toLowerCase())
+            if (t.infohash?.toLowerCase() === h)
                 return { torrent: t, serieData: sd }
         }
+
+        // Niveau saison — vérifier si le même hash apparaît dans plusieurs saisons
+        // Si oui, pas de _season pour que buildFileMap scanne toutes les saisons
+        const seasonsWithHash = (sd.seasons ?? []).filter((s: any) =>
+            s.torrents?.some((t: any) => t.infohash?.toLowerCase() === h)
+        )
+        if (seasonsWithHash.length === 1) {
+            // Torrent propre à une seule saison → on filtre sur cette saison
+            const season = seasonsWithHash[0]
+            const t = season.torrents.find((t: any) => t.infohash?.toLowerCase() === h)
+            return { torrent: { ...t, _season: season }, serieData: sd }
+        } else if (seasonsWithHash.length > 1) {
+            // Même torrent dans plusieurs saisons → pas de filtre saison
+            const t = seasonsWithHash[0].torrents.find((t: any) => t.infohash?.toLowerCase() === h)
+            return { torrent: t, serieData: sd }
+        }
+
+        // Niveau épisode
         for (const season of sd.seasons ?? []) {
-            for (const t of season.torrents ?? []) {
-                if (t.infohash?.toLowerCase() === hash.toLowerCase())
-                    return { torrent: { ...t, _season: season }, serieData: sd }
-            }
             const matchingEpisodes = season.episodes?.filter((ep: any) =>
-                ep.torrents?.some((t: any) => t.infohash?.toLowerCase() === hash.toLowerCase())
+                ep.torrents?.some((t: any) => t.infohash?.toLowerCase() === h)
             ) ?? []
 
             if (matchingEpisodes.length === 1) {
                 const ep = matchingEpisodes[0]
-                const t  = ep.torrents.find((t: any) => t.infohash?.toLowerCase() === hash.toLowerCase())
+                const t  = ep.torrents.find((t: any) => t.infohash?.toLowerCase() === h)
                 return { torrent: { ...t, _episode: ep, _season: season }, serieData: sd }
             } else if (matchingEpisodes.length > 1) {
-                const t = matchingEpisodes[0].torrents.find((t: any) => t.infohash?.toLowerCase() === hash.toLowerCase())
+                const t = matchingEpisodes[0].torrents.find((t: any) => t.infohash?.toLowerCase() === h)
                 return { torrent: { ...t, _season: season }, serieData: sd }
             }
         }
