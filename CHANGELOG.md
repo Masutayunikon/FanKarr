@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.3.1](https://github.com/Masutayunikon/FanKarr/compare/v3.3.0...v3.3.1) (2026-04-07)
+
+
+### Bug Fixes
+
+* add driver register for transmission ([7d2096e](https://github.com/Masutayunikon/FanKarr/commit/7d2096ec1972079a2e0e5bdfe01c4cc702e6b185))
+
 ## [3.3.0](https://github.com/Masutayunikon/FanKarr/compare/v3.2.1...v3.3.0) (2026-04-07)
 
 
