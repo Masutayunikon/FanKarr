@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.3.2](https://github.com/Masutayunikon/FanKarr/compare/v3.3.1...v3.3.2) (2026-04-07)
+
+
+### Bug Fixes
+
+* use fetch instead of useFetch ([af550ec](https://github.com/Masutayunikon/FanKarr/commit/af550eccfbeeb116491e8ea4973eac493ed962d3))
+
 ## [3.3.1](https://github.com/Masutayunikon/FanKarr/compare/v3.3.0...v3.3.1) (2026-04-07)
 
 
