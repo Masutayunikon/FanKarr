@@ -136,7 +136,7 @@ const picker = ref<{ open: boolean; field: 'completePath' | 'mediaPath'; current
 })
 
 function openPicker(field: 'completePath' | 'mediaPath') {
-  picker.value = { open: true, field, currentPath: form.value[field] || '/' }
+  picker.value = { open: true, field, currentPath: form.value[field] || picker.value.currentPath || '/' }
 }
 
 function onPickerSelect(path: string) {
@@ -145,12 +145,15 @@ function onPickerSelect(path: string) {
 }
 
 onMounted(async () => {
-  const [settingsRes, systemRes] = await Promise.all([
+  const [settingsRes, systemRes, infoRes] = await Promise.all([
     fetch('/api/settings', { credentials: 'include' }),
     fetch('/api/system',   { credentials: 'include' }),
+    fetch('/api/system/info', { credentials: 'include' }),
   ])
   if (settingsRes.ok) Object.assign(form.value, await settingsRes.json())
   if (systemRes.ok)   isDocker.value = (await systemRes.json()).isDocker
+  if (infoRes.ok) picker.value.currentPath = (await infoRes.json()).defaultPath ?? '/'
+
 })
 
 async function save() {
@@ -190,10 +193,4 @@ async function scan() {
     scanning.value = false
   }
 }
-
-onMounted(async () => {
-  const res = await fetch('/api/system/info')
-  const systemInfo = await res.json()
-  picker.value.currentPath = systemInfo.defaultPath ?? '/'
-})
 </script>
