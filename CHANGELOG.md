@@ -1,5 +1,18 @@
 # Changelog
 
+## [3.2.0](https://github.com/Masutayunikon/FanKarr/compare/v3.1.1...v3.2.0) (2026-04-07)
+
+
+### Features
+
+* add build for arm64 ([96acc13](https://github.com/Masutayunikon/FanKarr/commit/96acc134698ca09842d57d906e4a28ab8e94ba56))
+* add developer settings on settings and dashboard debug ([96acc13](https://github.com/Masutayunikon/FanKarr/commit/96acc134698ca09842d57d906e4a28ab8e94ba56))
+
+
+### Bug Fixes
+
+* android build name ([0cfe6eb](https://github.com/Masutayunikon/FanKarr/commit/0cfe6eb81055b841a67c08e02129709c0214d87d))
+
 ## [3.1.1](https://github.com/Masutayunikon/FanKarr/compare/v3.1.0...v3.1.1) (2026-03-28)
 
 
