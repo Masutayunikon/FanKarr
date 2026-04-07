@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.3.0](https://github.com/Masutayunikon/FanKarr/compare/v3.2.1...v3.3.0) (2026-04-07)
+
+
+### Features
+
+* add transmission client ([a2b88de](https://github.com/Masutayunikon/FanKarr/commit/a2b88de3a123aeb9c140e83605901dd5cdad041a))
+* set defaultPath for any system ([a2b88de](https://github.com/Masutayunikon/FanKarr/commit/a2b88de3a123aeb9c140e83605901dd5cdad041a))
+
 ## [3.2.1](https://github.com/Masutayunikon/FanKarr/compare/v3.2.0...v3.2.1) (2026-04-07)
 
 
