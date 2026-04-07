@@ -55,7 +55,7 @@ jobs:
             archive: fankarr-linux-x64.zip
           - target: linux-arm64
             os: ubuntu-latest
-            bun-target: bun-linux-arm64-termux
+            bun-target: bun-linux-arm64
             binary: binaries/fankarr
             archive: fankarr-linux-arm64-termux.zip
           - target: macos
