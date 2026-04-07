@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.1.1](https://github.com/Masutayunikon/FanKarr/compare/v3.1.0...v3.1.1) (2026-03-28)
+
+
+### Bug Fixes
+
+* remove plex settings ([8744ade](https://github.com/Masutayunikon/FanKarr/commit/8744adeff5f2db1ab648412d50495690d9e68d0b))
+* torrent for multiple seasons is now working ([2514008](https://github.com/Masutayunikon/FanKarr/commit/25140086c13ce5a497500659bdd6cea2aeff96ed))
+
 ## [3.1.0](https://github.com/Masutayunikon/FanKarr/compare/v3.0.0...v3.1.0) (2026-03-27)
 
 
