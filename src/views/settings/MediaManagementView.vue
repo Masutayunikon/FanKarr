@@ -129,12 +129,10 @@ const form = ref({
   autoImport   : true,
 })
 
-const { data: systemInfo } = await fetch('/api/system/info')
-
 const picker = ref<{ open: boolean; field: 'completePath' | 'mediaPath'; currentPath: string }>({
   open: false,
   field: 'completePath',
-  currentPath: systemInfo.value?.defaultPath ?? '/',
+  currentPath: '/',
 })
 
 function openPicker(field: 'completePath' | 'mediaPath') {
@@ -192,4 +190,10 @@ async function scan() {
     scanning.value = false
   }
 }
+
+onMounted(async () => {
+  const res = await fetch('/api/system/info')
+  const systemInfo = await res.json()
+  picker.value.currentPath = systemInfo.defaultPath ?? '/'
+})
 </script>
