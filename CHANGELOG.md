@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.2.1](https://github.com/Masutayunikon/FanKarr/compare/v3.2.0...v3.2.1) (2026-04-07)
+
+
+### Bug Fixes
+
+* bun target android ([a167a87](https://github.com/Masutayunikon/FanKarr/commit/a167a870188bdcd6b26644e304c2059ad5f05e96))
+
 ## [3.2.0](https://github.com/Masutayunikon/FanKarr/compare/v3.1.1...v3.2.0) (2026-04-07)
 
 
