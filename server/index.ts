@@ -13,6 +13,7 @@ import qbittorrentDriver from './torrent-clients/qbittorrent.js'
 import { organizeTorrent, autoOrganizeAll, scanMediaPath, workerRunning } from './organize.js'
 import { logger, readLogs, clearLogs, logsFileSize } from './logger.js'
 import { DATA_DIR, BASE_DIR } from './config.js'
+import { systemInfo } from './system.js'
 
 registerDriver(qbittorrentDriver)
 
@@ -35,6 +36,9 @@ app.get('/api/auth/status', authStatus)
 app.post('/api/auth/setup',  authSetup)
 app.post('/api/auth/login',  authLogin)
 app.post('/api/auth/logout', authLogout)
+
+// system info
+app.get('/api/system/info', systemInfo)
 
 // ── Settings ───────────────────────────────────────────────────
 app.get('/api/settings', requireAuth, (_req, res) => {

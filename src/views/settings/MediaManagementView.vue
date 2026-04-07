@@ -129,8 +129,12 @@ const form = ref({
   autoImport   : true,
 })
 
+const { data: systemInfo } = await useFetch('/api/system/info')
+
 const picker = ref<{ open: boolean; field: 'completePath' | 'mediaPath'; currentPath: string }>({
-  open: false, field: 'completePath', currentPath: '/',
+  open: false,
+  field: 'completePath',
+  currentPath: systemInfo.value?.defaultPath ?? '/',
 })
 
 function openPicker(field: 'completePath' | 'mediaPath') {
