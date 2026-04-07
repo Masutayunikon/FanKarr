@@ -13,7 +13,7 @@ import { readSettings } from './settings.js'
 
 const ORGANIZED_PATH = path.join(DATA_DIR, 'organized.json')
 
-let workerRunning = false
+export let workerRunning = false
 const _prevStates = new Map<string, string>()
 
 function resolveWorkerPath(): string {
@@ -211,7 +211,8 @@ export async function autoOrganizeAll(
         workerRunning = false
     })
     worker.on('exit', (code) => {
-        if (code !== 0) logger.error('organize', `Worker exit avec code ${code}`)
+        if (code > 1) logger.error('organize', `Worker exit inattendu avec code ${code}`)
+        else logger.debug('organize', `Worker terminé (code ${code})`)
         workerRunning = false
     })
 
@@ -261,7 +262,7 @@ export async function organizeTorrent(
             reject(err)
         })
         worker.on('exit', (code) => {
-            if (code !== 0) reject(new Error(`Worker exit ${code}`))
+            if (code > 1) reject(new Error(`Worker exit inattendu: code ${code}`))
         })
 
         worker.postMessage({ type: 'run', torrents: [fakeTorrent], seriesData })

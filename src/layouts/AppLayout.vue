@@ -74,6 +74,7 @@ const navItems = computed<NavItem[]>(() => [
       { label: 'Gestion des médias',        to: '/settings/media-management' },
       { label: 'Catalogue Fankai',          to: '/settings/catalogue' },
       { label: 'Journaux',                  to: '/settings/logs' },
+      { label: 'Avancé',                    to: '/settings/advanced' },
     ],
   },
 ])

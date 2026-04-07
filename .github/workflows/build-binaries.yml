@@ -53,6 +53,11 @@ jobs:
             bun-target: bun-linux-x64
             binary: binaries/fankarr
             archive: fankarr-linux-x64.zip
+          - target: linux-arm64
+            os: ubuntu-latest
+            bun-target: bun-linux-arm64
+            binary: binaries/fankarr
+            archive: fankarr-linux-arm64.zip
           - target: macos
             os: macos-latest
             bun-target: bun-darwin-arm64

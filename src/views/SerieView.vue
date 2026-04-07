@@ -151,8 +151,19 @@
             </button>
           </div>
 
-          <!-- Progression saison -->
-          <ProgressBar :progress="torrentProgress(extractHash(season.torrent))?.progress" class="px-5 py-2 border-b border-border" />
+          <!-- Progression saison — dans le header, sous les contrôles -->
+          <div
+              v-if="torrentProgress(extractHash(season.torrent)) && torrentProgress(extractHash(season.torrent))!.progress < 100"
+              class="px-5 pb-3 -mt-1"
+          >
+            <div class="h-0.5 bg-border rounded-full overflow-hidden">
+              <div
+                  class="h-full bg-accent rounded-full transition-all duration-500"
+                  :style="{ width: `${torrentProgress(extractHash(season.torrent))!.progress}%` }"
+              />
+            </div>
+            <p class="text-[11px] text-muted mt-1">{{ torrentProgress(extractHash(season.torrent))!.progress }}%</p>
+          </div>
 
           <!-- Épisodes -->
           <div v-if="!collapsedSeasons.has(season.id)" class="divide-y divide-border/50">

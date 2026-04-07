@@ -73,6 +73,11 @@ const router = createRouter({
                             name: 'settings-logs',
                             component: () => import('@/views/settings/LogsView.vue'), // ← nouveau chemin
                         },
+                        {
+                            path: 'advanced',
+                            name: 'settings-advanced',
+                            component: () => import('@/views/settings/AdvancedView.vue'),
+                        },
                     ],
                 },
             ],

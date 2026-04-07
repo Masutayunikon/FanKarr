@@ -220,7 +220,7 @@ const filtersDisponibilite = [
 const filtersImport = [
   { label: 'Importés',  value: 'complete',    color: '#22c55e' },
   { label: 'En cours',  value: 'downloading', color: '#3b82f6' },
-  { label: 'Partiel',   value: 'partial',     color: 'var(--accent)' },
+  { label: 'Partiel',   value: 'partial',     color: '#9b59b6' },
 ]
 
 const sortOptions = [
@@ -233,7 +233,7 @@ const sortOptions = [
 const legend = [
   { label: 'Importé',      color: '#22c55e' },
   { label: 'En cours',     color: '#3b82f6' },
-  { label: 'Partiel',      color: 'var(--accent)' },
+  { label: 'Partiel',      color: '#9b59b6' },
   { label: 'Non importé',  color: 'var(--border)' },
 ]
 
@@ -271,7 +271,7 @@ function stateColor(state: string): string {
   return ({
     complete   : '#22c55e',
     downloading: '#3b82f6',
-    partial    : 'var(--accent)',
+    partial    : '#9b59b6',
     none       : 'transparent',
   } as Record<string, string>)[state] ?? 'transparent'
 }

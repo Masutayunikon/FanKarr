@@ -32,6 +32,47 @@
         </div>
       </div>
 
+      <!-- Toolbar : recherche + tri -->
+      <div class="flex items-center gap-2 mb-4">
+        <div class="relative flex-1 max-w-xs">
+          <Search class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" :size="14" />
+          <input
+              v-model="search"
+              type="text"
+              placeholder="Rechercher..."
+              class="settings-input pl-9 w-full py-1.5 text-sm"
+          />
+        </div>
+
+        <div class="relative shrink-0" ref="sortRef">
+          <button
+              @click="sortOpen = !sortOpen"
+              class="btn-secondary flex items-center gap-1.5 py-1.5 px-2.5"
+              :class="activeSort !== 'none' ? 'border-accent text-accent' : ''"
+          >
+            <ArrowUpDown :size="14" />
+            <span class="hidden md:inline text-xs">Trier</span>
+            <span v-if="activeSort !== 'none'" class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-accent" />
+          </button>
+
+          <div
+              v-if="sortOpen"
+              class="absolute top-full right-0 mt-1 bg-card border border-border rounded-xl p-2 z-20 w-48 flex flex-col gap-0.5 shadow-xl"
+          >
+            <button
+                v-for="s in sortOptions" :key="s.value"
+                @click="setSort(s.value)"
+                class="flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors"
+                :class="activeSort === s.value ? 'bg-active text-primary' : 'text-secondary hover:bg-hover'"
+            >
+              {{ s.label }}
+              <span v-if="activeSort === s.value && sortDir === 'asc'">↑</span>
+              <span v-else-if="activeSort === s.value && sortDir === 'desc'">↓</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Onglets + filtre -->
       <div class="flex items-center justify-between mb-4">
         <div class="flex gap-1 bg-shell rounded-lg p-1 border border-border">
@@ -193,6 +234,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
+import { Search, ArrowUpDown } from 'lucide-vue-next'
+import { onClickOutside } from '@vueuse/core'
 import { useToast } from '@/composables/useToast'
 
 const { add: toast } = useToast()
@@ -205,6 +248,30 @@ const importing    = ref<Record<string, boolean>>({})
 const importingAll = ref(false)
 const activeTab    = ref<'active' | 'done'>('active')
 const hideImported = ref(false)
+const search    = ref('')
+const sortOpen  = ref(false)
+const activeSort = ref<'none' | 'name' | 'size' | 'progress' | 'state'>('none')
+const sortDir   = ref<'asc' | 'desc'>('asc')
+const sortRef   = ref<HTMLElement | null>(null)
+
+onClickOutside(sortRef, () => { sortOpen.value = false })
+
+const sortOptions = [
+  { label: 'Nom',        value: 'name'     },
+  { label: 'Taille',     value: 'size'     },
+  { label: 'Progression', value: 'progress' },
+  { label: 'État',       value: 'state'    },
+]
+
+function setSort(val: typeof activeSort.value) {
+  if (activeSort.value === val) {
+    sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    activeSort.value = val
+    sortDir.value = 'asc'
+  }
+  sortOpen.value = false
+}
 
 let pollInterval: ReturnType<typeof setInterval> | null = null
 
@@ -217,9 +284,33 @@ const doneTorrents = computed(() =>
 )
 
 const visibleTorrents = computed(() => {
-  if (activeTab.value === 'active') return activeTorrents.value
-  if (hideImported.value) return doneTorrents.value.filter(t => t.organizeState !== 'done')
-  return doneTorrents.value
+  let list = activeTab.value === 'active'
+      ? activeTorrents.value
+      : hideImported.value
+          ? doneTorrents.value.filter(t => t.organizeState !== 'done')
+          : doneTorrents.value
+
+  // Recherche
+  if (search.value.trim()) {
+    const q = search.value.toLowerCase()
+    list = list.filter(t => t.name.toLowerCase().includes(q))
+  }
+
+  // Tri
+  if (activeSort.value !== 'none') {
+    const dir = sortDir.value === 'asc' ? 1 : -1
+    list = [...list].sort((a, b) => {
+      switch (activeSort.value) {
+        case 'name'    : return a.name.localeCompare(b.name, 'fr') * dir
+        case 'size'    : return (a.size - b.size) * dir
+        case 'progress': return (a.progress - b.progress) * dir
+        case 'state'   : return a.state.localeCompare(b.state) * dir
+        default        : return 0
+      }
+    })
+  }
+
+  return list
 })
 
 const stats = computed(() => [

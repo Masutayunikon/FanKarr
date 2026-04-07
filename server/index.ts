@@ -10,7 +10,7 @@ import {
     sanitizeClient, dispatchDownload, dispatchList
 } from './torrent-clients/index.js'
 import qbittorrentDriver from './torrent-clients/qbittorrent.js'
-import { organizeTorrent, autoOrganizeAll, scanMediaPath } from './organize.js'
+import { organizeTorrent, autoOrganizeAll, scanMediaPath, workerRunning } from './organize.js'
 import { logger, readLogs, clearLogs, logsFileSize } from './logger.js'
 import { DATA_DIR, BASE_DIR } from './config.js'
 
@@ -41,8 +41,8 @@ app.get('/api/settings', requireAuth, (_req, res) => {
     res.json(readSettings())
 })
 app.post('/api/settings', requireAuth, (req, res) => {
-    const { mediaPath, completePath, organizeMode, category, nfoSupport, autoImport } = req.body
-    const updated = writeSettings({ mediaPath, completePath, organizeMode, category, nfoSupport, autoImport })
+    const { mediaPath, completePath, organizeMode, category, nfoSupport, autoImport, devMode } = req.body
+    const updated = writeSettings({ mediaPath, completePath, organizeMode, category, nfoSupport, autoImport, devMode })
     logger.info('api', 'Paramètres mis à jour')
     res.json(updated)
 })
@@ -454,6 +454,50 @@ app.post('/api/scan', requireAuth, async (_req, res) => {
         logger.error('api', `Scan médiathèque échoué : ${err instanceof Error ? err.message : err}`)
         res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
     }
+})
+
+// ── Debug (dev mode uniquement) ───────────────────────────────
+app.get('/api/debug/stats', requireAuth, (req, res) => {
+    const { devMode } = readSettings()
+    if (!devMode) { res.status(403).json({ error: 'Dev mode désactivé' }); return }
+
+    const mem     = process.memoryUsage()
+    const uptimeS = Math.floor(process.uptime())
+    const h       = Math.floor(uptimeS / 3600)
+    const m       = Math.floor((uptimeS % 3600) / 60)
+    const s       = uptimeS % 60
+
+    let organizedCount = 0
+    try {
+        const orgPath = path.join(DATA_DIR, 'organized.json')
+        if (fs.existsSync(orgPath)) {
+            const org = JSON.parse(fs.readFileSync(orgPath, 'utf-8'))
+            organizedCount = Object.values(org).reduce((acc: number, files: any) => acc + Object.keys(files).length, 0)
+        }
+    } catch {}
+
+    res.json({
+        memory: {
+            heapUsed : Math.round(mem.heapUsed  / 1024 / 1024),
+            heapTotal: Math.round(mem.heapTotal / 1024 / 1024),
+            rss      : Math.round(mem.rss       / 1024 / 1024),
+        },
+        cache: {
+            entries   : _cache.size,
+            ttlHours  : 6,
+        },
+        uptime: `${h}h ${m}m ${s}s`,
+        uptimeSeconds: uptimeS,
+        worker: {
+            running: workerRunning,
+        },
+        organized: {
+            trackedFiles: organizedCount,
+        },
+        requests: {
+            notifs: recentOrganized.length,
+        },
+    })
 })
 
 if (fs.existsSync(PUBLIC_PATH)) {

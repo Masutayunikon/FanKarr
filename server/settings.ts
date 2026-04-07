@@ -11,6 +11,7 @@ export interface Settings {
     category     : string
     nfoSupport   : boolean
     autoImport   : boolean
+    devMode      : boolean
 }
 
 const defaults: Settings = {
@@ -20,6 +21,7 @@ const defaults: Settings = {
     category    : 'fankai',
     nfoSupport  : false,
     autoImport  : true,
+    devMode     : false,
 }
 
 export function readSettings(): Settings {
