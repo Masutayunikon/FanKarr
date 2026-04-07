@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.3.3](https://github.com/Masutayunikon/FanKarr/compare/v3.3.2...v3.3.3) (2026-04-07)
+
+
+### Bug Fixes
+
+* MediaManagementView.vue api call is now in mounted ([8c5b650](https://github.com/Masutayunikon/FanKarr/commit/8c5b650ca6eeac75f33e8c5423f6d4fd24f9871b))
+* path ([58ae88a](https://github.com/Masutayunikon/FanKarr/commit/58ae88a01c063318407134cd7351572220acd892))
+
 ## [3.3.2](https://github.com/Masutayunikon/FanKarr/compare/v3.3.1...v3.3.2) (2026-04-07)
 
 
