@@ -10,12 +10,14 @@ import {
     sanitizeClient, dispatchDownload, dispatchList
 } from './torrent-clients/index.js'
 import qbittorrentDriver from './torrent-clients/qbittorrent.js'
+import transmissionDriver from './torrent-clients/transmission.js'
 import { organizeTorrent, autoOrganizeAll, scanMediaPath, workerRunning } from './organize.js'
 import { logger, readLogs, clearLogs, logsFileSize } from './logger.js'
 import { DATA_DIR, BASE_DIR } from './config.js'
 import { systemInfo } from './system.js'
 
 registerDriver(qbittorrentDriver)
+registerDriver(transmissionDriver)
 
 const app  = express()
 const PORT = Number(process.env.PORT) || 9898
