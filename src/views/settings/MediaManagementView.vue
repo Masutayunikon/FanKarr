@@ -129,7 +129,7 @@ const form = ref({
   autoImport   : true,
 })
 
-const { data: systemInfo } = await useFetch('/api/system/info')
+const { data: systemInfo } = await fetch('/api/system/info')
 
 const picker = ref<{ open: boolean; field: 'completePath' | 'mediaPath'; currentPath: string }>({
   open: false,
