@@ -18,6 +18,13 @@
           <button @click="importAll" :disabled="importingAll" class="btn-primary">
             {{ importingAll ? '...' : 'Importer tout' }}
           </button>
+          <button @click="fetchTorrents" :disabled="loading" class="btn-secondary">
+            <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"
+                 :class="loading ? 'animate-spin' : ''">
+              <path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.36-2.64M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.36 2.64"/>
+              <polyline points="16 5 21 5 21 10"/>
+            </svg>
+          </button>
           <button @click="togglePolling" class="btn-secondary">
             {{ polling ? 'Pause' : 'Reprendre' }}
           </button>
@@ -342,7 +349,7 @@ async function fetchTorrents() {
 
 function startPolling() {
   fetchTorrents()
-  pollInterval = setInterval(fetchTorrents, 3000)
+  pollInterval = setInterval(fetchTorrents, 60_000)
 }
 
 function stopPolling() {
