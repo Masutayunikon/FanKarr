@@ -34,6 +34,7 @@
         </div>
         <div class="flex items-center gap-1">
           <button @click="testClient(client.uuid)" class="btn-ghost text-xs">Tester</button>
+          <button @click="editClient(client)" class="btn-ghost text-xs text-blue-400 hover:text-blue-300">Modifier</button>
           <button @click="deleteClient(client.uuid)" class="btn-ghost text-xs text-red-400 hover:text-red-300">Supprimer</button>
         </div>
       </div>
@@ -49,7 +50,7 @@
         <div class="bg-card border border-border rounded-xl w-full max-w-md p-6 flex flex-col gap-4">
 
           <div class="flex items-center justify-between">
-            <h3 class="text-sm font-semibold text-primary">Ajouter un client</h3>
+            <h3 class="text-sm font-semibold text-primary">{{ modal.uuid ? 'Modifier un client' : 'Ajouter un client' }}</h3>
             <button @click="closeModal" class="text-muted hover:text-primary transition-colors">✕</button>
           </div>
 
@@ -116,6 +117,7 @@ const healthStatus     = ref<Record<string, boolean | null>>({})
 
 const modal = ref({
   open   : false,
+  uuid   : null as string | null,
   name   : '',
   type   : '',
   config : {} as Record<string, string>,
@@ -171,7 +173,20 @@ async function deleteClient(uuid: string) {
 }
 
 function openAddModal() {
-  modal.value = { open: true, name: '', type: '', config: {}, testing: false, saving: false, tested: false }
+  modal.value = { open: true, uuid: null, name: '', type: '', config: {}, testing: false, saving: false, tested: false }
+}
+
+function editClient(client: any) {
+  modal.value = {
+    open   : true,
+    uuid   : client.uuid,
+    name   : client.name,
+    type   : client.type,
+    config : JSON.parse(JSON.stringify(client.config)),
+    testing: false,
+    saving : false,
+    tested : true,
+  }
 }
 
 function closeModal() { modal.value.open = false }
@@ -193,7 +208,7 @@ async function testNewClient() {
   try {
     const res = await fetch('/api/torrent-clients/test-config', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-      body: JSON.stringify({ type: modal.value.type, config: modal.value.config }),
+      body: JSON.stringify({ type: modal.value.type, config: modal.value.config, uuid: modal.value.uuid }),
     })
     const { ok, message } = await res.json()
     modal.value.tested = ok
@@ -209,8 +224,12 @@ async function saveClient() {
   if (!modal.value.tested) return
   modal.value.saving = true
   try {
-    const res = await fetch('/api/torrent-clients', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+    const isEdit = !!modal.value.uuid
+    const method = isEdit ? 'PUT' : 'POST'
+    const url = isEdit ? `/api/torrent-clients/${modal.value.uuid}` : '/api/torrent-clients'
+
+    const res = await fetch(url, {
+      method, headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({
         name  : modal.value.name || clientLabel(modal.value.type),
         type  : modal.value.type,
@@ -219,10 +238,15 @@ async function saveClient() {
     })
     if (res.ok) {
       const client = await res.json()
-      clients.value.push(client)
+      if (isEdit) {
+        const index = clients.value.findIndex(c => c.uuid === client.uuid)
+        if (index !== -1) clients.value[index] = client
+      } else {
+        clients.value.push(client)
+      }
       refreshHealth(client.uuid)
       closeModal()
-      toast('Client enregistré ✓', 'success')
+      toast(isEdit ? 'Client modifié ✓' : 'Client enregistré ✓', 'success')
     } else {
       const { error } = await res.json()
       toast(error ?? "Erreur lors de l'enregistrement", 'error')
