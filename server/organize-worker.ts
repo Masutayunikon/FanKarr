@@ -241,7 +241,9 @@ async function downloadGitlabFolder(serieTitle: string, destRoot: string): Promi
 }
 
 // ─── Filesystem ops ───────────────────────────────────────────
-function seasonFolder(n: number): string { return `Saison ${n}` }
+function seasonFolder(n: number): string {
+    return n === 0 ? 'Specials' : `Saison ${n}`
+}
 
 function tryHardlink(src: string, dest: string): boolean {
     try { fs.linkSync(src, dest); return true }
