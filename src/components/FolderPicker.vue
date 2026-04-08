@@ -14,6 +14,12 @@
 
         <!-- Chemin éditable -->
         <div class="px-5 py-3 border-b border-border shrink-0 flex gap-2">
+          <button @click="navigateTo('/')" class="btn-secondary px-2 text-muted hover:text-primary" title="Retour à la racine">
+            <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+              <polyline points="9 22 9 12 15 12 15 22"/>
+            </svg>
+          </button>
           <input
               v-model="inputPath"
               @keydown.enter="navigateTo(inputPath)"
@@ -62,7 +68,7 @@
         <!-- Footer -->
         <div class="flex items-center justify-between px-5 py-4 border-t border-border shrink-0">
           <span class="text-xs text-muted font-mono truncate max-w-xs">{{ current }}</span>
-          <button @click="$emit('select', current)" class="btn-primary">
+          <button @click="$emit('select', current.replace(/\\/+$/, '') || '/')" class="btn-primary">
             Choisir
           </button>
         </div>
@@ -86,7 +92,9 @@ const loading   = ref(false)
 const error     = ref('')
 
 function joinPath(base: string, name: string): string {
-  return base === '/' ? `/${name}` : `${base}/${name}`
+  if (base === '/') return `/${name}`
+  const cleanBase = base.endsWith('/') ? base.slice(0, -1) : base
+  return `${cleanBase}/${name}`
 }
 
 async function navigateTo(p: string) {
