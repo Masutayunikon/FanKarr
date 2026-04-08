@@ -103,30 +103,6 @@ export function addClient(name: string, type: string, config: Record<string, str
     return client
 }
 
-export function updateClient(uuid: string, name: string, type: string, config: Record<string, string | number>): SavedClient | null {
-    const clients = loadClients()
-    const index = clients.findIndex(c => c.uuid === uuid)
-    if (index === -1) return null
-
-    const oldClient = clients[index]
-    const definition = getDriver(type)?.definition
-
-    // Conserver les mots de passe si "••••••••" est envoyé
-    if (definition) {
-        for (const field of definition.fields) {
-            if (field.type === 'password' && config[field.key] === '••••••••') {
-                config[field.key] = oldClient.config[field.key]
-            }
-        }
-    }
-
-    const client: SavedClient = { uuid, name, type, config }
-    clients[index] = client
-    saveClients(clients)
-    logger.info('torrent-clients', `Client mis à jour : "${name}" (${type})`)
-    return client
-}
-
 export function removeClient(uuid: string): boolean {
     const clients  = loadClients()
     const target   = clients.find(c => c.uuid === uuid)
@@ -141,6 +117,16 @@ export function getClient(uuid: string): SavedClient | undefined {
     return loadClients().find(c => c.uuid === uuid)
 }
 
+export function updateClient(uuid: string, name: string, type: string, config: Record<string, string | number>): SavedClient | null {
+    const clients = loadClients()
+    const index   = clients.findIndex(c => c.uuid === uuid)
+    if (index === -1) return null
+    clients[index] = { ...clients[index], name, type, config }
+    saveClients(clients)
+    logger.info('torrent-clients', `Client modifié : "${name}" (${type})`)
+    return clients[index]
+}
+
 export function sanitizeClient(client: SavedClient, definition?: TorrentClientDefinition): SavedClient {
     if (!definition) definition = getDriver(client.type)?.definition
     if (!definition) return client
@@ -151,6 +137,19 @@ export function sanitizeClient(client: SavedClient, definition?: TorrentClientDe
         }
     }
     return { ...client, config }
+}
+
+// ─── Remote path remapping ────────────────────────────────────────────────────
+
+// FIX : remplace le préfixe remotePath par localPath dans save_path
+// ex: remotePath=/downloads, localPath=/mnt/nas/downloads
+//     /downloads/fankai/Serie → /mnt/nas/downloads/fankai/Serie
+function remapSavePath(savePath: string, remotePath: string, localPath: string): string {
+    const remote = remotePath.replace(/\/+$/, '')
+    const local  = localPath.replace(/\/+$/, '')
+    if (!remote || !local) return savePath
+    if (!savePath.startsWith(remote)) return savePath
+    return local + savePath.slice(remote.length)
 }
 
 // ─── Dispatch download ─────────────────────────────────────────────────────────
@@ -198,8 +197,22 @@ export async function dispatchList(category?: string): Promise<(TorrentInfo & { 
         try {
             const clientCategory = (client.config.category as string) || category
             const torrents = await driver.list(client.config, clientCategory)
+
+            const remotePath = String(client.config.remotePath ?? '')
+            const localPath  = String(client.config.localPath  ?? '')
+            const hasRemap   = remotePath && localPath
+
             for (const t of torrents) {
-                results.push({ ...t, client_uuid: client.uuid, client_name: client.name })
+                // FIX : remap save_path si remotePath et localPath sont configurés
+                const save_path = hasRemap
+                    ? remapSavePath(t.save_path, remotePath, localPath)
+                    : t.save_path
+
+                if (hasRemap && save_path !== t.save_path) {
+                    logger.debug('torrent-clients', `Remap save_path : "${t.save_path}" → "${save_path}"`)
+                }
+
+                results.push({ ...t, save_path, client_uuid: client.uuid, client_name: client.name })
             }
         } catch (err) {
             const msg = err instanceof Error ? err.message : 'Erreur inconnue'

@@ -67,7 +67,10 @@
               </select>
             </div>
             <div v-if="currentDefinition" v-for="field in currentDefinition.fields" :key="field.key">
-              <label class="settings-label">{{ field.label }}</label>
+              <label class="settings-label">
+                {{ field.label }}
+                <span v-if="field.required" class="text-red-400 ml-0.5">*</span>
+              </label>
               <input
                   v-model="modal.config[field.key]"
                   :type="field.type === 'password' ? 'password' : 'text'"

@@ -57,10 +57,13 @@ const TR: TorrentClientDriver = {
         id    : 'transmission',
         label : 'Transmission',
         fields: [
-            { key: 'url',      label: 'URL',          type: 'url',      placeholder: 'http://localhost:9091', required: true },
-            { key: 'username', label: 'Identifiant',  type: 'text',     placeholder: 'transmission',         required: false },
-            { key: 'password', label: 'Mot de passe', type: 'password', placeholder: '••••••••',             required: false },
-            { key: 'category', label: 'Catégorie',    type: 'text',     placeholder: 'fankai',               required: false, default: 'fankai' },
+            { key: 'url',      label: 'URL',            type: 'url',      placeholder: 'http://localhost:9091', required: true },
+            { key: 'username', label: 'Identifiant',    type: 'text',     placeholder: 'transmission',         required: false },
+            { key: 'password', label: 'Mot de passe',   type: 'password', placeholder: '••••••••',             required: false },
+            { key: 'category', label: 'Catégorie',      type: 'text',     placeholder: 'fankai',               required: false, default: 'fankai' },
+            { key: 'savePath',   label: 'Dossier cible',          type: 'text', placeholder: '/downloads/fankai',     required: false },
+            { key: 'remotePath', label: 'Chemin distant (client)', type: 'text', placeholder: '/downloads',           required: false },
+            { key: 'localPath',  label: 'Chemin local (FanKarr)',  type: 'text', placeholder: '/mnt/nas/downloads',   required: false },
         ],
     },
 
@@ -99,7 +102,6 @@ const TR: TorrentClientDriver = {
         return torrents
             .filter(t => {
                 if (!category) return true
-                // Filtrer par label uniquement, comme qBittorrent filtre par catégorie
                 return t.labels?.includes(category)
             })
             .map(t => ({
@@ -128,7 +130,7 @@ const TR: TorrentClientDriver = {
         }
 
         await trRequest(config, 'torrent-add', args)
-        logger.info('transmission', `Torrent ajouté avec succès (catégorie: ${config.category ?? 'aucune'})`)
+        logger.info('transmission', `Torrent ajouté avec succès (catégorie: ${config.category ?? 'aucune'}${config.savePath ? `, dossier: ${config.savePath}` : ''})`)
     },
 }
 

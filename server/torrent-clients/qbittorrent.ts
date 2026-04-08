@@ -39,10 +39,13 @@ const QB: TorrentClientDriver = {
         id    : 'qbittorrent',
         label : 'qBittorrent',
         fields: [
-            { key: 'url',      label: 'URL WebUI',    type: 'url',      placeholder: 'http://localhost:8080', required: true },
-            { key: 'username', label: 'Identifiant',  type: 'text',     placeholder: 'admin',                required: true },
-            { key: 'password', label: 'Mot de passe', type: 'password', placeholder: '••••••••',             required: true },
-            { key: 'category', label: 'Catégorie',    type: 'text',     placeholder: 'fankai',               required: false, default: 'fankai' },
+            { key: 'url',      label: 'URL WebUI',       type: 'url',      placeholder: 'http://localhost:8080', required: true },
+            { key: 'username', label: 'Identifiant',     type: 'text',     placeholder: 'admin',                required: true },
+            { key: 'password', label: 'Mot de passe',    type: 'password', placeholder: '••••••••',             required: true },
+            { key: 'category', label: 'Catégorie',       type: 'text',     placeholder: 'fankai',               required: false, default: 'fankai' },
+            { key: 'savePath',   label: 'Dossier cible',          type: 'text', placeholder: '/downloads/fankai',     required: false },
+            { key: 'remotePath', label: 'Chemin distant (client)', type: 'text', placeholder: '/downloads',           required: false },
+            { key: 'localPath',  label: 'Chemin local (FanKarr)',  type: 'text', placeholder: '/mnt/nas/downloads',   required: false },
         ],
     },
 
@@ -110,7 +113,7 @@ const QB: TorrentClientDriver = {
         })
         const text = await res.text()
         if (text !== 'Ok.') throw new Error(`Ajout échoué : ${text}`)
-        logger.info('qbittorrent', `Torrent ajouté avec succès (catégorie: ${config.category ?? 'aucune'})`)
+        logger.info('qbittorrent', `Torrent ajouté avec succès (catégorie: ${config.category ?? 'aucune'}${config.savePath ? `, dossier: ${config.savePath}` : ''})`)
     },
 }
 

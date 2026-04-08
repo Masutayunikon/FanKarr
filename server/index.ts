@@ -1,5 +1,6 @@
 import express from 'express'
 import cookieParser from 'cookie-parser'
+import http from 'http'
 import fs from 'fs'
 import path from 'path'
 import { authStatus, authSetup, authLogin, authLogout, requireAuth } from './auth.js'
@@ -9,8 +10,9 @@ import {
     listClients, addClient, removeClient, getClient,
     sanitizeClient, dispatchDownload, dispatchList, updateClient
 } from './torrent-clients/index.js'
-import qbittorrentDriver from './torrent-clients/qbittorrent.js'
+import qbittorrentDriver  from './torrent-clients/qbittorrent.js'
 import transmissionDriver from './torrent-clients/transmission.js'
+import synologyDsDriver   from './torrent-clients/synology-ds.js'
 import { organizeTorrent, autoOrganizeAll, scanMediaPath, workerRunning } from './organize.js'
 import { logger, readLogs, clearLogs, logsFileSize } from './logger.js'
 import { DATA_DIR, BASE_DIR } from './config.js'
@@ -18,6 +20,7 @@ import { systemInfo } from './system.js'
 
 registerDriver(qbittorrentDriver)
 registerDriver(transmissionDriver)
+registerDriver(synologyDsDriver)
 
 const app  = express()
 const PORT = Number(process.env.PORT) || 9898
@@ -84,7 +87,7 @@ app.post('/api/torrent-clients/test-config', requireAuth, async (req, res) => {
     if (!type || !config) { res.status(400).json({ error: 'type et config requis' }); return }
     const driver = getDriver(type)
     if (!driver) { res.status(400).json({ error: `Type inconnu : ${type}` }); return }
-    
+
     if (uuid) {
         const oldClient = getClient(uuid)
         if (oldClient) {
@@ -526,12 +529,186 @@ app.get('/api/debug/stats', requireAuth, (req, res) => {
     })
 })
 
+// ── NFO Updates ────────────────────────────────────────────────
+
+interface NfoUpdateNotif {
+    serieTitle : string
+    commitSha  : string
+    commitMsg  : string
+    updatedAt  : string
+    status     : 'updated' | 'error'
+    error?     : string
+}
+
+const recentNfoUpdates: NfoUpdateNotif[] = []
+const MAX_NFO_NOTIFS = 30
+const NFO_COMMITS_PATH = path.join(DATA_DIR, 'nfo_commits.json')
+
+const GITLAB_API_NFO  = 'https://gitlab.com/api/v4/projects/ElPouki%2Ffankai_pack/repository'
+const GITLAB_RAW_NFO  = 'https://gitlab.com/ElPouki/fankai_pack/-/raw/main/pack'
+
+const SERIE_TITLE_GITLAB_MAP: Record<string, string> = {
+    'Enfer Et Paradis Henshū'          : 'Enfer et Paradis Henshū',
+    'Hajime No Ippo Henshū'            : 'Hajime no Ippo Henshū',
+    'Hikaru No Go Henshū'              : 'Hikaru no Go Henshū',
+    'Hokuto No Ken Kaï'                : 'Hokuto no Ken Kaï',
+    'Kaguya-sama : Love is War Henshū' : 'Kaguya-sama - Love is War Henshū',
+    'Kenshin le Vagabond Henshū'       : 'Kenshin le vagabond Henshū',
+    'Kuroko No Basket Henshū'          : 'Kuroko no Basket Henshū',
+    'Shingeki No Kyojin Henshū'        : 'Shingeki no Kyojin Henshū',
+    'Tower Of God Henshū'              : 'Tower of God Henshū',
+}
+
+function getGitlabTitle(title: string): string {
+    return SERIE_TITLE_GITLAB_MAP[title] ?? title
+}
+
+function loadNfoCommits(): Record<string, string> {
+    try {
+        if (!fs.existsSync(NFO_COMMITS_PATH)) return {}
+        return JSON.parse(fs.readFileSync(NFO_COMMITS_PATH, 'utf-8'))
+    } catch { return {} }
+}
+
+function saveNfoCommits(commits: Record<string, string>) {
+    fs.mkdirSync(path.dirname(NFO_COMMITS_PATH), { recursive: true })
+    fs.writeFileSync(NFO_COMMITS_PATH, JSON.stringify(commits, null, 2), 'utf-8')
+}
+
+async function getLatestGitlabCommit(gitlabTitle: string): Promise<{ sha: string; message: string } | null> {
+    try {
+        const url = `${GITLAB_API_NFO}/commits?path=${encodeURIComponent('pack/' + gitlabTitle)}&per_page=1&ref_name=main`
+        const res = await fetch(url, { headers: { 'User-Agent': 'fankarr' } })
+        if (!res.ok) return null
+        const data: any[] = await res.json()
+        if (!data.length) return null
+        return { sha: data[0].id, message: data[0].title ?? data[0].message ?? '' }
+    } catch { return null }
+}
+
+async function downloadNfoFolder(gitlabTitle: string, destRoot: string): Promise<void> {
+    let files: any[] = []
+    let page = 1
+    while (true) {
+        const batch = await fetch(
+            `${GITLAB_API_NFO}/tree?path=${encodeURIComponent('pack/' + gitlabTitle)}&recursive=true&per_page=100&page=${page}&ref=main`,
+            { headers: { 'User-Agent': 'fankarr' } }
+        ).then(r => r.ok ? r.json() : [])
+        if (!Array.isArray(batch) || batch.length === 0) break
+        files.push(...batch)
+        if (batch.length < 100) break
+        page++
+    }
+
+    const blobs = files.filter((f: any) => f.type === 'blob')
+    let downloaded = 0, skipped = 0
+
+    for (const entry of blobs) {
+        const relativePath = entry.path.replace(`pack/${gitlabTitle}/`, '')
+        const destPath     = path.join(destRoot, relativePath)
+        try {
+            const rawUrl  = `${GITLAB_RAW_NFO}/${encodeURIComponent(gitlabTitle)}/${relativePath.split('/').map(encodeURIComponent).join('/')}`
+            const res     = await fetch(rawUrl, { headers: { 'User-Agent': 'fankarr' } })
+            if (!res.ok) { skipped++; continue }
+            fs.mkdirSync(path.dirname(destPath), { recursive: true })
+            fs.writeFileSync(destPath, Buffer.from(await res.arrayBuffer()))
+            downloaded++
+        } catch { skipped++ }
+    }
+    logger.info('nfo-update', `"${gitlabTitle}" — ${downloaded} fichiers mis à jour, ${skipped} ignorés`)
+}
+
+async function checkNfoUpdates() {
+    const { mediaPath, nfoSupport } = readSettings()
+    if (!nfoSupport) return
+
+    let organized: Record<string, Record<string, string>> = {}
+    try { const p = path.join(DATA_DIR, 'organized.json'); if (fs.existsSync(p)) organized = JSON.parse(fs.readFileSync(p, 'utf-8')) } catch {}
+    if (Object.keys(organized).length === 0) return
+
+    // Récupérer les titres de séries qu'on a déjà importées
+    const seriesData  = await loadEnrichedSeriesData()
+    const knownHashes = new Set(Object.keys(organized))
+    const serieTitles = new Set<string>()
+
+    for (const sd of seriesData) {
+        const allTorrents = [
+            ...(sd.torrents ?? []),
+            ...(sd.seasons ?? []).flatMap((s: any) => s.torrents ?? []),
+            ...(sd.seasons ?? []).flatMap((s: any) => (s.episodes ?? []).flatMap((e: any) => e.torrents ?? [])),
+        ]
+        if (allTorrents.some((t: any) => knownHashes.has(t.infohash?.toLowerCase()))) {
+            const rawTitle = sd.title ?? sd.show_title ?? ''
+            if (rawTitle) serieTitles.add(rawTitle.replace(/:/g, ' -').replace(/[<>"/\\|?*]/g, '').replace(/\s+/g, ' ').trim())
+        }
+    }
+
+    if (serieTitles.size === 0) return
+
+    const commits = loadNfoCommits()
+    let hasChanges = false
+
+    for (const serieTitle of serieTitles) {
+        const gitlabTitle = getGitlabTitle(serieTitle)
+        const latest      = await getLatestGitlabCommit(gitlabTitle)
+        if (!latest) continue
+
+        const known = commits[gitlabTitle]
+        if (known === latest.sha) continue
+
+        // Nouveau commit détecté → re-télécharger
+        logger.info('nfo-update', `MAJ NFO détectée pour "${gitlabTitle}" (${latest.sha.slice(0, 8)})`)
+        try {
+            const destRoot = path.join(mediaPath, serieTitle)
+            await downloadNfoFolder(gitlabTitle, destRoot)
+            commits[gitlabTitle] = latest.sha
+            hasChanges = true
+
+            recentNfoUpdates.unshift({
+                serieTitle,
+                commitSha : latest.sha.slice(0, 8),
+                commitMsg : latest.message,
+                updatedAt : new Date().toISOString(),
+                status    : 'updated',
+            })
+            if (recentNfoUpdates.length > MAX_NFO_NOTIFS) recentNfoUpdates.pop()
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : 'Erreur inconnue'
+            logger.error('nfo-update', `Échec MAJ NFO "${gitlabTitle}" : ${msg}`)
+            recentNfoUpdates.unshift({
+                serieTitle,
+                commitSha : latest.sha.slice(0, 8),
+                commitMsg : latest.message,
+                updatedAt : new Date().toISOString(),
+                status    : 'error',
+                error     : msg,
+            })
+            if (recentNfoUpdates.length > MAX_NFO_NOTIFS) recentNfoUpdates.pop()
+        }
+    }
+
+    if (hasChanges) saveNfoCommits(commits)
+}
+
+app.get('/api/nfo-updates/recent', requireAuth, (_req, res) => {
+    res.json(recentNfoUpdates)
+})
+
+app.post('/api/nfo-updates/check', requireAuth, async (_req, res) => {
+    logger.info('nfo-update', 'Vérification manuelle des MAJ NFO lancée')
+    checkNfoUpdates().catch(err => logger.error('nfo-update', `Vérif manuelle échouée : ${err instanceof Error ? err.message : err}`))
+    res.json({ ok: true, message: 'Vérification lancée en arrière-plan' })
+})
+
 if (fs.existsSync(PUBLIC_PATH)) {
     app.get('*path', (_req, res) => { res.sendFile(path.join(PUBLIC_PATH, 'index.html')) })
 }
 
 // ── Démarrage ──────────────────────────────────────────────────
-app.listen(PORT, async () => {
+// FIX : maxHeaderSize à 32KB pour éviter l'erreur 431 (cookies trop volumineux, Firefox)
+const server = http.createServer({ maxHeaderSize: 32768 }, app)
+
+server.listen(PORT, async () => {
     logger.info('api', `Serveur démarré sur le port ${PORT}`)
 
     try {
@@ -569,4 +746,12 @@ app.listen(PORT, async () => {
         autoOrganize()
         setInterval(autoOrganize, 5 * 60_000)
     }, 10_000)
+
+    // Vérification NFO GitLab toutes les heures
+    setTimeout(() => {
+        checkNfoUpdates().catch(err => logger.error('nfo-update', `Vérif initiale échouée : ${err instanceof Error ? err.message : err}`))
+        setInterval(() => {
+            checkNfoUpdates().catch(err => logger.error('nfo-update', `Vérif horaire échouée : ${err instanceof Error ? err.message : err}`))
+        }, 60 * 60_000)
+    }, 30_000) // 30s après le démarrage pour ne pas surcharger
 })
