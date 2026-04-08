@@ -23,7 +23,7 @@ async function trRequest(
     sessionId = ''
 ): Promise<{ result: string; arguments?: any; sessionId?: string }> {
     const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
+        'Content-Type'              : 'application/json',
         'X-Transmission-Session-Id': sessionId,
     }
 
@@ -60,7 +60,7 @@ const TR: TorrentClientDriver = {
             { key: 'url',      label: 'URL',          type: 'url',      placeholder: 'http://localhost:9091', required: true },
             { key: 'username', label: 'Identifiant',  type: 'text',     placeholder: 'transmission',         required: false },
             { key: 'password', label: 'Mot de passe', type: 'password', placeholder: '••••••••',             required: false },
-            { key: 'category', label: 'Dossier cible',type: 'text',     placeholder: 'fankai',               required: false, default: 'fankai' },
+            { key: 'category', label: 'Catégorie',    type: 'text',     placeholder: 'fankai',               required: false, default: 'fankai' },
         ],
     },
 
@@ -89,17 +89,18 @@ const TR: TorrentClientDriver = {
     },
 
     async list(config, category) {
-        const fields = ['hashString', 'name', 'status', 'percentDone', 'totalSize',
-            'downloadedEver', 'rateDownload', 'eta', 'downloadDir', 'labels']
+        const fields = [
+            'hashString', 'name', 'status', 'percentDone', 'totalSize',
+            'downloadedEver', 'rateDownload', 'eta', 'downloadDir', 'labels',
+        ]
         const data = await trRequest(config, 'torrent-get', { fields })
         const torrents: any[] = data.arguments?.torrents ?? []
 
         return torrents
             .filter(t => {
                 if (!category) return true
-                // Filtrer par label ou par dossier contenant la catégorie
-                return t.labels?.includes(category) ||
-                    (t.downloadDir as string)?.includes(category)
+                // Filtrer par label uniquement, comme qBittorrent filtre par catégorie
+                return t.labels?.includes(category)
             })
             .map(t => ({
                 hash      : t.hashString,
@@ -120,9 +121,6 @@ const TR: TorrentClientDriver = {
 
         if (config.savePath) {
             args['download-dir'] = String(config.savePath)
-        } else if (config.category) {
-            // Si pas de savePath explicite, ajouter la catégorie comme sous-dossier
-            args['download-dir'] = `/sdcard/Download/${config.category}`
         }
 
         if (config.category) {

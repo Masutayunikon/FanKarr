@@ -159,7 +159,7 @@
               </div>
             </div>
             <div class="text-right shrink-0">
-              <p class="text-sm font-semibold text-primary">{{ t.progress }}%</p>
+              <p class="text-sm font-semibold text-primary">{{ clampedProgress(t) }}%</p>
               <p class="text-xs text-muted mt-0.5">{{ formatSize(t.downloaded) }} / {{ formatSize(t.size) }}</p>
             </div>
           </div>
@@ -168,10 +168,10 @@
           <div class="h-1 bg-border rounded-full overflow-hidden">
             <div
                 class="h-full rounded-full transition-all duration-500"
-                :class="t.state === 'seeding' ? 'bg-green-500' :
+                :class="t.state === 'seeding' || t.state === 'unknown' ? 'bg-green-500' :
                       t.state === 'error'   ? 'bg-red-500'   :
                       t.state === 'paused'  ? 'bg-muted'     : 'bg-accent'"
-                :style="{ width: `${t.progress}%` }"
+                :style="{ width: `${clampedProgress(t)}%` }"
             />
           </div>
 
@@ -181,9 +181,10 @@
               <span v-if="t.state === 'downloading'">↓ {{ formatSpeed(t.speed) }}</span>
               <span v-if="t.state === 'downloading' && t.eta > 0">ETA {{ formatEta(t.eta) }}</span>
               <span v-if="t.state === 'seeding'" class="text-green-500">Complété</span>
+              <span v-if="t.state === 'unknown'" class="text-yellow-500">État non remonté par le client</span>
             </div>
 
-            <div v-if="t.state === 'seeding'" class="flex items-center gap-2">
+            <div v-if="t.state === 'seeding' || t.state === 'unknown'" class="flex items-center gap-2">
 
               <!-- Erreurs fichiers -->
               <div v-if="t.errorFiles?.length > 0" class="relative group/err">
@@ -275,12 +276,13 @@ function setSort(val: typeof activeSort.value) {
 
 let pollInterval: ReturnType<typeof setInterval> | null = null
 
+// FIX : unknown retiré de activeTorrents, ajouté dans doneTorrents
 const activeTorrents = computed(() =>
-    torrents.value.filter(t => ['downloading', 'paused', 'checking', 'error', 'unknown'].includes(t.state))
+    torrents.value.filter(t => ['downloading', 'paused', 'checking', 'error'].includes(t.state))
 )
 
 const doneTorrents = computed(() =>
-    torrents.value.filter(t => t.state === 'seeding')
+    torrents.value.filter(t => t.state === 'seeding' || t.state === 'unknown')
 )
 
 const visibleTorrents = computed(() => {
@@ -319,6 +321,11 @@ const stats = computed(() => [
   { label: 'En pause',  value: torrents.value.filter(t => t.state === 'paused').length },
   { label: 'Erreurs',   value: torrents.value.filter(t => t.state === 'error').length },
 ])
+
+// FIX : progress cappé à 100 pour éviter "278.2 GB / 278.1 GB" → 100%
+function clampedProgress(t: any): number {
+  return Math.min(100, Math.max(0, t.progress ?? 0))
+}
 
 async function fetchTorrents() {
   try {
@@ -406,7 +413,8 @@ function stateBadge(state: string) {
     paused     : { label: 'En pause',       class: 'border-border text-muted' },
     checking   : { label: 'Vérification',   class: 'border-yellow-500/40 text-yellow-500' },
     error      : { label: 'Erreur',         class: 'border-red-500/40 text-red-400' },
-    unknown    : { label: 'Inconnu',        class: 'border-border text-muted' },
+    // FIX : badge jaune pour signaler état dégradé sans alarmer
+    unknown    : { label: 'État inconnu',   class: 'border-yellow-500/40 text-yellow-500' },
   }
   return map[state] ?? map.unknown
 }

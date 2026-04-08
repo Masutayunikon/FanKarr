@@ -13,7 +13,6 @@ import { DATA_DIR } from './config.js'
 const ORGANIZED_PATH = path.join(DATA_DIR, 'organized.json')
 
 // ─── Utils log ────────────────────────────────────────────────
-// Les messages sont routés vers logger via organize.ts — pas besoin de préfixe
 function log(msg: string)   { parentPort?.postMessage({ type: 'log', level: 'info',  msg }) }
 function warn(msg: string)  { parentPort?.postMessage({ type: 'log', level: 'warn',  msg }) }
 function error(msg: string) { parentPort?.postMessage({ type: 'log', level: 'error', msg }) }
@@ -51,29 +50,23 @@ function isOrganized(hash: string, filename: string): boolean {
 function findTorrentByHash(hash: string, seriesData: any[]): { torrent: any; serieData: any } | null {
     const h = hash.toLowerCase()
     for (const sd of seriesData) {
-        // Niveau série (pack intégrale)
         for (const t of sd.torrents ?? []) {
             if (t.infohash?.toLowerCase() === h)
                 return { torrent: t, serieData: sd }
         }
 
-        // Niveau saison — vérifier si le même hash apparaît dans plusieurs saisons
-        // Si oui, pas de _season pour que buildFileMap scanne toutes les saisons
         const seasonsWithHash = (sd.seasons ?? []).filter((s: any) =>
             s.torrents?.some((t: any) => t.infohash?.toLowerCase() === h)
         )
         if (seasonsWithHash.length === 1) {
-            // Torrent propre à une seule saison → on filtre sur cette saison
             const season = seasonsWithHash[0]
             const t = season.torrents.find((t: any) => t.infohash?.toLowerCase() === h)
             return { torrent: { ...t, _season: season }, serieData: sd }
         } else if (seasonsWithHash.length > 1) {
-            // Même torrent dans plusieurs saisons → pas de filtre saison
             const t = seasonsWithHash[0].torrents.find((t: any) => t.infohash?.toLowerCase() === h)
             return { torrent: t, serieData: sd }
         }
 
-        // Niveau épisode
         for (const season of sd.seasons ?? []) {
             const matchingEpisodes = season.episodes?.filter((ep: any) =>
                 ep.torrents?.some((t: any) => t.infohash?.toLowerCase() === h)
@@ -97,8 +90,9 @@ function buildFileMap(
     hash         : string,
     nfoSupport   : boolean,
     seasonFilter?: number,
-): Map<string, { season_number: number; original_filename: string; fullPath: string }> {
-    const map = new Map<string, { season_number: number; original_filename: string; fullPath: string }>()
+): Map<string, { season_number: number; nfo_filename: string; fullPath: string }> {
+    // FIX : type de retour utilise nfo_filename au lieu de original_filename
+    const map = new Map<string, { season_number: number; nfo_filename: string; fullPath: string }>()
     const h = hash.toLowerCase()
 
     for (const season of serieData.seasons ?? []) {
@@ -124,17 +118,21 @@ function buildFileMap(
                 : null
 
             if (!nfoSupport && !fmtName) {
-                warn(`formatted_name manquant pour épisode ${ep.id} (S${season.season_number}E${ep.episode_number}) — fallback original_filename`)
+                warn(`formatted_name manquant pour épisode ${ep.id} (S${season.season_number}E${ep.episode_number}) — fallback nfo_filename`)
             }
 
-            const destName = nfoSupport
-                ? (ep.original_filename ?? filename)
-                : (fmtName ?? ep.original_filename ?? filename)
+            // FIX : priorité à nfo_filename, fallback sur formatted_name puis filename brut
+            // On remplace l'extension du nfo_filename par celle du fichier source (.nfo → .mkv)
+            const srcExt = path.extname(filename)
+            const resolvedName = nfoSupport
+                ? (ep.nfo_filename ?? ep.original_filename ?? filename)
+                : (fmtName ?? ep.nfo_filename ?? ep.original_filename ?? filename)
+            const destName = swapExtension(resolvedName, srcExt)
 
             map.set(filename, {
-                season_number    : season.season_number,
-                original_filename: destName,
-                fullPath         : matchedPath,
+                season_number: season.season_number,
+                nfo_filename : destName,
+                fullPath     : matchedPath,
             })
         }
     }
@@ -241,6 +239,15 @@ async function downloadGitlabFolder(serieTitle: string, destRoot: string): Promi
 }
 
 // ─── Filesystem ops ───────────────────────────────────────────
+
+// FIX : remplace l'extension d'un nom de fichier par celle du fichier source
+// ex: "[Shalouf] Dandadan 01.nfo" + ".mkv" → "[Shalouf] Dandadan 01.mkv"
+function swapExtension(filename: string, ext: string): string {
+    const currentExt = path.extname(filename)
+    if (!currentExt || currentExt === ext) return filename
+    return filename.slice(0, -currentExt.length) + ext
+}
+
 function seasonFolder(n: number): string {
     return n === 0 ? 'Specials' : `Saison ${n}`
 }
@@ -296,9 +303,15 @@ async function organizeTorrent(hash: string, name: string, savePath: string, ser
         const fmtName  = ep.formatted_name?.trim()
             ? ep.formatted_name.replace(/[<>:"/\\|?*]/g, '') + '.mkv'
             : null
-        const destName = nfoSupport
-            ? (ep.original_filename ?? filename)
-            : (fmtName ?? ep.original_filename ?? filename)
+
+        // FIX : priorité à nfo_filename pour épisode unique aussi
+        // On swap l'extension (.nfo → extension du fichier source)
+        const srcExt = path.extname(filename)
+        const resolvedName = nfoSupport
+            ? (ep.nfo_filename ?? ep.original_filename ?? filename)
+            : (fmtName ?? ep.nfo_filename ?? ep.original_filename ?? filename)
+        const destName = swapExtension(resolvedName, srcExt)
+
         const destDir  = path.join(mediaPath, serieTitle, seasonFolder(season.season_number ?? 1))
         const dest     = path.join(destDir, destName)
 
@@ -347,7 +360,8 @@ async function organizeTorrent(hash: string, name: string, savePath: string, ser
 
     result.total = fileMap.size
 
-    for (const [filename, { season_number, original_filename, fullPath }] of fileMap) {
+    // FIX : destructure nfo_filename au lieu de original_filename
+    for (const [filename, { season_number, nfo_filename, fullPath }] of fileMap) {
         if (isOrganized(hash, filename)) { result.skipped++; continue }
 
         const candidates = [
@@ -366,7 +380,7 @@ async function organizeTorrent(hash: string, name: string, savePath: string, ser
         }
 
         const destDir = path.join(mediaPath, serieTitle, seasonFolder(season_number))
-        const dest    = path.join(destDir, original_filename)
+        const dest    = path.join(destDir, nfo_filename)
 
         if (fs.existsSync(dest)) { markOrganized(hash, filename); result.skipped++; continue }
 
@@ -380,7 +394,7 @@ async function organizeTorrent(hash: string, name: string, savePath: string, ser
             }
             markOrganized(hash, filename)
             result.done++
-            debug(`${original_filename} → Saison ${season_number}`)
+            debug(`${nfo_filename} → Saison ${season_number}`)
         } catch (err) {
             const msg = err instanceof Error ? err.message : 'Erreur inconnue'
             error(`Échec import "${filename}" : ${msg}`)

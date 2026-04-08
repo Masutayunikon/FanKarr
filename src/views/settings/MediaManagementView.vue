@@ -15,10 +15,13 @@
           <span v-if="isDocker" class="text-[10px] text-accent border border-accent/40 px-1.5 py-0.5 rounded">Docker</span>
         </div>
         <button @click="openPicker('completePath')" class="settings-input text-left font-mono truncate w-full"
-                :class="form.completePath ? 'text-primary' : 'text-muted'">
+                :class="isRootPath(form.completePath) ? 'text-yellow-500 border-yellow-500/40' : form.completePath ? 'text-primary' : 'text-muted'">
           {{ form.completePath || '/' }}
         </button>
-        <p class="text-xs text-muted mt-1.5">Dossier où sont déposés les fichiers téléchargés</p>
+        <p v-if="isRootPath(form.completePath)" class="text-xs text-yellow-500 mt-1.5 flex items-center gap-1">
+          <span>⚠</span> Chemin non configuré — cliquez pour sélectionner un dossier
+        </p>
+        <p v-else class="text-xs text-muted mt-1.5">Dossier où sont déposés les fichiers téléchargés</p>
       </div>
 
       <div>
@@ -27,12 +30,27 @@
           <span v-if="isDocker" class="text-[10px] text-accent border border-accent/40 px-1.5 py-0.5 rounded">Docker</span>
         </div>
         <button @click="openPicker('mediaPath')" class="settings-input text-left font-mono truncate w-full"
-                :class="form.mediaPath ? 'text-primary' : 'text-muted'">
+                :class="isRootPath(form.mediaPath) ? 'text-yellow-500 border-yellow-500/40' : form.mediaPath ? 'text-primary' : 'text-muted'">
           {{ form.mediaPath || '/' }}
         </button>
-        <p class="text-xs text-muted mt-1.5">Dossier racine de votre médiathèque (Jellyfin, Kodi, Plex…)</p>
+        <p v-if="isRootPath(form.mediaPath)" class="text-xs text-yellow-500 mt-1.5 flex items-center gap-1">
+          <span>⚠</span> Chemin non configuré — cliquez pour sélectionner un dossier
+        </p>
+        <p v-else class="text-xs text-muted mt-1.5">Dossier racine de votre médiathèque (Jellyfin, Kodi, Plex…)</p>
       </div>
 
+    </div>
+
+    <!-- Alerte globale si un des deux paths est sur / -->
+    <div v-if="hasUnconfiguredPaths" class="flex items-start gap-3 px-4 py-3 rounded-lg border border-yellow-500/40 bg-yellow-500/5">
+      <span class="text-yellow-500 text-sm mt-0.5">⚠</span>
+      <div class="flex flex-col gap-0.5">
+        <p class="text-sm text-yellow-500 font-medium">Chemins non configurés</p>
+        <p class="text-xs text-muted">
+          L'import automatique est désactivé tant que les dossiers ne sont pas configurés.
+          Configurez-les ci-dessus avant de sauvegarder.
+        </p>
+      </div>
     </div>
 
     <!-- Mode import -->
@@ -109,7 +127,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useToast } from '@/composables/useToast'
 import FolderPicker from '@/components/FolderPicker.vue'
 import SettingsToggle from '@/components/settings/SettingsToggle.vue'
@@ -135,6 +153,15 @@ const picker = ref<{ open: boolean; field: 'completePath' | 'mediaPath'; current
   currentPath: '/',
 })
 
+// FIX : détection path non configuré (vide ou racine /)
+function isRootPath(p: string): boolean {
+  return !p || p === '/'
+}
+
+const hasUnconfiguredPaths = computed(() =>
+    isRootPath(form.value.completePath) || isRootPath(form.value.mediaPath)
+)
+
 function openPicker(field: 'completePath' | 'mediaPath') {
   picker.value = { open: true, field, currentPath: form.value[field] || picker.value.currentPath || '/' }
 }
@@ -153,7 +180,6 @@ onMounted(async () => {
   if (settingsRes.ok) Object.assign(form.value, await settingsRes.json())
   if (systemRes.ok)   isDocker.value = (await systemRes.json()).isDocker
   if (infoRes.ok) picker.value.currentPath = (await infoRes.json()).defaultPath ?? '/'
-
 })
 
 async function save() {
