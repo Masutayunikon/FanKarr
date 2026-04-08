@@ -328,7 +328,11 @@ async function organizeTorrent(hash: string, name: string, savePath: string, ser
         ]
 
         let src: string | null = null
-        for (const c of candidates) { if (fs.existsSync(c)) { src = c; break } }
+
+        for (const c of candidates) {
+            debug(`Candidate : ${c} → ${fs.existsSync(c)}`)
+            if (fs.existsSync(c)) { src = c; break }
+        }
 
         if (!src) {
             error(`Fichier source introuvable : ${filename}`)
