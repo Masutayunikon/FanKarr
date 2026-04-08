@@ -103,6 +103,30 @@ export function addClient(name: string, type: string, config: Record<string, str
     return client
 }
 
+export function updateClient(uuid: string, name: string, type: string, config: Record<string, string | number>): SavedClient | null {
+    const clients = loadClients()
+    const index = clients.findIndex(c => c.uuid === uuid)
+    if (index === -1) return null
+
+    const oldClient = clients[index]
+    const definition = getDriver(type)?.definition
+
+    // Conserver les mots de passe si "••••••••" est envoyé
+    if (definition) {
+        for (const field of definition.fields) {
+            if (field.type === 'password' && config[field.key] === '••••••••') {
+                config[field.key] = oldClient.config[field.key]
+            }
+        }
+    }
+
+    const client: SavedClient = { uuid, name, type, config }
+    clients[index] = client
+    saveClients(clients)
+    logger.info('torrent-clients', `Client mis à jour : "${name}" (${type})`)
+    return client
+}
+
 export function removeClient(uuid: string): boolean {
     const clients  = loadClients()
     const target   = clients.find(c => c.uuid === uuid)
