@@ -1,5 +1,22 @@
 # Changelog
 
+## [3.4.0](https://github.com/Masutayunikon/FanKarr/compare/v3.3.3...v3.4.0) (2026-04-08)
+
+
+### Features
+
+* ajout d'un retour visuel si on a un path par defaut sur / ([4a5312d](https://github.com/Masutayunikon/FanKarr/commit/4a5312d4ece9a2f1ff484ab9e1cbbb7cf291c5a5))
+* Ajout du support pour l'édition/mise à jour des clients torrent ([dda8a03](https://github.com/Masutayunikon/FanKarr/commit/dda8a03403b46027a23b4a2812ca3797a2628673))
+* Ajout du support pour l'édition/mise à jour des clients torrent ([a3e1c34](https://github.com/Masutayunikon/FanKarr/commit/a3e1c34e7547bab75c45ddd3eace0d211409ccd5))
+
+
+### Bug Fixes
+
+* le driver de Transmission n'est plus basé sur android ([4a5312d](https://github.com/Masutayunikon/FanKarr/commit/4a5312d4ece9a2f1ff484ab9e1cbbb7cf291c5a5))
+* les torrent inconnue en états seront mis dans la catégorie terminée ([4a5312d](https://github.com/Masutayunikon/FanKarr/commit/4a5312d4ece9a2f1ff484ab9e1cbbb7cf291c5a5))
+* typo ([18ec548](https://github.com/Masutayunikon/FanKarr/commit/18ec548d76c929afac11cd16d88e734480ee2755))
+* utilisation de nfo_filename au lieu de original_filename ([4a5312d](https://github.com/Masutayunikon/FanKarr/commit/4a5312d4ece9a2f1ff484ab9e1cbbb7cf291c5a5))
+
 ## [3.3.3](https://github.com/Masutayunikon/FanKarr/compare/v3.3.2...v3.3.3) (2026-04-07)
 
 
