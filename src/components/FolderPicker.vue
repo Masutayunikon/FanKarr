@@ -68,7 +68,8 @@
         <!-- Footer -->
         <div class="flex items-center justify-between px-5 py-4 border-t border-border shrink-0">
           <span class="text-xs text-muted font-mono truncate max-w-xs">{{ current }}</span>
-          <button @click="$emit('select', current.replace(/\\/+$/, '') || '/')" class="btn-primary">
+          <!-- FIX : regex sortie dans selectCurrent() pour éviter l'erreur de parsing Vue -->
+          <button @click="selectCurrent()" class="btn-primary">
             Choisir
           </button>
         </div>
@@ -90,6 +91,11 @@ const dirs      = ref<string[]>([])
 const parent    = ref<string | null>(null)
 const loading   = ref(false)
 const error     = ref('')
+
+// FIX : la regex /\/+$/ dans un @click inline fait planter le parser Vue
+function selectCurrent() {
+  emit('select', current.value.replace(/\/+$/, '') || '/')
+}
 
 function joinPath(base: string, name: string): string {
   if (base === '/') return `/${name}`
