@@ -1,5 +1,38 @@
 # Changelog
 
+## [3.5.0](https://github.com/Masutayunikon/FanKarr/compare/v3.4.0...v3.5.0) (2026-04-09)
+
+
+### Features
+
+* add uttorent driver ([712db87](https://github.com/Masutayunikon/FanKarr/commit/712db87a77be4dec157c3addb5bc12b1ac2bc124))
+* ajout d'information dans le fichier d'organisation pour l'organisation manuel plus tard ([7376306](https://github.com/Masutayunikon/FanKarr/commit/73763066b900a246910481d6ac06a4991959396d))
+* ajout d'un bouton refresh ([48f86ea](https://github.com/Masutayunikon/FanKarr/commit/48f86ea9cc36ded75f02fa3879a7d3bd2640fb70))
+* ajout de synology downloader comme client ([eefa216](https://github.com/Masutayunikon/FanKarr/commit/eefa216da5ed6428b982ded31ab696623e9e5806))
+* Ajout des mapping sur les clients ([eefa216](https://github.com/Masutayunikon/FanKarr/commit/eefa216da5ed6428b982ded31ab696623e9e5806))
+* ajout des parametres dossier de téléchargements pour les clients torrent ([eefa216](https://github.com/Masutayunikon/FanKarr/commit/eefa216da5ed6428b982ded31ab696623e9e5806))
+* ajout du driver rtorrent ([7376306](https://github.com/Masutayunikon/FanKarr/commit/73763066b900a246910481d6ac06a4991959396d))
+* auto update des fichiers nfo ([eefa216](https://github.com/Masutayunikon/FanKarr/commit/eefa216da5ed6428b982ded31ab696623e9e5806))
+* manual import ([b65e3e7](https://github.com/Masutayunikon/FanKarr/commit/b65e3e7cd8563466725e7eaf2f8aad7afd927296))
+
+
+### Bug Fixes
+
+* add log for candidate path ([9c6465b](https://github.com/Masutayunikon/FanKarr/commit/9c6465bc45f9e08e67c53f4e0c83b6a625ea25f1))
+* ajout d'une verif lors de l'écriture de la config sur les items dans body ([7376306](https://github.com/Masutayunikon/FanKarr/commit/73763066b900a246910481d6ac06a4991959396d))
+* augmentation du header size 8kb -&gt; 32kb ([eefa216](https://github.com/Masutayunikon/FanKarr/commit/eefa216da5ed6428b982ded31ab696623e9e5806))
+* empeche un login failed de se repeter et de se faire bloquer par les clients ([7376306](https://github.com/Masutayunikon/FanKarr/commit/73763066b900a246910481d6ac06a4991959396d))
+* import manuelle desactivé pour le moment ([fc7fd3a](https://github.com/Masutayunikon/FanKarr/commit/fc7fd3a0ecfba3a82f851fdcc7a278fdeb43febe))
+* l'organiseur prend les fichiers renommer maintenant ([7376306](https://github.com/Masutayunikon/FanKarr/commit/73763066b900a246910481d6ac06a4991959396d))
+* ne sauvegarde plus le mots de passe "fake" quand on edit un client ([7376306](https://github.com/Masutayunikon/FanKarr/commit/73763066b900a246910481d6ac06a4991959396d))
+* organiser take correct name ([712db87](https://github.com/Masutayunikon/FanKarr/commit/712db87a77be4dec157c3addb5bc12b1ac2bc124))
+* polling des torrents à 60s ([48f86ea](https://github.com/Masutayunikon/FanKarr/commit/48f86ea9cc36ded75f02fa3879a7d3bd2640fb70))
+* remove log for mapping ([7376306](https://github.com/Masutayunikon/FanKarr/commit/73763066b900a246910481d6ac06a4991959396d))
+* remove log for mapping ([4d963e5](https://github.com/Masutayunikon/FanKarr/commit/4d963e5bf3ab00e798089e93cdc846fbd2c31de6))
+* unlink before move ([7376306](https://github.com/Masutayunikon/FanKarr/commit/73763066b900a246910481d6ac06a4991959396d))
+* unlink before move ([4d963e5](https://github.com/Masutayunikon/FanKarr/commit/4d963e5bf3ab00e798089e93cdc846fbd2c31de6))
+* utorrent path for import ([eba2552](https://github.com/Masutayunikon/FanKarr/commit/eba2552e1dba67eec615c2a17e0ca1b896fc1a3b))
+
 ## [3.4.0](https://github.com/Masutayunikon/FanKarr/compare/v3.3.3...v3.4.0) (2026-04-08)
 
 
