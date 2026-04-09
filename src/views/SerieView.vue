@@ -62,6 +62,24 @@
               {{ data.serie.plot }}
             </p>
 
+            <button
+                @click="manualImportOpen = true"
+                class="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-lg border border-border text-muted hover:text-primary hover:border-secondary transition"
+            >
+              Import manuel
+            </button>
+
+            <!-- Modal -->
+            <ManualImportModal
+                v-if="manualImportOpen && data"
+                :serie-id="Number(route.params.id)"
+                :serie-name="data.serie.title"
+                :seasons="data.seasons"
+                :organized="organizedByEpisode"
+                @close="manualImportOpen = false"
+                @imported="load(); manualImportOpen = false"
+            />
+
             <!-- Boutons intégrale -->
             <div class="flex flex-wrap gap-2 mt-1">
               <button
@@ -243,6 +261,7 @@ import { ArrowLeft, Tv, ChevronUp, Download, Loader, Check, X } from 'lucide-vue
 import { useSeriesStore } from '@/stores/series'
 import { useToast } from '@/composables/useToast'
 import type { Season } from '@/stores/series'
+import ManualImportModal from "@/components/ManualImportModal.vue";
 
 // ── Icône d'état du bouton ────────────────────────────────────
 // states: 'idle' | 'loading' | 'done' | 'unavailable'
@@ -297,6 +316,17 @@ let pollTimer: ReturnType<typeof setInterval> | null = null
 
 const data = computed(() => store.currentSerie)
 
+
+const manualImportOpen   = ref(false)
+const organizedByEpisode = ref<Record<string, any>>({})
+
+// Dans onMounted, après load() :
+async function fetchOrganized() {
+  try {
+    const res = await fetch('/api/organized', { credentials: 'include' })
+    if (res.ok) organizedByEpisode.value = await res.json()
+  } catch {}
+}
 // ── Polling downloads ─────────────────────────────────────────
 async function fetchActiveDownloads() {
   try {
@@ -408,6 +438,7 @@ function formatDuration(seconds: number): string {
 
 onMounted(() => {
   load()
+  fetchOrganized()
   fetchActiveDownloads()
   pollTimer = setInterval(fetchActiveDownloads, 5000)
 })

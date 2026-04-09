@@ -13,9 +13,8 @@ import {
 import qbittorrentDriver  from './torrent-clients/qbittorrent.js'
 import transmissionDriver from './torrent-clients/transmission.js'
 import synologyDsDriver   from './torrent-clients/synology-ds.js'
-import rtorrentDriver from './torrent-clients/rtorrent.js'
-import utorrent from "./torrent-clients/utorrent.js";
-
+import utorrentDriver     from './torrent-clients/utorrent.js'
+import rtorrentDriver     from './torrent-clients/rtorrent.js'
 import { organizeTorrent, autoOrganizeAll, scanMediaPath, workerRunning } from './organize.js'
 import { logger, readLogs, clearLogs, logsFileSize } from './logger.js'
 import { DATA_DIR, BASE_DIR } from './config.js'
@@ -24,8 +23,8 @@ import { systemInfo } from './system.js'
 registerDriver(qbittorrentDriver)
 registerDriver(transmissionDriver)
 registerDriver(synologyDsDriver)
+registerDriver(utorrentDriver)
 registerDriver(rtorrentDriver)
-registerDriver(utorrent)
 
 const app  = express()
 const PORT = Number(process.env.PORT) || 9898
@@ -47,7 +46,6 @@ app.post('/api/auth/setup',  authSetup)
 app.post('/api/auth/login',  authLogin)
 app.post('/api/auth/logout', authLogout)
 
-// system info
 app.get('/api/system/info', systemInfo)
 
 // ── Settings ───────────────────────────────────────────────────
@@ -91,7 +89,6 @@ app.put('/api/torrent-clients/:uuid', requireAuth, (req, res) => {
     const { name, type, config } = req.body
     if (!name || !type || !config) { res.status(400).json({ error: 'name, type et config requis' }); return }
     if (!getDriver(type))          { res.status(400).json({ error: `Type inconnu : ${type}` }); return }
-    // Restaurer les mots de passe masqués avec les valeurs actuelles
     const oldClient = getClient(String(req.params.uuid))
     if (oldClient) {
         const driver = getDriver(type)
@@ -112,7 +109,6 @@ app.post('/api/torrent-clients/test-config', requireAuth, async (req, res) => {
     if (!type || !config) { res.status(400).json({ error: 'type et config requis' }); return }
     const driver = getDriver(type)
     if (!driver) { res.status(400).json({ error: `Type inconnu : ${type}` }); return }
-
     if (uuid) {
         const oldClient = getClient(uuid)
         if (oldClient) {
@@ -123,7 +119,6 @@ app.post('/api/torrent-clients/test-config', requireAuth, async (req, res) => {
             }
         }
     }
-
     res.json(await driver.test(config))
 })
 app.post('/api/torrent-clients/:uuid/test', requireAuth, async (req, res) => {
@@ -265,7 +260,6 @@ function computeSerieDownloadState(serieData: any | null, organized: Record<stri
         const orgFiles = organized[hash] ?? {}
         if (Object.keys(orgFiles).length === 0) continue
         for (const ep of buildResolvedEpisodes(serieData, hash, t.season_number)) {
-            // Nouveau format : clé = episode_id ; ancien format : clé = filename
             const isOrganized = orgFiles[String(ep.episode_id)] !== undefined || orgFiles[ep.filename] !== undefined
             if (isOrganized) organizedEpisodeIds.add(ep.episode_id)
         }
@@ -280,7 +274,7 @@ app.get('/api/series', requireAuth, async (_req, res) => {
     try {
         const [apiData, availableIds] = await Promise.all([fankaiGet('/series'), readAvailable()])
         const availableSet = new Set<number>(availableIds)
-        let organized: Record<string, Record<string, string>> = {}
+        let organized: Record<string, Record<string, any>> = {}
         try { const p = path.join(DATA_DIR, 'organized.json'); if (fs.existsSync(p)) organized = JSON.parse(fs.readFileSync(p, 'utf-8')) } catch {}
         const activeTorrents = new Set<string>()
         try { const { category } = readSettings(); const active = await dispatchList(category ?? 'fankai'); for (const t of active) { if (t.hash && t.state === 'downloading') activeTorrents.add(t.hash.toLowerCase()) } } catch {}
@@ -315,7 +309,6 @@ app.get('/api/series/:id', requireAuth, async (req, res) => {
         const episodeTorrentMap    : Record<number, any> = {}
         const seasonTorrentMapBySn : Record<number, any> = {}
         const integraleTorrents    : any[] = []
-        const packEpisodesTorrents : any[] = []
         const organizedEpisodeIds  = new Set<number>()
         if (serieData) {
             for (const t of (serieData.torrents ?? [])) {
@@ -346,7 +339,6 @@ app.get('/api/series/:id', requireAuth, async (req, res) => {
                         const orgFiles = organized[t.infohash?.toLowerCase()] ?? {}
                         const isOrg = orgFiles[String(ep.id)] !== undefined
                         if (!isOrg) {
-                            // fallback ancien format
                             const match = (ep.paths ?? []).find((p: any) => typeof p === 'object' && p.infohash?.toLowerCase() === t.infohash?.toLowerCase())
                             const filename = match ? match.path.split('/').pop() : null
                             if (filename && orgFiles[filename]) organizedEpisodeIds.add(ep.id)
@@ -481,6 +473,7 @@ app.post('/api/logs/clear', requireAuth, (_req, res) => {
 app.get('/api/system', requireAuth, (_req, res) => {
     res.json({ isDocker: fs.existsSync('/.dockerenv') })
 })
+
 app.get('/api/browse', requireAuth, (req, res) => {
     const dirPath = (req.query.path as string) || '/'
     try {
@@ -492,12 +485,45 @@ app.get('/api/browse', requireAuth, (req, res) => {
         res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur lecture dossier' })
     }
 })
+
+app.get('/api/browse-files', requireAuth, (req, res) => {
+    const dirPath = (req.query.path as string) || '/'
+    const VIDEO_EXTS = new Set(['.mkv', '.mp4', '.avi', '.m4v', '.mov', '.wmv'])
+    try {
+        const files: { name: string; path: string; size: number }[] = []
+        function walk(dir: string) {
+            let entries: fs.Dirent[]
+            try { entries = fs.readdirSync(dir, { withFileTypes: true }) }
+            catch { return }
+            for (const entry of entries) {
+                if (entry.name.startsWith('.')) continue
+                const full = path.join(dir, entry.name)
+                if (entry.isDirectory()) {
+                    walk(full)
+                } else if (entry.isFile() && VIDEO_EXTS.has(path.extname(entry.name).toLowerCase())) {
+                    try {
+                        const stat = fs.statSync(full)
+                        files.push({ name: entry.name, path: full, size: stat.size })
+                    } catch {}
+                }
+            }
+        }
+        walk(dirPath)
+        files.sort((a, b) => a.name.localeCompare(b.name, 'fr'))
+        res.json({ path: dirPath, files })
+    } catch (err) {
+        logger.warn('api', `browse-files "${dirPath}" : ${err instanceof Error ? err.message : err}`)
+        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur lecture dossier' })
+    }
+})
+
 app.get('/api/torrents/status', requireAuth, async (_req, res) => {
     try {
         const available = await readAvailable()
         res.json({ exists: available.length > 0, count: available.length, empty: available.length === 0 })
     } catch { res.json({ exists: false, count: 0, empty: true }) }
 })
+
 app.post('/api/update', requireAuth, async (_req, res) => {
     try {
         cacheClear()
@@ -511,6 +537,7 @@ app.post('/api/update', requireAuth, async (_req, res) => {
         res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
     }
 })
+
 app.post('/api/scan', requireAuth, async (_req, res) => {
     try {
         const { mediaPath } = readSettings()
@@ -524,17 +551,111 @@ app.post('/api/scan', requireAuth, async (_req, res) => {
     }
 })
 
-// ── Debug (dev mode uniquement) ───────────────────────────────
+// ── Import manuel ──────────────────────────────────────────────
+app.post('/api/manual-import', requireAuth, async (req, res) => {
+    const { serie_id, items } = req.body
+    if (!serie_id || !Array.isArray(items) || items.length === 0) {
+        res.status(400).json({ error: 'serie_id et items requis' }); return
+    }
+    const { mediaPath, organizeMode, nfoSupport } = readSettings()
+    const ORGANIZED_PATH = path.join(DATA_DIR, 'organized.json')
+    let organized: Record<string, Record<string, any>> = {}
+    try { if (fs.existsSync(ORGANIZED_PATH)) organized = JSON.parse(fs.readFileSync(ORGANIZED_PATH, 'utf-8')) } catch {}
+    const sd = await readSerieData(Number(serie_id))
+    if (!sd) { res.status(404).json({ error: 'Série introuvable dans le catalogue' }); return }
+    const rawTitle   = sd.title ?? sd.show_title ?? ''
+    const serieTitle = rawTitle.replace(/:/g, ' -').replace(/[<>"/\\|?*]/g, '').replace(/\s+/g, ' ').trim()
+    const episodeIndex = new Map<number, { ep: any; season: any }>()
+    for (const season of sd.seasons ?? []) {
+        for (const ep of season.episodes ?? []) {
+            episodeIndex.set(ep.id, { ep, season })
+        }
+    }
+    const done: number[] = []
+    const errors: { file: string; error: string }[] = []
+    for (const item of items) {
+        const { file_path, episode_id, hash } = item
+        if (!file_path || !episode_id) { errors.push({ file: file_path ?? '?', error: 'Paramètres manquants' }); continue }
+        const found = episodeIndex.get(Number(episode_id))
+        if (!found) { errors.push({ file: file_path, error: `Épisode ${episode_id} introuvable` }); continue }
+        const { ep, season } = found
+        const srcFilename   = path.basename(file_path)
+        const srcExt        = path.extname(srcFilename)
+        const fmtName       = ep.formatted_name?.trim() ? ep.formatted_name.replace(/[<>:"/\\|?*]/g, '') + '.mkv' : null
+        const resolvedName  = nfoSupport
+            ? (ep.nfo_filename ?? ep.original_filename ?? srcFilename)
+            : (fmtName ?? ep.nfo_filename ?? ep.original_filename ?? srcFilename)
+        const destFilename  = resolvedName.endsWith('.nfo') ? resolvedName.slice(0, -4) + srcExt : resolvedName
+        const seasonFolder  = season.season_number === 0 ? 'Specials' : `Saison ${season.season_number}`
+        const destDir       = path.join(mediaPath, serieTitle, seasonFolder)
+        const destPath      = path.join(destDir, destFilename)
+        try {
+            if (!fs.existsSync(file_path)) throw new Error('Fichier source introuvable')
+            fs.mkdirSync(destDir, { recursive: true })
+            if (!fs.existsSync(destPath)) {
+                if (organizeMode === 'hardlink') {
+                    try { fs.linkSync(file_path, destPath) }
+                    catch { await fs.promises.copyFile(file_path, destPath) }
+                } else {
+                    await fs.promises.copyFile(file_path, destPath)
+                    await fs.promises.unlink(file_path)
+                }
+            }
+            const torrentHash = String(hash || '').toLowerCase() || 'manual'
+            if (!organized[torrentHash]) organized[torrentHash] = {}
+            organized[torrentHash][String(episode_id)] = {
+                at: new Date().toISOString(), season: season.season_number,
+                episode: ep.episode_number, episode_id: ep.id,
+                src_filename: srcFilename, dest_filename: destFilename, dest_path: destPath,
+            }
+            done.push(episode_id)
+            logger.info('api', `Import manuel : "${srcFilename}" → "${destPath}"`)
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : 'Erreur inconnue'
+            errors.push({ file: srcFilename, error: msg })
+            logger.error('api', `Import manuel échoué pour "${srcFilename}" : ${msg}`)
+        }
+    }
+    fs.writeFileSync(ORGANIZED_PATH, JSON.stringify(organized, null, 2), 'utf-8')
+    res.json({ ok: true, done: done.length, errors })
+})
+
+app.get('/api/organized/:serieId', requireAuth, async (req, res) => {
+    const serieId = Number(req.params.serieId)
+    try {
+        const sd = await readSerieData(serieId)
+        if (!sd) { res.status(404).json({ error: 'Série introuvable' }); return }
+        let organized: Record<string, Record<string, any>> = {}
+        try { const p = path.join(DATA_DIR, 'organized.json'); if (fs.existsSync(p)) organized = JSON.parse(fs.readFileSync(p, 'utf-8')) } catch {}
+        const result: Record<string, any> = {}
+        for (const season of sd.seasons ?? []) {
+            for (const ep of season.episodes ?? []) {
+                for (const p of ep.paths ?? []) {
+                    if (typeof p !== 'object' || !p.infohash) continue
+                    const hash    = p.infohash.toLowerCase()
+                    const entry   = (organized[hash] ?? {})[String(ep.id)]
+                    if (entry) { result[String(ep.id)] = entry; break }
+                }
+                if (!result[String(ep.id)] && organized['manual']?.[String(ep.id)]) {
+                    result[String(ep.id)] = organized['manual'][String(ep.id)]
+                }
+            }
+        }
+        res.json(result)
+    } catch (err) {
+        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
+    }
+})
+
+// ── Debug ──────────────────────────────────────────────────────
 app.get('/api/debug/stats', requireAuth, (req, res) => {
     const { devMode } = readSettings()
     if (!devMode) { res.status(403).json({ error: 'Dev mode désactivé' }); return }
-
     const mem     = process.memoryUsage()
     const uptimeS = Math.floor(process.uptime())
     const h       = Math.floor(uptimeS / 3600)
     const m       = Math.floor((uptimeS % 3600) / 60)
     const s       = uptimeS % 60
-
     let organizedCount = 0
     try {
         const orgPath = path.join(DATA_DIR, 'organized.json')
@@ -543,48 +664,27 @@ app.get('/api/debug/stats', requireAuth, (req, res) => {
             organizedCount = Object.values(org).reduce((acc: number, episodes: any) => acc + Object.keys(episodes).length, 0)
         }
     } catch {}
-
     res.json({
-        memory: {
-            heapUsed : Math.round(mem.heapUsed  / 1024 / 1024),
-            heapTotal: Math.round(mem.heapTotal / 1024 / 1024),
-            rss      : Math.round(mem.rss       / 1024 / 1024),
-        },
-        cache: {
-            entries   : _cache.size,
-            ttlHours  : 6,
-        },
-        uptime: `${h}h ${m}m ${s}s`,
+        memory   : { heapUsed: Math.round(mem.heapUsed / 1024 / 1024), heapTotal: Math.round(mem.heapTotal / 1024 / 1024), rss: Math.round(mem.rss / 1024 / 1024) },
+        cache    : { entries: _cache.size, ttlHours: 6 },
+        uptime   : `${h}h ${m}m ${s}s`,
         uptimeSeconds: uptimeS,
-        worker: {
-            running: workerRunning,
-        },
-        organized: {
-            trackedFiles: organizedCount,
-        },
-        requests: {
-            notifs: recentOrganized.length,
-        },
+        worker   : { running: workerRunning },
+        organized: { trackedFiles: organizedCount },
+        requests : { notifs: recentOrganized.length },
     })
 })
 
 // ── NFO Updates ────────────────────────────────────────────────
-
 interface NfoUpdateNotif {
-    serieTitle : string
-    commitSha  : string
-    commitMsg  : string
-    updatedAt  : string
-    status     : 'updated' | 'error'
-    error?     : string
+    serieTitle: string; commitSha: string; commitMsg: string
+    updatedAt: string; status: 'updated' | 'error'; error?: string
 }
-
 const recentNfoUpdates: NfoUpdateNotif[] = []
-const MAX_NFO_NOTIFS = 30
+const MAX_NFO_NOTIFS   = 30
 const NFO_COMMITS_PATH = path.join(DATA_DIR, 'nfo_commits.json')
-
-const GITLAB_API_NFO  = 'https://gitlab.com/api/v4/projects/ElPouki%2Ffankai_pack/repository'
-const GITLAB_RAW_NFO  = 'https://gitlab.com/ElPouki/fankai_pack/-/raw/main/pack'
+const GITLAB_API_NFO   = 'https://gitlab.com/api/v4/projects/ElPouki%2Ffankai_pack/repository'
+const GITLAB_RAW_NFO   = 'https://gitlab.com/ElPouki/fankai_pack/-/raw/main/pack'
 
 const SERIE_TITLE_GITLAB_MAP: Record<string, string> = {
     'Enfer Et Paradis Henshū'          : 'Enfer et Paradis Henshū',
@@ -598,17 +698,12 @@ const SERIE_TITLE_GITLAB_MAP: Record<string, string> = {
     'Tower Of God Henshū'              : 'Tower of God Henshū',
 }
 
-function getGitlabTitle(title: string): string {
-    return SERIE_TITLE_GITLAB_MAP[title] ?? title
-}
+function getGitlabTitle(title: string): string { return SERIE_TITLE_GITLAB_MAP[title] ?? title }
 
 function loadNfoCommits(): Record<string, string> {
-    try {
-        if (!fs.existsSync(NFO_COMMITS_PATH)) return {}
-        return JSON.parse(fs.readFileSync(NFO_COMMITS_PATH, 'utf-8'))
-    } catch { return {} }
+    try { if (!fs.existsSync(NFO_COMMITS_PATH)) return {}; return JSON.parse(fs.readFileSync(NFO_COMMITS_PATH, 'utf-8')) }
+    catch { return {} }
 }
-
 function saveNfoCommits(commits: Record<string, string>) {
     fs.mkdirSync(path.dirname(NFO_COMMITS_PATH), { recursive: true })
     fs.writeFileSync(NFO_COMMITS_PATH, JSON.stringify(commits, null, 2), 'utf-8')
@@ -616,8 +711,7 @@ function saveNfoCommits(commits: Record<string, string>) {
 
 async function getLatestGitlabCommit(gitlabTitle: string): Promise<{ sha: string; message: string } | null> {
     try {
-        const url = `${GITLAB_API_NFO}/commits?path=${encodeURIComponent('pack/' + gitlabTitle)}&per_page=1&ref_name=main`
-        const res = await fetch(url, { headers: { 'User-Agent': 'fankarr' } })
+        const res = await fetch(`${GITLAB_API_NFO}/commits?path=${encodeURIComponent('pack/' + gitlabTitle)}&per_page=1&ref_name=main`, { headers: { 'User-Agent': 'fankarr' } })
         if (!res.ok) return null
         const data: any[] = await res.json()
         if (!data.length) return null
@@ -626,28 +720,18 @@ async function getLatestGitlabCommit(gitlabTitle: string): Promise<{ sha: string
 }
 
 async function downloadNfoFolder(gitlabTitle: string, destRoot: string): Promise<void> {
-    let files: any[] = []
-    let page = 1
+    let files: any[] = [], page = 1
     while (true) {
-        const batch = await fetch(
-            `${GITLAB_API_NFO}/tree?path=${encodeURIComponent('pack/' + gitlabTitle)}&recursive=true&per_page=100&page=${page}&ref=main`,
-            { headers: { 'User-Agent': 'fankarr' } }
-        ).then(r => r.ok ? r.json() : [])
+        const batch = await fetch(`${GITLAB_API_NFO}/tree?path=${encodeURIComponent('pack/' + gitlabTitle)}&recursive=true&per_page=100&page=${page}&ref=main`, { headers: { 'User-Agent': 'fankarr' } }).then(r => r.ok ? r.json() : [])
         if (!Array.isArray(batch) || batch.length === 0) break
-        files.push(...batch)
-        if (batch.length < 100) break
-        page++
+        files.push(...batch); if (batch.length < 100) break; page++
     }
-
-    const blobs = files.filter((f: any) => f.type === 'blob')
     let downloaded = 0, skipped = 0
-
-    for (const entry of blobs) {
+    for (const entry of files.filter((f: any) => f.type === 'blob')) {
         const relativePath = entry.path.replace(`pack/${gitlabTitle}/`, '')
         const destPath     = path.join(destRoot, relativePath)
         try {
-            const rawUrl  = `${GITLAB_RAW_NFO}/${encodeURIComponent(gitlabTitle)}/${relativePath.split('/').map(encodeURIComponent).join('/')}`
-            const res     = await fetch(rawUrl, { headers: { 'User-Agent': 'fankarr' } })
+            const res = await fetch(`${GITLAB_RAW_NFO}/${encodeURIComponent(gitlabTitle)}/${relativePath.split('/').map(encodeURIComponent).join('/')}`, { headers: { 'User-Agent': 'fankarr' } })
             if (!res.ok) { skipped++; continue }
             fs.mkdirSync(path.dirname(destPath), { recursive: true })
             fs.writeFileSync(destPath, Buffer.from(await res.arrayBuffer()))
@@ -660,96 +744,59 @@ async function downloadNfoFolder(gitlabTitle: string, destRoot: string): Promise
 async function checkNfoUpdates() {
     const { mediaPath, nfoSupport } = readSettings()
     if (!nfoSupport) return
-
-    let organized: Record<string, Record<string, string>> = {}
+    let organized: Record<string, Record<string, any>> = {}
     try { const p = path.join(DATA_DIR, 'organized.json'); if (fs.existsSync(p)) organized = JSON.parse(fs.readFileSync(p, 'utf-8')) } catch {}
     if (Object.keys(organized).length === 0) return
-
-    // Récupérer les titres de séries qu'on a déjà importées
     const seriesData  = await loadEnrichedSeriesData()
     const knownHashes = new Set(Object.keys(organized))
     const serieTitles = new Set<string>()
-
     for (const sd of seriesData) {
-        const allTorrents = [
-            ...(sd.torrents ?? []),
-            ...(sd.seasons ?? []).flatMap((s: any) => s.torrents ?? []),
-            ...(sd.seasons ?? []).flatMap((s: any) => (s.episodes ?? []).flatMap((e: any) => e.torrents ?? [])),
-        ]
+        const allTorrents = [...(sd.torrents ?? []), ...(sd.seasons ?? []).flatMap((s: any) => s.torrents ?? []), ...(sd.seasons ?? []).flatMap((s: any) => (s.episodes ?? []).flatMap((e: any) => e.torrents ?? []))]
         if (allTorrents.some((t: any) => knownHashes.has(t.infohash?.toLowerCase()))) {
             const rawTitle = sd.title ?? sd.show_title ?? ''
             if (rawTitle) serieTitles.add(rawTitle.replace(/:/g, ' -').replace(/[<>"/\\|?*]/g, '').replace(/\s+/g, ' ').trim())
         }
     }
-
     if (serieTitles.size === 0) return
-
     const commits = loadNfoCommits()
     let hasChanges = false
-
     for (const serieTitle of serieTitles) {
         const gitlabTitle = getGitlabTitle(serieTitle)
         const latest      = await getLatestGitlabCommit(gitlabTitle)
-        if (!latest) continue
-
-        const known = commits[gitlabTitle]
-        if (known === latest.sha) continue
-
-        // Nouveau commit détecté → re-télécharger
+        if (!latest || commits[gitlabTitle] === latest.sha) continue
         logger.info('nfo-update', `MAJ NFO détectée pour "${gitlabTitle}" (${latest.sha.slice(0, 8)})`)
         try {
-            const destRoot = path.join(mediaPath, serieTitle)
-            await downloadNfoFolder(gitlabTitle, destRoot)
+            await downloadNfoFolder(gitlabTitle, path.join(mediaPath, serieTitle))
             commits[gitlabTitle] = latest.sha
             hasChanges = true
-
-            recentNfoUpdates.unshift({
-                serieTitle,
-                commitSha : latest.sha.slice(0, 8),
-                commitMsg : latest.message,
-                updatedAt : new Date().toISOString(),
-                status    : 'updated',
-            })
-            if (recentNfoUpdates.length > MAX_NFO_NOTIFS) recentNfoUpdates.pop()
+            recentNfoUpdates.unshift({ serieTitle, commitSha: latest.sha.slice(0, 8), commitMsg: latest.message, updatedAt: new Date().toISOString(), status: 'updated' })
         } catch (err) {
             const msg = err instanceof Error ? err.message : 'Erreur inconnue'
             logger.error('nfo-update', `Échec MAJ NFO "${gitlabTitle}" : ${msg}`)
-            recentNfoUpdates.unshift({
-                serieTitle,
-                commitSha : latest.sha.slice(0, 8),
-                commitMsg : latest.message,
-                updatedAt : new Date().toISOString(),
-                status    : 'error',
-                error     : msg,
-            })
-            if (recentNfoUpdates.length > MAX_NFO_NOTIFS) recentNfoUpdates.pop()
+            recentNfoUpdates.unshift({ serieTitle, commitSha: latest.sha.slice(0, 8), commitMsg: latest.message, updatedAt: new Date().toISOString(), status: 'error', error: msg })
         }
+        if (recentNfoUpdates.length > MAX_NFO_NOTIFS) recentNfoUpdates.pop()
     }
-
     if (hasChanges) saveNfoCommits(commits)
 }
 
-app.get('/api/nfo-updates/recent', requireAuth, (_req, res) => {
-    res.json(recentNfoUpdates)
-})
-
+app.get('/api/nfo-updates/recent', requireAuth, (_req, res) => { res.json(recentNfoUpdates) })
 app.post('/api/nfo-updates/check', requireAuth, async (_req, res) => {
     logger.info('nfo-update', 'Vérification manuelle des MAJ NFO lancée')
     checkNfoUpdates().catch(err => logger.error('nfo-update', `Vérif manuelle échouée : ${err instanceof Error ? err.message : err}`))
     res.json({ ok: true, message: 'Vérification lancée en arrière-plan' })
 })
 
+// ── Catch-all SPA ──────────────────────────────────────────────
 if (fs.existsSync(PUBLIC_PATH)) {
     app.get('*path', (_req, res) => { res.sendFile(path.join(PUBLIC_PATH, 'index.html')) })
 }
 
 // ── Démarrage ──────────────────────────────────────────────────
-// FIX : maxHeaderSize à 32KB pour éviter l'erreur 431 (cookies trop volumineux, Firefox)
 const server = http.createServer({ maxHeaderSize: 32768 }, app)
 
 server.listen(PORT, async () => {
     logger.info('api', `Serveur démarré sur le port ${PORT}`)
-
     try {
         const available = await readAvailable()
         logger.info('api', `Cache GitHub initialisé — ${available.length} séries disponibles`)
@@ -760,9 +807,7 @@ server.listen(PORT, async () => {
     const ORGANIZED_PATH = path.join(DATA_DIR, 'organized.json')
     const { mediaPath }  = readSettings()
 
-    // Reset organized.json au nouveau format (clé episode_id au lieu de filename)
-    // Si le fichier existe et contient l'ancien format (valeurs string), on le vide
-    // et on relance le scan pour reconstruire proprement
+    // Migration organized.json : si ancien format (valeurs string) → reset + rescan
     try {
         if (fs.existsSync(ORGANIZED_PATH)) {
             const raw = JSON.parse(fs.readFileSync(ORGANIZED_PATH, 'utf-8'))
@@ -803,11 +848,10 @@ server.listen(PORT, async () => {
         setInterval(autoOrganize, 5 * 60_000)
     }, 10_000)
 
-    // Vérification NFO GitLab toutes les heures
     setTimeout(() => {
         checkNfoUpdates().catch(err => logger.error('nfo-update', `Vérif initiale échouée : ${err instanceof Error ? err.message : err}`))
         setInterval(() => {
             checkNfoUpdates().catch(err => logger.error('nfo-update', `Vérif horaire échouée : ${err instanceof Error ? err.message : err}`))
         }, 60 * 60_000)
-    }, 30_000) // 30s après le démarrage pour ne pas surcharger
+    }, 30_000)
 })
