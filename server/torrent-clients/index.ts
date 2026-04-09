@@ -208,10 +208,6 @@ export async function dispatchList(category?: string): Promise<(TorrentInfo & { 
                     ? remapSavePath(t.save_path, remotePath, localPath)
                     : t.save_path
 
-                if (hasRemap && save_path !== t.save_path) {
-                    logger.debug('torrent-clients', `Remap save_path : "${t.save_path}" → "${save_path}"`)
-                }
-
                 results.push({ ...t, save_path, client_uuid: client.uuid, client_name: client.name })
             }
         } catch (err) {
