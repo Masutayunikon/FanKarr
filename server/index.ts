@@ -14,7 +14,7 @@ import qbittorrentDriver  from './torrent-clients/qbittorrent.js'
 import transmissionDriver from './torrent-clients/transmission.js'
 import synologyDsDriver   from './torrent-clients/synology-ds.js'
 import rtorrentDriver from './torrent-clients/rtorrent.js'
-import utorrent from "./torrent-clients/utorrent";
+import utorrent from "./torrent-clients/utorrent.js";
 
 import { organizeTorrent, autoOrganizeAll, scanMediaPath, workerRunning } from './organize.js'
 import { logger, readLogs, clearLogs, logsFileSize } from './logger.js'
