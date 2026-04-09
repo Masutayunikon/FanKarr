@@ -18,6 +18,20 @@ function warn(msg: string)  { parentPort?.postMessage({ type: 'log', level: 'war
 function error(msg: string) { parentPort?.postMessage({ type: 'log', level: 'error', msg }) }
 function debug(msg: string) { parentPort?.postMessage({ type: 'log', level: 'debug', msg }) }
 
+// ─── Types ────────────────────────────────────────────────────
+export interface OrgEntry {
+    at           : string
+    season       : number
+    episode      : number
+    episode_id   : number
+    src_filename : string
+    dest_filename: string
+    dest_path    : string
+}
+
+// organized.json : Record<hash, Record<episode_id_string, OrgEntry>>
+type Organized = Record<string, Record<string, OrgEntry>>
+
 // ─── Settings ─────────────────────────────────────────────────
 function readSettings(): { mediaPath: string; completePath: string; organizeMode: string; nfoSupport: boolean } {
     try {
@@ -28,22 +42,22 @@ function readSettings(): { mediaPath: string; completePath: string; organizeMode
 }
 
 // ─── Organized log ────────────────────────────────────────────
-function loadOrganized(): Record<string, Record<string, string>> {
+function loadOrganized(): Organized {
     try {
         if (!fs.existsSync(ORGANIZED_PATH)) return {}
         return JSON.parse(fs.readFileSync(ORGANIZED_PATH, 'utf-8'))
     } catch { return {} }
 }
 
-function markOrganized(hash: string, filename: string) {
+function markOrganized(hash: string, episodeId: number, entry: OrgEntry) {
     const data = loadOrganized()
     if (!data[hash]) data[hash] = {}
-    data[hash][filename] = new Date().toISOString()
+    data[hash][String(episodeId)] = entry
     fs.writeFileSync(ORGANIZED_PATH, JSON.stringify(data, null, 2), 'utf-8')
 }
 
-function isOrganized(hash: string, filename: string): boolean {
-    return !!loadOrganized()[hash]?.[filename]
+function isOrganized(hash: string, episodeId: number): boolean {
+    return !!loadOrganized()[hash]?.[String(episodeId)]
 }
 
 // ─── Lookup torrent dans les seriesData ───────────────────────
@@ -90,9 +104,8 @@ function buildFileMap(
     hash         : string,
     nfoSupport   : boolean,
     seasonFilter?: number,
-): Map<string, { season_number: number; nfo_filename: string; fullPath: string }> {
-    // FIX : type de retour utilise nfo_filename au lieu de original_filename
-    const map = new Map<string, { season_number: number; nfo_filename: string; fullPath: string }>()
+): Map<string, { season_number: number; episode_number: number; episode_id: number; nfo_filename: string; fullPath: string }> {
+    const map = new Map<string, { season_number: number; episode_number: number; episode_id: number; nfo_filename: string; fullPath: string }>()
     const h = hash.toLowerCase()
 
     for (const season of serieData.seasons ?? []) {
@@ -121,8 +134,6 @@ function buildFileMap(
                 warn(`formatted_name manquant pour épisode ${ep.id} (S${season.season_number}E${ep.episode_number}) — fallback nfo_filename`)
             }
 
-            // FIX : priorité à nfo_filename, fallback sur formatted_name puis filename brut
-            // On remplace l'extension du nfo_filename par celle du fichier source (.nfo → .mkv)
             const srcExt = path.extname(filename)
             const resolvedName = nfoSupport
                 ? (ep.nfo_filename ?? ep.original_filename ?? filename)
@@ -130,9 +141,11 @@ function buildFileMap(
             const destName = swapExtension(resolvedName, srcExt)
 
             map.set(filename, {
-                season_number: season.season_number,
-                nfo_filename : destName,
-                fullPath     : matchedPath,
+                season_number : season.season_number,
+                episode_number: ep.episode_number,
+                episode_id    : ep.id,
+                nfo_filename  : destName,
+                fullPath      : matchedPath,
             })
         }
     }
@@ -240,8 +253,6 @@ async function downloadGitlabFolder(serieTitle: string, destRoot: string): Promi
 
 // ─── Filesystem ops ───────────────────────────────────────────
 
-// FIX : remplace l'extension d'un nom de fichier par celle du fichier source
-// ex: "[Shalouf] Dandadan 01.nfo" + ".mkv" → "[Shalouf] Dandadan 01.mkv"
 function swapExtension(filename: string, ext: string): string {
     const currentExt = path.extname(filename)
     if (!currentExt || currentExt === ext) return filename
@@ -304,18 +315,16 @@ async function organizeTorrent(hash: string, name: string, savePath: string, ser
             ? ep.formatted_name.replace(/[<>:"/\\|?*]/g, '') + '.mkv'
             : null
 
-        // FIX : priorité à nfo_filename pour épisode unique aussi
-        // On swap l'extension (.nfo → extension du fichier source)
-        const srcExt = path.extname(filename)
+        const srcExt       = path.extname(filename)
         const resolvedName = nfoSupport
             ? (ep.nfo_filename ?? ep.original_filename ?? filename)
             : (fmtName ?? ep.nfo_filename ?? ep.original_filename ?? filename)
         const destName = swapExtension(resolvedName, srcExt)
 
-        const destDir  = path.join(mediaPath, serieTitle, seasonFolder(season.season_number ?? 1))
-        const dest     = path.join(destDir, destName)
+        const destDir = path.join(mediaPath, serieTitle, seasonFolder(season.season_number ?? 1))
+        const dest    = path.join(destDir, destName)
 
-        if (isOrganized(hash, filename)) return { ...result, total: 1, skipped: 1 }
+        if (isOrganized(hash, ep.id)) return { ...result, total: 1, skipped: 1 }
 
         const candidates = filePath ? [
             path.join(savePath, filePath),
@@ -328,11 +337,7 @@ async function organizeTorrent(hash: string, name: string, savePath: string, ser
         ]
 
         let src: string | null = null
-
-        for (const c of candidates) {
-            debug(`Candidate : ${c} → ${fs.existsSync(c)}`)
-            if (fs.existsSync(c)) { src = c; break }
-        }
+        for (const c of candidates) { if (fs.existsSync(c)) { src = c; break } }
 
         if (!src) {
             error(`Fichier source introuvable : ${filename}`)
@@ -345,10 +350,22 @@ async function organizeTorrent(hash: string, name: string, savePath: string, ser
                 if (!tryHardlink(src, dest)) await fsp.copyFile(src, dest)
             } else {
                 await fsp.copyFile(src, dest)
+                markOrganized(hash, ep.id, {
+                    at: new Date().toISOString(), season: season.season_number ?? 1,
+                    episode: ep.episode_number, episode_id: ep.id,
+                    src_filename: filename, dest_filename: destName, dest_path: dest,
+                })
                 await fsp.unlink(src)
+                log(`${destName} → Saison ${season.season_number}`)
+                return { ...result, total: 1, done: 1 }
             }
         }
-        markOrganized(hash, filename)
+
+        markOrganized(hash, ep.id, {
+            at: new Date().toISOString(), season: season.season_number ?? 1,
+            episode: ep.episode_number, episode_id: ep.id,
+            src_filename: filename, dest_filename: destName, dest_path: dest,
+        })
         log(`${destName} → Saison ${season.season_number}`)
         return { ...result, total: 1, done: 1 }
     }
@@ -364,9 +381,8 @@ async function organizeTorrent(hash: string, name: string, savePath: string, ser
 
     result.total = fileMap.size
 
-    // FIX : destructure nfo_filename au lieu de original_filename
-    for (const [filename, { season_number, nfo_filename, fullPath }] of fileMap) {
-        if (isOrganized(hash, filename)) { result.skipped++; continue }
+    for (const [filename, { season_number, episode_number, episode_id, nfo_filename, fullPath }] of fileMap) {
+        if (isOrganized(hash, episode_id)) { result.skipped++; continue }
 
         const candidates = [
             path.join(savePath, fullPath),
@@ -386,15 +402,32 @@ async function organizeTorrent(hash: string, name: string, savePath: string, ser
         const destDir = path.join(mediaPath, serieTitle, seasonFolder(season_number))
         const dest    = path.join(destDir, nfo_filename)
 
-        if (fs.existsSync(dest)) { markOrganized(hash, filename); result.skipped++; continue }
+        if (fs.existsSync(dest)) {
+            markOrganized(hash, episode_id, {
+                at: new Date().toISOString(), season: season_number,
+                episode: episode_number, episode_id,
+                src_filename: filename, dest_filename: nfo_filename, dest_path: dest,
+            })
+            result.skipped++
+            continue
+        }
 
         try {
             fs.mkdirSync(destDir, { recursive: true })
             if (organizeMode === 'hardlink') {
                 if (!tryHardlink(src, dest)) await fsp.copyFile(src, dest)
+                markOrganized(hash, episode_id, {
+                    at: new Date().toISOString(), season: season_number,
+                    episode: episode_number, episode_id,
+                    src_filename: filename, dest_filename: nfo_filename, dest_path: dest,
+                })
             } else {
                 await fsp.copyFile(src, dest)
-                markOrganized(hash, filename)
+                markOrganized(hash, episode_id, {
+                    at: new Date().toISOString(), season: season_number,
+                    episode: episode_number, episode_id,
+                    src_filename: filename, dest_filename: nfo_filename, dest_path: dest,
+                })
                 await fsp.unlink(src)
             }
             result.done++
@@ -430,9 +463,10 @@ parentPort?.on('message', async (msg: any) => {
         const { torrent, serieData } = found
         const seasonFilter = torrent._season?.season_number
         const fileMap      = buildFileMap(serieData, t.hash, nfoSupport, seasonFilter)
+        const orgHash      = organized[t.hash] ?? {}
         const allDone      = fileMap.size > 0
-            ? [...fileMap.keys()].every(f => organized[t.hash]?.[f])
-            : !!organized[t.hash]?.[t.name]
+            ? [...fileMap.values()].every(f => orgHash[String(f.episode_id)])
+            : Object.keys(orgHash).length > 0
 
         if (allDone) {
             debug(`"${t.name}" déjà entièrement importé — skip`)

@@ -139,6 +139,56 @@ export function sanitizeClient(client: SavedClient, definition?: TorrentClientDe
     return { ...client, config }
 }
 
+// ─── Backoff par client ───────────────────────────────────────────────────────
+// Si un client échoue à l'auth, on le met en cooldown pour éviter le ban IP
+
+interface BackoffEntry {
+    failCount  : number
+    nextRetry  : number  // timestamp ms
+}
+
+const _backoff = new Map<string, BackoffEntry>()
+
+// Délais progressifs : 1min, 5min, 15min, 30min, 60min (plafonné)
+const BACKOFF_DELAYS = [60_000, 5 * 60_000, 15 * 60_000, 30 * 60_000, 60 * 60_000]
+
+function isInCooldown(uuid: string): boolean {
+    const entry = _backoff.get(uuid)
+    if (!entry) return false
+    return Date.now() < entry.nextRetry
+}
+
+function cooldownRemaining(uuid: string): string {
+    const entry = _backoff.get(uuid)
+    if (!entry) return ''
+    const remaining = Math.max(0, entry.nextRetry - Date.now())
+    const m = Math.ceil(remaining / 60_000)
+    return m > 0 ? `${m}min` : ''
+}
+
+function registerFailure(uuid: string, clientName: string) {
+    const entry     = _backoff.get(uuid) ?? { failCount: 0, nextRetry: 0 }
+    entry.failCount = Math.min(entry.failCount + 1, BACKOFF_DELAYS.length - 1) + (entry.failCount === 0 ? 0 : 0)
+    const delay     = BACKOFF_DELAYS[Math.min(entry.failCount - 1, BACKOFF_DELAYS.length - 1)]
+    entry.nextRetry = Date.now() + delay
+    _backoff.set(uuid, entry)
+    const min = Math.round(delay / 60_000)
+    logger.warn('torrent-clients', `Client "${clientName}" en cooldown ${min}min après ${entry.failCount} échec(s)`)
+}
+
+function registerSuccess(uuid: string) {
+    _backoff.delete(uuid)
+}
+
+// Exposé pour l'API de status
+export function getClientCooldowns(): Record<string, { failCount: number; nextRetry: number }> {
+    const result: Record<string, { failCount: number; nextRetry: number }> = {}
+    for (const [uuid, entry] of _backoff.entries()) {
+        if (Date.now() < entry.nextRetry) result[uuid] = entry
+    }
+    return result
+}
+
 // ─── Remote path remapping ────────────────────────────────────────────────────
 
 // FIX : remplace le préfixe remotePath par localPath dans save_path
@@ -194,25 +244,41 @@ export async function dispatchList(category?: string): Promise<(TorrentInfo & { 
     for (const client of clients) {
         const driver = getDriver(client.type)
         if (!driver) continue
+
+        // Skip si le client est en cooldown suite à des échecs d'auth
+        if (isInCooldown(client.uuid)) {
+            const remaining = cooldownRemaining(client.uuid)
+            logger.debug('torrent-clients', `Client "${client.name}" en cooldown — retry dans ${remaining}`)
+            continue
+        }
+
         try {
             const clientCategory = (client.config.category as string) || category
             const torrents = await driver.list(client.config, clientCategory)
+
+            registerSuccess(client.uuid)
 
             const remotePath = String(client.config.remotePath ?? '')
             const localPath  = String(client.config.localPath  ?? '')
             const hasRemap   = remotePath && localPath
 
             for (const t of torrents) {
-                // FIX : remap save_path si remotePath et localPath sont configurés
                 const save_path = hasRemap
                     ? remapSavePath(t.save_path, remotePath, localPath)
                     : t.save_path
-
                 results.push({ ...t, save_path, client_uuid: client.uuid, client_name: client.name })
             }
         } catch (err) {
             const msg = err instanceof Error ? err.message : 'Erreur inconnue'
             logger.error('torrent-clients', `Impossible de récupérer la liste depuis "${client.name}" : ${msg}`)
+            // Déclencher le backoff si c'est une erreur d'auth
+            const isAuthError = msg.toLowerCase().includes('login') ||
+                msg.toLowerCase().includes('auth') ||
+                msg.toLowerCase().includes('ban') ||
+                msg.toLowerCase().includes('forbidden') ||
+                msg.toLowerCase().includes('401') ||
+                msg.toLowerCase().includes('403')
+            if (isAuthError) registerFailure(client.uuid, client.name)
         }
     }
 

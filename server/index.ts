@@ -13,7 +13,8 @@ import {
 import qbittorrentDriver  from './torrent-clients/qbittorrent.js'
 import transmissionDriver from './torrent-clients/transmission.js'
 import synologyDsDriver   from './torrent-clients/synology-ds.js'
-import utorrentDriver from './torrent-clients/utorrent.js'
+import rtorrentDriver from './torrent-clients/rtorrent.js'
+import utorrent from "./torrent-clients/utorrent";
 
 import { organizeTorrent, autoOrganizeAll, scanMediaPath, workerRunning } from './organize.js'
 import { logger, readLogs, clearLogs, logsFileSize } from './logger.js'
@@ -23,7 +24,8 @@ import { systemInfo } from './system.js'
 registerDriver(qbittorrentDriver)
 registerDriver(transmissionDriver)
 registerDriver(synologyDsDriver)
-registerDriver(utorrentDriver)
+registerDriver(rtorrentDriver)
+registerDriver(utorrent)
 
 const app  = express()
 const PORT = Number(process.env.PORT) || 9898
@@ -54,7 +56,15 @@ app.get('/api/settings', requireAuth, (_req, res) => {
 })
 app.post('/api/settings', requireAuth, (req, res) => {
     const { mediaPath, completePath, organizeMode, category, nfoSupport, autoImport, devMode } = req.body
-    const updated = writeSettings({ mediaPath, completePath, organizeMode, category, nfoSupport, autoImport, devMode })
+    const patch: Record<string, any> = {}
+    if (mediaPath     !== undefined) patch.mediaPath     = mediaPath
+    if (completePath  !== undefined) patch.completePath  = completePath
+    if (organizeMode  !== undefined) patch.organizeMode  = organizeMode
+    if (category      !== undefined) patch.category      = category
+    if (nfoSupport    !== undefined) patch.nfoSupport    = nfoSupport
+    if (autoImport    !== undefined) patch.autoImport    = autoImport
+    if (devMode       !== undefined) patch.devMode       = devMode
+    const updated = writeSettings(patch)
     logger.info('api', 'Paramètres mis à jour')
     res.json(updated)
 })
@@ -81,6 +91,18 @@ app.put('/api/torrent-clients/:uuid', requireAuth, (req, res) => {
     const { name, type, config } = req.body
     if (!name || !type || !config) { res.status(400).json({ error: 'name, type et config requis' }); return }
     if (!getDriver(type))          { res.status(400).json({ error: `Type inconnu : ${type}` }); return }
+    // Restaurer les mots de passe masqués avec les valeurs actuelles
+    const oldClient = getClient(String(req.params.uuid))
+    if (oldClient) {
+        const driver = getDriver(type)
+        if (driver) {
+            for (const field of driver.definition.fields) {
+                if (field.type === 'password' && config[field.key] === '••••••••') {
+                    config[field.key] = oldClient.config[field.key]
+                }
+            }
+        }
+    }
     const updated = updateClient(String(req.params.uuid), name, type, config)
     if (!updated) { res.status(404).json({ error: 'Client introuvable' }); return }
     res.json(sanitizeClient(updated))
@@ -225,7 +247,7 @@ async function loadEnrichedSeriesData(): Promise<any[]> {
     return allSd.filter(Boolean)
 }
 
-function computeSerieDownloadState(serieData: any | null, organized: Record<string, Record<string, string>>, activeTorrents: Set<string>): 'none' | 'downloading' | 'partial' | 'complete' {
+function computeSerieDownloadState(serieData: any | null, organized: Record<string, Record<string, any>>, activeTorrents: Set<string>): 'none' | 'downloading' | 'partial' | 'complete' {
     if (!serieData) return 'none'
     const allTorrents = extractTorrentsFromSerieData(serieData)
     if (allTorrents.length === 0) return 'none'
@@ -243,7 +265,9 @@ function computeSerieDownloadState(serieData: any | null, organized: Record<stri
         const orgFiles = organized[hash] ?? {}
         if (Object.keys(orgFiles).length === 0) continue
         for (const ep of buildResolvedEpisodes(serieData, hash, t.season_number)) {
-            if (orgFiles[ep.filename]) organizedEpisodeIds.add(ep.episode_id)
+            // Nouveau format : clé = episode_id ; ancien format : clé = filename
+            const isOrganized = orgFiles[String(ep.episode_id)] !== undefined || orgFiles[ep.filename] !== undefined
+            if (isOrganized) organizedEpisodeIds.add(ep.episode_id)
         }
     }
     if (allEpisodeIds.size === 0 || organizedEpisodeIds.size === 0) return 'none'
@@ -285,7 +309,7 @@ app.get('/api/series/:id', requireAuth, async (req, res) => {
             const episodes = (Array.isArray(epsData) ? epsData : (epsData.episodes ?? [])).map(normalizeEpisode)
             return { ...normalizeSeason(season), episodes }
         }))
-        let organized: Record<string, Record<string, string>> = {}
+        let organized: Record<string, Record<string, any>> = {}
         try { const p = path.join(DATA_DIR, 'organized.json'); if (fs.existsSync(p)) organized = JSON.parse(fs.readFileSync(p, 'utf-8')) } catch {}
         const availableEpisodeIds  = new Set<number>()
         const episodeTorrentMap    : Record<number, any> = {}
@@ -299,7 +323,10 @@ app.get('/api/series/:id', requireAuth, async (req, res) => {
                 const resolved = buildResolvedEpisodes(serieData, t.infohash)
                 for (const ep of resolved) availableEpisodeIds.add(ep.episode_id)
                 const orgFiles = organized[t.infohash?.toLowerCase()] ?? {}
-                for (const ep of resolved) { if (orgFiles[ep.filename]) organizedEpisodeIds.add(ep.episode_id) }
+                for (const ep of resolved) {
+                    const isOrg = orgFiles[String(ep.episode_id)] !== undefined || orgFiles[ep.filename] !== undefined
+                    if (isOrg) organizedEpisodeIds.add(ep.episode_id)
+                }
             }
             for (const season of serieData.seasons ?? []) {
                 for (const t of (season.torrents ?? [])) {
@@ -307,16 +334,25 @@ app.get('/api/series/:id', requireAuth, async (req, res) => {
                     const resolved = buildResolvedEpisodes(serieData, t.infohash, season.season_number)
                     for (const ep of resolved) availableEpisodeIds.add(ep.episode_id)
                     const orgFiles = organized[t.infohash?.toLowerCase()] ?? {}
-                    for (const ep of resolved) { if (orgFiles[ep.filename]) organizedEpisodeIds.add(ep.episode_id) }
+                    for (const ep of resolved) {
+                        const isOrg = orgFiles[String(ep.episode_id)] !== undefined || orgFiles[ep.filename] !== undefined
+                        if (isOrg) organizedEpisodeIds.add(ep.episode_id)
+                    }
                 }
                 for (const ep of season.episodes ?? []) {
                     for (const t of (ep.torrents ?? [])) {
                         episodeTorrentMap[ep.id] = { torrent_url: t.torrent_url, magnet: t.magnet, type: 'episode', raw: t.title, manual: t.manual ?? false, fankai: t.fankai ?? true }
                         availableEpisodeIds.add(ep.id)
                         const orgFiles = organized[t.infohash?.toLowerCase()] ?? {}
-                        const match = (ep.paths ?? []).find((p: any) => typeof p === 'object' && p.infohash?.toLowerCase() === t.infohash?.toLowerCase())
-                        const filename = match ? match.path.split('/').pop() : null
-                        if (filename && orgFiles[filename]) organizedEpisodeIds.add(ep.id)
+                        const isOrg = orgFiles[String(ep.id)] !== undefined
+                        if (!isOrg) {
+                            // fallback ancien format
+                            const match = (ep.paths ?? []).find((p: any) => typeof p === 'object' && p.infohash?.toLowerCase() === t.infohash?.toLowerCase())
+                            const filename = match ? match.path.split('/').pop() : null
+                            if (filename && orgFiles[filename]) organizedEpisodeIds.add(ep.id)
+                        } else {
+                            organizedEpisodeIds.add(ep.id)
+                        }
                     }
                 }
             }
@@ -365,7 +401,7 @@ app.get('/api/downloads', requireAuth, async (_req, res) => {
     try {
         const { category } = readSettings()
         const torrents = await dispatchList(category ?? 'fankai')
-        let organized: Record<string, Record<string, string>> = {}
+        let organized: Record<string, Record<string, any>> = {}
         try { const p = path.join(DATA_DIR, 'organized.json'); if (fs.existsSync(p)) organized = JSON.parse(fs.readFileSync(p, 'utf-8')) } catch {}
         const enriched = await Promise.all(torrents.map(async (t: any) => {
             const orgFiles = organized[t.hash] ?? {}
@@ -504,7 +540,7 @@ app.get('/api/debug/stats', requireAuth, (req, res) => {
         const orgPath = path.join(DATA_DIR, 'organized.json')
         if (fs.existsSync(orgPath)) {
             const org = JSON.parse(fs.readFileSync(orgPath, 'utf-8'))
-            organizedCount = Object.values(org).reduce((acc: number, files: any) => acc + Object.keys(files).length, 0)
+            organizedCount = Object.values(org).reduce((acc: number, episodes: any) => acc + Object.keys(episodes).length, 0)
         }
     } catch {}
 
@@ -723,6 +759,23 @@ server.listen(PORT, async () => {
 
     const ORGANIZED_PATH = path.join(DATA_DIR, 'organized.json')
     const { mediaPath }  = readSettings()
+
+    // Reset organized.json au nouveau format (clé episode_id au lieu de filename)
+    // Si le fichier existe et contient l'ancien format (valeurs string), on le vide
+    // et on relance le scan pour reconstruire proprement
+    try {
+        if (fs.existsSync(ORGANIZED_PATH)) {
+            const raw = JSON.parse(fs.readFileSync(ORGANIZED_PATH, 'utf-8'))
+            const isOldFormat = Object.values(raw).some((entries: any) =>
+                Object.values(entries).some(v => typeof v === 'string')
+            )
+            if (isOldFormat) {
+                logger.info('api', 'Migration organized.json : ancien format détecté → réinitialisation')
+                fs.writeFileSync(ORGANIZED_PATH, '{}', 'utf-8')
+            }
+        }
+    } catch {}
+
     loadEnrichedSeriesData()
         .then(seriesData => scanMediaPath(mediaPath, ORGANIZED_PATH, seriesData))
         .catch(err => logger.error('api', `Scan initial échoué : ${err instanceof Error ? err.message : err}`))

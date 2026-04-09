@@ -109,7 +109,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useToast } from '@/composables/useToast'
 
 const { add: toast } = useToast()
@@ -204,6 +204,27 @@ function onTypeChange() {
     }
   }
 }
+
+// Reset tested dès que l'utilisateur modifie un champ (nom ou config)
+// sauf si c'est un mot de passe masqué non touché
+watch(() => modal.value.name, () => {
+  if (modal.value.uuid) modal.value.tested = false
+})
+
+watch(() => modal.value.config, (newConfig) => {
+  if (!modal.value.uuid) return
+  const driver = currentDefinition.value
+  if (!driver) return
+  // Si au moins un champ non-password a changé → reset tested
+  // Pour les passwords, on reset seulement si la valeur n'est plus le masque
+  for (const [key, val] of Object.entries(newConfig)) {
+    const field = driver.fields.find(f => f.key === key)
+    if (!field) continue
+    if (field.type === 'password' && val === '••••••••') continue
+    modal.value.tested = false
+    return
+  }
+}, { deep: true })
 
 async function testNewClient() {
   modal.value.testing = true

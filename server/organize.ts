@@ -30,6 +30,18 @@ export interface OrganizeResult {
     errors  : { file: string; error: string }[]
 }
 
+interface OrgEntry {
+    at           : string
+    season       : number
+    episode      : number
+    episode_id   : number
+    src_filename : string
+    dest_filename: string
+    dest_path    : string
+}
+
+type Organized = Record<string, Record<string, OrgEntry>>
+
 // ── Scan initial ──────────────────────────────────────────────
 
 function swapExt(filename: string, ext: string): string {
@@ -52,10 +64,15 @@ export async function scanMediaPath(
 
     logger.info('organize', `Scan de la médiathèque : ${mediaPath}`)
 
-    // FIX : on indexe le nom brut ET les noms de destination possibles
-    // (nfo_filename, formatted_name) pour matcher les fichiers déjà renommés
-    // Map : nom_sur_disque → { hash, srcFilename }
-    const filenameIndex = new Map<string, { hash: string; srcFilename: string }>()
+    // Map : nom_sur_disque → { hash, srcFilename, episodeId, season, episode }
+    const filenameIndex = new Map<string, {
+        hash        : string
+        srcFilename : string
+        episodeId   : number
+        season      : number
+        episode     : number
+        destFilename: string
+    }>()
 
     for (const sd of seriesData) {
         for (const season of sd.seasons ?? []) {
@@ -69,39 +86,46 @@ export async function scanMediaPath(
                     if (!srcFilename) continue
 
                     const srcExt = path.extname(srcFilename)
+                    const entry = {
+                        hash,
+                        srcFilename,
+                        episodeId   : ep.id,
+                        season      : season.season_number,
+                        episode     : ep.episode_number,
+                        destFilename: srcFilename,
+                    }
 
-                    // 1. Nom brut du fichier source
-                    filenameIndex.set(srcFilename, { hash, srcFilename })
+                    // 1. Nom brut source
+                    filenameIndex.set(srcFilename, entry)
 
                     // 2. nfo_filename avec extension swappée
                     if (ep.nfo_filename) {
                         const nfoRenamed = swapExt(ep.nfo_filename, srcExt)
-                        filenameIndex.set(nfoRenamed, { hash, srcFilename })
+                        filenameIndex.set(nfoRenamed, { ...entry, destFilename: nfoRenamed })
                     }
 
                     // 3. original_filename
                     if (ep.original_filename) {
-                        filenameIndex.set(ep.original_filename, { hash, srcFilename })
+                        filenameIndex.set(ep.original_filename, { ...entry, destFilename: ep.original_filename })
                     }
 
                     // 4. formatted_name + .mkv
                     if (ep.formatted_name?.trim()) {
                         const fmtName = ep.formatted_name.replace(/[<>:"/\\|?*]/g, '').trim() + '.mkv'
-                        filenameIndex.set(fmtName, { hash, srcFilename })
+                        filenameIndex.set(fmtName, { ...entry, destFilename: fmtName })
                     }
                 }
             }
         }
     }
 
-    let organized: Record<string, Record<string, string>> = {}
+    let organized: Organized = {}
     try {
         if (fs.existsSync(organizedPath))
             organized = JSON.parse(fs.readFileSync(organizedPath, 'utf-8'))
     } catch {}
 
-    // FIX : on track les paires hash:srcFilename (clé dans organized.json)
-    // et non hash:nom_sur_disque
+    // Track les paires hash:episodeId présentes
     const presentFiles = new Set<string>()
 
     function walk(dir: string) {
@@ -117,32 +141,37 @@ export async function scanMediaPath(
                 const match = filenameIndex.get(entry.name)
                 if (!match) continue
 
-                const { hash, srcFilename } = match
-                // La clé dans organized.json est toujours le srcFilename (nom brut)
-                presentFiles.add(`${hash}:${srcFilename}`)
-                if (organized[hash]?.[srcFilename]) continue
+                const { hash, srcFilename, episodeId, season, episode, destFilename } = match
+                presentFiles.add(`${hash}:${episodeId}`)
+
+                if (organized[hash]?.[String(episodeId)]) continue
+
                 if (!organized[hash]) organized[hash] = {}
-                organized[hash][srcFilename] = new Date().toISOString()
+                organized[hash][String(episodeId)] = {
+                    at           : new Date().toISOString(),
+                    season,
+                    episode,
+                    episode_id   : episodeId,
+                    src_filename : srcFilename,
+                    dest_filename: destFilename,
+                    dest_path    : full,
+                }
                 result.added++
-                logger.debug('organize', `Scan match : "${entry.name}" → hash ${hash.slice(0, 8)}… (src: ${srcFilename})`)
+                logger.debug('organize', `Scan match : "${entry.name}" → ep ${episodeId} (S${season}E${episode})`)
             }
         }
     }
 
     walk(mediaPath)
 
-    // FIX : supprimer uniquement les entrées dont le fichier source
-    // n'est plus présent ET qui sont connues dans l'index
-    // (évite de supprimer des entrées pour des fichiers hors catalogue)
-    const allSrcFilenames = new Set([...filenameIndex.values()].map(v => v.srcFilename))
+    // Supprimer uniquement les entrées connues dans l'index et absentes du disque
+    const allEpisodeIds = new Set([...filenameIndex.values()].map(v => `${v.hash}:${v.episodeId}`))
 
     let removed = 0
-    for (const [hash, files] of Object.entries(organized)) {
-        for (const srcFilename of Object.keys(files)) {
-            // Ne supprimer que si le fichier est dans notre catalogue
-            // ET qu'il n'est plus présent dans la médiathèque
-            if (allSrcFilenames.has(srcFilename) && !presentFiles.has(`${hash}:${srcFilename}`)) {
-                delete organized[hash][srcFilename]
+    for (const [hash, episodes] of Object.entries(organized)) {
+        for (const episodeId of Object.keys(episodes)) {
+            if (allEpisodeIds.has(`${hash}:${episodeId}`) && !presentFiles.has(`${hash}:${episodeId}`)) {
+                delete organized[hash][episodeId]
                 removed++
             }
         }
@@ -197,11 +226,10 @@ export async function autoOrganizeAll(
 
     for (const t of torrents) _prevStates.set(t.hash, t.state)
 
-    let organized: Record<string, Record<string, string>> = {}
+    let organized: Organized = {}
     try {
-        const orgPath = path.join(DATA_DIR, 'organized.json')
-        if (fs.existsSync(orgPath))
-            organized = JSON.parse(fs.readFileSync(orgPath, 'utf-8'))
+        if (fs.existsSync(ORGANIZED_PATH))
+            organized = JSON.parse(fs.readFileSync(ORGANIZED_PATH, 'utf-8'))
     } catch {}
 
     const hasUnorganized = torrents.some(t =>
