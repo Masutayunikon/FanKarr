@@ -32,6 +32,12 @@ export interface OrganizeResult {
 
 // ── Scan initial ──────────────────────────────────────────────
 
+function swapExt(filename: string, ext: string): string {
+    const cur = path.extname(filename)
+    if (!cur || cur === ext) return filename
+    return filename.slice(0, -cur.length) + ext
+}
+
 export async function scanMediaPath(
     mediaPath    : string,
     organizedPath: string,
@@ -46,7 +52,11 @@ export async function scanMediaPath(
 
     logger.info('organize', `Scan de la médiathèque : ${mediaPath}`)
 
-    const filenameIndex = new Map<string, string>()
+    // FIX : on indexe le nom brut ET les noms de destination possibles
+    // (nfo_filename, formatted_name) pour matcher les fichiers déjà renommés
+    // Map : nom_sur_disque → { hash, srcFilename }
+    const filenameIndex = new Map<string, { hash: string; srcFilename: string }>()
+
     for (const sd of seriesData) {
         for (const season of sd.seasons ?? []) {
             for (const ep of season.episodes ?? []) {
@@ -54,8 +64,31 @@ export async function scanMediaPath(
                     if (typeof p === 'string') continue
                     const hash = p.infohash?.toLowerCase()
                     if (!hash || !p.path) continue
-                    const filename = p.path.replace(/\\/g, '/').split('/').pop()
-                    if (filename) filenameIndex.set(filename, hash)
+
+                    const srcFilename = p.path.replace(/\\/g, '/').split('/').pop()
+                    if (!srcFilename) continue
+
+                    const srcExt = path.extname(srcFilename)
+
+                    // 1. Nom brut du fichier source
+                    filenameIndex.set(srcFilename, { hash, srcFilename })
+
+                    // 2. nfo_filename avec extension swappée
+                    if (ep.nfo_filename) {
+                        const nfoRenamed = swapExt(ep.nfo_filename, srcExt)
+                        filenameIndex.set(nfoRenamed, { hash, srcFilename })
+                    }
+
+                    // 3. original_filename
+                    if (ep.original_filename) {
+                        filenameIndex.set(ep.original_filename, { hash, srcFilename })
+                    }
+
+                    // 4. formatted_name + .mkv
+                    if (ep.formatted_name?.trim()) {
+                        const fmtName = ep.formatted_name.replace(/[<>:"/\\|?*]/g, '').trim() + '.mkv'
+                        filenameIndex.set(fmtName, { hash, srcFilename })
+                    }
                 }
             }
         }
@@ -67,6 +100,8 @@ export async function scanMediaPath(
             organized = JSON.parse(fs.readFileSync(organizedPath, 'utf-8'))
     } catch {}
 
+    // FIX : on track les paires hash:srcFilename (clé dans organized.json)
+    // et non hash:nom_sur_disque
     const presentFiles = new Set<string>()
 
     function walk(dir: string) {
@@ -79,24 +114,35 @@ export async function scanMediaPath(
                 walk(full)
             } else if (entry.isFile() && entry.name.endsWith('.mkv')) {
                 result.found++
-                const hash = filenameIndex.get(entry.name)
-                if (!hash) continue
-                presentFiles.add(`${hash}:${entry.name}`)
-                if (organized[hash]?.[entry.name]) continue
+                const match = filenameIndex.get(entry.name)
+                if (!match) continue
+
+                const { hash, srcFilename } = match
+                // La clé dans organized.json est toujours le srcFilename (nom brut)
+                presentFiles.add(`${hash}:${srcFilename}`)
+                if (organized[hash]?.[srcFilename]) continue
                 if (!organized[hash]) organized[hash] = {}
-                organized[hash][entry.name] = new Date().toISOString()
+                organized[hash][srcFilename] = new Date().toISOString()
                 result.added++
+                logger.debug('organize', `Scan match : "${entry.name}" → hash ${hash.slice(0, 8)}… (src: ${srcFilename})`)
             }
         }
     }
 
     walk(mediaPath)
 
+    // FIX : supprimer uniquement les entrées dont le fichier source
+    // n'est plus présent ET qui sont connues dans l'index
+    // (évite de supprimer des entrées pour des fichiers hors catalogue)
+    const allSrcFilenames = new Set([...filenameIndex.values()].map(v => v.srcFilename))
+
     let removed = 0
     for (const [hash, files] of Object.entries(organized)) {
-        for (const filename of Object.keys(files)) {
-            if (!presentFiles.has(`${hash}:${filename}`) && filenameIndex.get(filename) === hash) {
-                delete organized[hash][filename]
+        for (const srcFilename of Object.keys(files)) {
+            // Ne supprimer que si le fichier est dans notre catalogue
+            // ET qu'il n'est plus présent dans la médiathèque
+            if (allSrcFilenames.has(srcFilename) && !presentFiles.has(`${hash}:${srcFilename}`)) {
+                delete organized[hash][srcFilename]
                 removed++
             }
         }

@@ -394,9 +394,9 @@ async function organizeTorrent(hash: string, name: string, savePath: string, ser
                 if (!tryHardlink(src, dest)) await fsp.copyFile(src, dest)
             } else {
                 await fsp.copyFile(src, dest)
+                markOrganized(hash, filename)
                 await fsp.unlink(src)
             }
-            markOrganized(hash, filename)
             result.done++
             debug(`${nfo_filename} → Saison ${season_number}`)
         } catch (err) {
