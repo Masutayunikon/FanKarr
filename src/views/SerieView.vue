@@ -61,7 +61,7 @@
             <p v-if="data.serie.plot" class="text-sm text-secondary leading-relaxed max-w-2xl line-clamp-3">
               {{ data.serie.plot }}
             </p>
-
+<!--
             <button
                 @click="manualImportOpen = true"
                 class="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-lg border border-border text-muted hover:text-primary hover:border-secondary transition"
@@ -69,7 +69,7 @@
               Import manuel
             </button>
 
-            <!-- Modal -->
+
             <ManualImportModal
                 v-if="manualImportOpen && data"
                 :serie-id="Number(route.params.id)"
@@ -79,7 +79,7 @@
                 @close="manualImportOpen = false"
                 @imported="load(); manualImportOpen = false"
             />
-
+-->
             <!-- Boutons intégrale -->
             <div class="flex flex-wrap gap-2 mt-1">
               <button
@@ -438,7 +438,7 @@ function formatDuration(seconds: number): string {
 
 onMounted(() => {
   load()
-  fetchOrganized()
+  // fetchOrganized()
   fetchActiveDownloads()
   pollTimer = setInterval(fetchActiveDownloads, 5000)
 })
