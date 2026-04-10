@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.6.0](https://github.com/Masutayunikon/FanKarr/compare/v3.5.0...v3.6.0) (2026-04-10)
+
+
+### Features
+
+* ajout d'un exe pour les cpu non avx2 ([51aacaf](https://github.com/Masutayunikon/FanKarr/commit/51aacafbcb0de1ca6a8b496c0905aa4e831d6008))
+
 ## [3.5.0](https://github.com/Masutayunikon/FanKarr/compare/v3.4.0...v3.5.0) (2026-04-09)
 
 
