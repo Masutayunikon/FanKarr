@@ -111,14 +111,14 @@ jobs:
         run: bun build server/organize-worker.ts --target node --outfile organize-worker.js
 
       - name: Package archive (Windows)
-        if: matrix.target == 'windows-x64'
-        run: Compress-Archive -Path ${{ matrix.binary }}, organize-worker.js, public -DestinationPath ${{ matrix.archive }}
+        if: matrix.target == 'windows-x64' || matrix.target == 'windows-x64-legacy'
+        run: Compress-Archive -Path ${{ matrix.binary }}, organize-worker.js, public, version.txt -DestinationPath ${{ matrix.archive }}
         shell: pwsh
 
       - name: Package archive (Unix)
-        if: matrix.target != 'windows-x64'
+        if: matrix.target != 'windows-x64' && matrix.target != 'windows-x64-legacy'
         run: |
-          zip -r ${{ matrix.archive }} ${{ matrix.binary }} organize-worker.js public/
+          zip -r ${{ matrix.archive }} ${{ matrix.binary }} organize-worker.js public/ version.txt
 
       - name: Upload archive to Release
         uses: softprops/action-gh-release@v2

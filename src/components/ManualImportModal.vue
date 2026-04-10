@@ -138,7 +138,7 @@
     <!-- Folder Picker -->
     <FolderPicker
         v-if="pickerOpen"
-        :initial-path="selectedFolder || '/'"
+        :initial-path="selectedFolder || props.initialPath || '/'"
         @select="onFolderSelect"
         @cancel="pickerOpen = false"
     />
@@ -153,10 +153,11 @@ import { useToast } from '@/composables/useToast'
 const { add: toast } = useToast()
 
 const props = defineProps<{
-  serieId  : number
-  serieName: string
-  seasons  : any[]
-  organized: Record<string, any>  // episode_id → entry
+  serieId     : number
+  serieName   : string
+  seasons     : any[]
+  organized   : Record<string, any>
+  initialPath?: string
 }>()
 
 const emit = defineEmits<{
@@ -165,10 +166,10 @@ const emit = defineEmits<{
 }>()
 
 // ─── State ────────────────────────────────────────────────────
-const step          = ref<'folder' | 'match' | 'done'>('folder')
-const pickerOpen    = ref(false)
-const selectedFolder = ref('')
-const scanning      = ref(false)
+const step           = ref<'folder' | 'match' | 'done'>('folder')
+const pickerOpen     = ref(false)
+const selectedFolder = ref(props.initialPath || '')
+const scanning       = ref(false)
 const importing     = ref(false)
 const importError   = ref('')
 const importResult  = ref({ done: 0, errors: [] as { file: string; error: string }[] })

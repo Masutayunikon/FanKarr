@@ -43,7 +43,21 @@
               Séries
             </RouterLink>
 
-            <h1 class="text-2xl font-bold text-primary tracking-tight">{{ data.serie.title }}</h1>
+            <!-- Titre + bouton import manuel -->
+            <div class="flex items-center gap-3 flex-wrap">
+              <h1 class="text-2xl font-bold text-primary tracking-tight">{{ data.serie.title }}</h1>
+              <button
+                  @click="openManualImport"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-border text-muted hover:text-primary hover:border-secondary transition shrink-0"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                Import manuel
+              </button>
+            </div>
 
             <div class="flex flex-wrap items-center gap-2">
               <span v-if="data.serie.year" class="text-sm text-muted">{{ data.serie.year }}</span>
@@ -61,25 +75,7 @@
             <p v-if="data.serie.plot" class="text-sm text-secondary leading-relaxed max-w-2xl line-clamp-3">
               {{ data.serie.plot }}
             </p>
-<!--
-            <button
-                @click="manualImportOpen = true"
-                class="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-lg border border-border text-muted hover:text-primary hover:border-secondary transition"
-            >
-              Import manuel
-            </button>
 
-
-            <ManualImportModal
-                v-if="manualImportOpen && data"
-                :serie-id="Number(route.params.id)"
-                :serie-name="data.serie.title"
-                :seasons="data.seasons"
-                :organized="organizedByEpisode"
-                @close="manualImportOpen = false"
-                @imported="load(); manualImportOpen = false"
-            />
--->
             <!-- Boutons intégrale -->
             <div class="flex flex-wrap gap-2 mt-1">
               <button
@@ -169,7 +165,7 @@
             </button>
           </div>
 
-          <!-- Progression saison — dans le header, sous les contrôles -->
+          <!-- Progression saison -->
           <div
               v-if="torrentProgress(extractHash(season.torrent)) && torrentProgress(extractHash(season.torrent))!.progress < 100"
               class="px-5 pb-3 -mt-1"
@@ -206,7 +202,6 @@
                       {{ season.season_number === 0 ? 'SP' : `E${String(ep.episode_number).padStart(2, '0')}` }}
                     </span>
                     <span class="text-sm text-primary truncate">{{ ep.title || `Épisode ${ep.episode_number}` }}</span>
-                    <!-- Badge Hors Fankai -->
                     <span
                         v-if="ep.fankai === false || ep.torrent?.fankai === false"
                         class="shrink-0 text-[10px] px-1.5 py-0.5 rounded border bg-purple-500/10 text-purple-400 border-purple-500/20"
@@ -250,7 +245,21 @@
           </div>
         </div>
       </div>
+
     </template>
+
+    <!-- Modal import manuel -->
+    <ManualImportModal
+        v-if="manualImportOpen && data"
+        :serie-id="Number(route.params.id)"
+        :serie-name="data.serie.title"
+        :seasons="data.seasons"
+        :organized="organizedByEpisode"
+        :initial-path="mediaPath"
+        @close="manualImportOpen = false"
+        @imported="load(); fetchOrganized(); manualImportOpen = false"
+    />
+
   </div>
 </template>
 
@@ -260,11 +269,10 @@ import { RouterLink, useRoute } from 'vue-router'
 import { ArrowLeft, Tv, ChevronUp, Download, Loader, Check, X } from 'lucide-vue-next'
 import { useSeriesStore } from '@/stores/series'
 import { useToast } from '@/composables/useToast'
+import ManualImportModal from '@/components/ManualImportModal.vue'
 import type { Season } from '@/stores/series'
-import ManualImportModal from "@/components/ManualImportModal.vue";
 
 // ── Icône d'état du bouton ────────────────────────────────────
-// states: 'idle' | 'loading' | 'done' | 'unavailable'
 const EpStateIcon = defineComponent({
   props: {
     state: { type: String, default: 'idle' },
@@ -300,9 +308,12 @@ const route  = useRoute()
 const store  = useSeriesStore()
 const { add: toast } = useToast()
 
-const collapsedSeasons = ref<Set<number>>(new Set())
-const downloading = ref<string[]>([])
-const downloaded  = ref<string[]>([])
+const collapsedSeasons   = ref<Set<number>>(new Set())
+const downloading        = ref<string[]>([])
+const downloaded         = ref<string[]>([])
+const manualImportOpen   = ref(false)
+const organizedByEpisode = ref<Record<string, any>>({})
+const mediaPath          = ref('/')
 
 function isDownloading(key: string) { return downloading.value.includes(key) }
 function isDownloaded(key: string)  { return downloaded.value.includes(key) }
@@ -316,17 +327,28 @@ let pollTimer: ReturnType<typeof setInterval> | null = null
 
 const data = computed(() => store.currentSerie)
 
-
-const manualImportOpen   = ref(false)
-const organizedByEpisode = ref<Record<string, any>>({})
-
-// Dans onMounted, après load() :
 async function fetchOrganized() {
   try {
-    const res = await fetch('/api/organized', { credentials: 'include' })
+    const res = await fetch(`/api/organized/${route.params.id}`, { credentials: 'include' })
     if (res.ok) organizedByEpisode.value = await res.json()
   } catch {}
 }
+
+async function fetchSettings() {
+  try {
+    const res = await fetch('/api/settings', { credentials: 'include' })
+    if (res.ok) {
+      const s = await res.json()
+      mediaPath.value = s.mediaPath || '/'
+    }
+  } catch {}
+}
+
+function openManualImport() {
+  fetchOrganized()
+  manualImportOpen.value = true
+}
+
 // ── Polling downloads ─────────────────────────────────────────
 async function fetchActiveDownloads() {
   try {
@@ -362,28 +384,28 @@ function isAlreadyQueued(torrent: { magnet?: string | null } | null | undefined)
 type BtnState = 'idle' | 'loading' | 'done' | 'unavailable'
 
 function epState(ep: any): BtnState {
-  if (ep.organized)                                          return 'done'
-  if (isDownloaded(`ep-${ep.id}`))                        return 'done'
-  if (isAlreadyQueued(ep.torrent))                           return 'done'
+  if (ep.organized)                                       return 'done'
+  if (isDownloaded(`ep-${ep.id}`))                       return 'done'
+  if (isAlreadyQueued(ep.torrent))                        return 'done'
   const prog = torrentProgress(extractHash(ep.torrent))
-  if (prog && prog.progress < 100)                           return 'loading'
-  if (!ep.torrent || !ep.available)                          return 'unavailable'
-  if (isDownloading(`ep-${ep.id}`))                        return 'loading'
+  if (prog && prog.progress < 100)                        return 'loading'
+  if (!ep.torrent || !ep.available)                       return 'unavailable'
+  if (isDownloading(`ep-${ep.id}`))                      return 'loading'
   return 'idle'
 }
 
 function epBtnState(key: string, torrent: any): BtnState {
-  if (isDownloaded(key) || isAlreadyQueued(torrent))       return 'done'
-  if (isDownloading(key))                                  return 'loading'
+  if (isDownloaded(key) || isAlreadyQueued(torrent))     return 'done'
+  if (isDownloading(key))                                return 'loading'
   return 'idle'
 }
 
 function seasonBtnState(season: any): BtnState {
-  if (season.organized_state === 'complete')                 return 'done'
-  if (isDownloaded(`season-${season.id}`))                 return 'done'
-  if (isAlreadyQueued(season.torrent))                       return 'done'
-  if (isDownloading(`season-${season.id}`))                return 'loading'
-  if (!season.torrent)                                       return 'unavailable'
+  if (season.organized_state === 'complete')              return 'done'
+  if (isDownloaded(`season-${season.id}`))               return 'done'
+  if (isAlreadyQueued(season.torrent))                    return 'done'
+  if (isDownloading(`season-${season.id}`))              return 'loading'
+  if (!season.torrent)                                    return 'unavailable'
   return 'idle'
 }
 
@@ -438,7 +460,7 @@ function formatDuration(seconds: number): string {
 
 onMounted(() => {
   load()
-  // fetchOrganized()
+  fetchSettings()
   fetchActiveDownloads()
   pollTimer = setInterval(fetchActiveDownloads, 5000)
 })

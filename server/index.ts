@@ -480,6 +480,18 @@ app.get('/api/system', requireAuth, (_req, res) => {
     res.json({ isDocker: fs.existsSync('/.dockerenv') })
 })
 
+app.get('/api/version', (_req, res) => {
+    try {
+        const versionPath = path.join(BASE_DIR, 'version.txt')
+        const version = fs.existsSync(versionPath)
+            ? fs.readFileSync(versionPath, 'utf-8').trim()
+            : 'dev'
+        res.json({ version })
+    } catch {
+        res.json({ version: 'dev' })
+    }
+})
+
 app.get('/api/browse', requireAuth, (req, res) => {
     const dirPath = (req.query.path as string) || '/'
     try {

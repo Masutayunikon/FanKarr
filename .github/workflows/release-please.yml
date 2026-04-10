@@ -9,8 +9,28 @@ name: release-please
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - uses: googleapis/release-please-action@v4
+        id: release
         with:
           token: ${{ secrets.FINED_TOKEN }}
           release-type: simple
+
+      # Quand une release est créée, on écrit version.txt et on le committe
+      - uses: actions/checkout@v4
+        if: ${{ steps.release.outputs.release_created }}
+        with:
+          token: ${{ secrets.FINED_TOKEN }}
+
+      - name: Write version.txt
+        if: ${{ steps.release.outputs.release_created }}
+        run: |
+          echo "${{ steps.release.outputs.tag_name }}" > version.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add version.txt
+          git commit -m "chore: update version.txt to ${{ steps.release.outputs.tag_name }}"
+          git push
