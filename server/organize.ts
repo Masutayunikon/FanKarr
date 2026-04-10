@@ -139,10 +139,16 @@ export async function scanMediaPath(
                 walk(full)
             } else if (entry.isFile() && /\.(mkv|mp4|avi|m4v|mov|wmv)$/i.test(entry.name)) {
                 result.found++
-                // Chercher par nom sans extension pour matcher quelle que soit l'extension
                 const nameWithoutExt = entry.name.replace(/\.[^.]+$/, '')
                 const match = filenameIndex.get(nameWithoutExt)
-                if (!match) continue
+                if (!match) {
+                    // Trouver des candidats proches dans l'index (même début de nom)
+                    const prefix    = nameWithoutExt.slice(0, 20).toLowerCase()
+                    const close     = [...filenameIndex.keys()].filter(k => k.toLowerCase().startsWith(prefix)).slice(0, 3)
+                    const closeStr  = close.length > 0 ? ` | candidats : ${close.map(c => `"${c}"`).join(', ')}` : ' | aucun candidat proche'
+                    logger.warn('organize', `Scan no match : "${nameWithoutExt}"${closeStr}`)
+                    continue
+                }
 
                 const { hash, srcFilename, episodeId, season, episode } = match
                 // Le destFilename prend l'extension réelle du fichier sur le disque
@@ -187,10 +193,10 @@ export async function scanMediaPath(
 
     if (result.added > 0 || removed > 0) {
         fs.writeFileSync(organizedPath, JSON.stringify(organized, null, 2), 'utf-8')
-        logger.info('organize', `Scan terminé — ${result.found} fichiers, ${result.added} ajoutés, ${removed} orphelins supprimés`)
-    } else {
-        logger.info('organize', `Scan terminé — ${result.found} fichiers, rien de nouveau`)
     }
+
+    const noMatch = result.found - result.added
+    logger.info('organize', `Scan terminé — ${result.found} fichiers, ${result.added} ajoutés, ${removed} orphelins supprimés${noMatch > 0 ? `, ${noMatch} non matchés` : ''}`)
 
     return result
 }
