@@ -170,6 +170,11 @@ async function readAvailable(): Promise<number[]> {
     catch { return [] }
 }
 
+async function readInfohashMap(): Promise<Record<string, string>> {
+    try { return await githubGet('infohash_map.json') as Record<string, string> }
+    catch { return {} }
+}
+
 async function readSerieData(serieId: number): Promise<any | null> {
     try { return await githubGet(`series/${serieId}.json`) }
     catch { return null }
@@ -277,7 +282,7 @@ app.get('/api/series', requireAuth, async (_req, res) => {
         let organized: Record<string, Record<string, any>> = {}
         try { const p = path.join(DATA_DIR, 'organized.json'); if (fs.existsSync(p)) organized = JSON.parse(fs.readFileSync(p, 'utf-8')) } catch {}
         const activeTorrents = new Set<string>()
-        try { const { category } = readSettings(); const active = await dispatchList(category ?? 'fankai'); for (const t of active) { if (t.hash && t.state === 'downloading') activeTorrents.add(t.hash.toLowerCase()) } } catch {}
+        try { const { category } = readSettings(); const infohashMap = await readInfohashMap(); const active = await dispatchList(category ?? 'fankai', infohashMap); for (const t of active) { if (t.hash && t.state === 'downloading') activeTorrents.add(t.hash.toLowerCase()) } } catch {}
         const seriesRaw = (Array.isArray(apiData) ? apiData : (apiData.series ?? [])).map(normalizeSerie)
         const serieDataMap = new Map<number, any>()
         await Promise.all(seriesRaw.filter((s: any) => availableSet.has(s.id)).map(async (s: any) => { const sd = await readSerieData(s.id); if (sd) serieDataMap.set(s.id, sd) }))
@@ -392,7 +397,8 @@ app.post('/api/download', requireAuth, async (req, res) => {
 app.get('/api/downloads', requireAuth, async (_req, res) => {
     try {
         const { category } = readSettings()
-        const torrents = await dispatchList(category ?? 'fankai')
+        const infohashMap = await readInfohashMap()
+        const torrents = await dispatchList(category ?? 'fankai', infohashMap)
         let organized: Record<string, Record<string, any>> = {}
         try { const p = path.join(DATA_DIR, 'organized.json'); if (fs.existsSync(p)) organized = JSON.parse(fs.readFileSync(p, 'utf-8')) } catch {}
         const enriched = await Promise.all(torrents.map(async (t: any) => {
@@ -828,9 +834,10 @@ server.listen(PORT, async () => {
     const autoOrganize = async () => {
         try {
             const { category } = readSettings()
+            const infohashMap  = await readInfohashMap()
             const seriesData   = await loadEnrichedSeriesData()
             await autoOrganizeAll(
-                () => dispatchList(category ?? 'fankai'),
+                () => dispatchList(category ?? 'fankai', infohashMap),
                 seriesData,
                 (result) => {
                     if (result.done > 0 || result.errors > 0) {

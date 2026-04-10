@@ -237,15 +237,27 @@ export async function dispatchDownload(url: string): Promise<{ uuid: string; nam
 
 // ─── Dispatch list ─────────────────────────────────────────────────────────────
 
-export async function dispatchList(category?: string): Promise<(TorrentInfo & { client_uuid: string; client_name: string })[]> {
-    const clients = loadClients()
+// Map inversée : titre normalisé → infohash (pour matcher les torrents Synology)
+function buildTitleIndex(infohashMap: Record<string, string>): Map<string, string> {
+    const index = new Map<string, string>()
+    for (const [hash, title] of Object.entries(infohashMap)) {
+        index.set(title.toLowerCase().trim(), hash.toLowerCase())
+    }
+    return index
+}
+
+export async function dispatchList(
+    category?    : string,
+    infohashMap? : Record<string, string>,
+): Promise<(TorrentInfo & { client_uuid: string; client_name: string })[]> {
+    const clients    = loadClients()
     const results: (TorrentInfo & { client_uuid: string; client_name: string })[] = []
+    const titleIndex = infohashMap ? buildTitleIndex(infohashMap) : null
 
     for (const client of clients) {
         const driver = getDriver(client.type)
         if (!driver) continue
 
-        // Skip si le client est en cooldown suite à des échecs d'auth
         if (isInCooldown(client.uuid)) {
             const remaining = cooldownRemaining(client.uuid)
             logger.debug('torrent-clients', `Client "${client.name}" en cooldown — retry dans ${remaining}`)
@@ -266,12 +278,23 @@ export async function dispatchList(category?: string): Promise<(TorrentInfo & { 
                 const save_path = hasRemap
                     ? remapSavePath(t.save_path, remotePath, localPath)
                     : t.save_path
-                results.push({ ...t, save_path, client_uuid: client.uuid, client_name: client.name })
+
+                // Pour Synology (hash = dbid_xxx), on essaie de résoudre le vrai infohash
+                // en matchant le titre du torrent dans la infohashMap
+                let hash = t.hash
+                if (titleIndex && t.hash.startsWith('dbid_')) {
+                    const resolved = titleIndex.get(t.name.toLowerCase().trim())
+                    if (resolved) {
+                        logger.debug('torrent-clients', `Synology hash résolu : "${t.name}" → ${resolved.slice(0, 8)}…`)
+                        hash = resolved
+                    }
+                }
+
+                results.push({ ...t, hash, save_path, client_uuid: client.uuid, client_name: client.name })
             }
         } catch (err) {
             const msg = err instanceof Error ? err.message : 'Erreur inconnue'
             logger.error('torrent-clients', `Impossible de récupérer la liste depuis "${client.name}" : ${msg}`)
-            // Déclencher le backoff si c'est une erreur d'auth
             const isAuthError = msg.toLowerCase().includes('login') ||
                 msg.toLowerCase().includes('auth') ||
                 msg.toLowerCase().includes('ban') ||
