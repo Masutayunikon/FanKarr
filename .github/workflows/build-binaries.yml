@@ -48,6 +48,12 @@ jobs:
             bun-target: bun-windows-x64
             binary: binaries/fankarr.exe
             archive: fankarr-windows-x64.zip
+          # Baseline pour les CPUs Windows anciens (sans AVX2, avant ~2013)
+          - target: windows-x64-baseline
+            os: windows-latest
+            bun-target: bun-windows-x64-baseline
+            binary: binaries/fankarr.exe
+            archive: fankarr-windows-x64-baseline.zip
           - target: linux-x64
             os: ubuntu-latest
             bun-target: bun-linux-x64
@@ -90,13 +96,13 @@ jobs:
           path: public/
 
       - name: Build binary (Unix)
-        if: matrix.target != 'windows-x64'
+        if: matrix.target != 'windows-x64' && matrix.target != 'windows-x64-baseline'
         run: |
           mkdir -p binaries
           bun build server/index.ts --compile --target ${{ matrix.bun-target }} --outfile ${{ matrix.binary }}
 
       - name: Build binary (Windows)
-        if: matrix.target == 'windows-x64'
+        if: matrix.target == 'windows-x64' || matrix.target == 'windows-x64-baseline'
         run: |
           New-Item -ItemType Directory -Force -Path binaries
           bun build server/index.ts --compile --target ${{ matrix.bun-target }} --outfile ${{ matrix.binary }}
@@ -106,12 +112,12 @@ jobs:
         run: bun build server/organize-worker.ts --target node --outfile organize-worker.js
 
       - name: Package archive (Windows)
-        if: matrix.target == 'windows-x64'
+        if: matrix.target == 'windows-x64' || matrix.target == 'windows-x64-baseline'
         run: Compress-Archive -Path ${{ matrix.binary }}, organize-worker.js, public -DestinationPath ${{ matrix.archive }}
         shell: pwsh
 
       - name: Package archive (Unix)
-        if: matrix.target != 'windows-x64'
+        if: matrix.target != 'windows-x64' && matrix.target != 'windows-x64-baseline'
         run: |
           chmod +x ${{ matrix.binary }}
           zip -r ${{ matrix.archive }} ${{ matrix.binary }} organize-worker.js public/
