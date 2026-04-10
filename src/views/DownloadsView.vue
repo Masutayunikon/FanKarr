@@ -39,7 +39,7 @@
         </div>
       </div>
 
-      <!-- Toolbar : recherche + tri -->
+      <!-- Toolbar : recherche + tri + colonnes -->
       <div class="flex items-center gap-2 mb-4">
         <div class="relative flex-1 max-w-xs">
           <Search class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" :size="14" />
@@ -51,6 +51,7 @@
           />
         </div>
 
+        <!-- Tri -->
         <div class="relative shrink-0" ref="sortRef">
           <button
               @click="sortOpen = !sortOpen"
@@ -61,7 +62,6 @@
             <span class="hidden md:inline text-xs">Trier</span>
             <span v-if="activeSort !== 'none'" class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-accent" />
           </button>
-
           <div
               v-if="sortOpen"
               class="absolute top-full right-0 mt-1 bg-card border border-border rounded-xl p-2 z-20 w-48 flex flex-col gap-0.5 shadow-xl"
@@ -78,17 +78,42 @@
             </button>
           </div>
         </div>
+
+        <!-- Colonnes -->
+        <div class="relative shrink-0" ref="colRef">
+          <button
+              @click="colOpen = !colOpen"
+              class="btn-secondary flex items-center gap-1.5 py-1.5 px-2.5"
+              :class="colOpen ? 'border-accent text-accent' : ''"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
+              <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+            <span class="hidden md:inline text-xs">Colonnes</span>
+          </button>
+          <div
+              v-if="colOpen"
+              class="absolute top-full right-0 mt-1 bg-card border border-border rounded-xl p-2 z-20 w-52 flex flex-col gap-0.5 shadow-xl"
+          >
+            <p class="text-[10px] text-muted px-3 py-1">Colonnes affichées</p>
+            <label
+                v-for="col in columnOptions" :key="col.key"
+                class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs cursor-pointer hover:bg-hover transition-colors"
+            >
+              <input type="checkbox" v-model="columns[col.key]" class="accent-accent" />
+              {{ col.label }}
+            </label>
+          </div>
+        </div>
       </div>
 
-      <!-- Onglets + filtre -->
+      <!-- Onglets + filtres -->
       <div class="flex items-center justify-between mb-4">
         <div class="flex gap-1 bg-shell rounded-lg p-1 border border-border">
           <button
               @click="activeTab = 'active'"
               class="px-4 py-1.5 text-xs rounded-md transition-colors"
-              :class="activeTab === 'active'
-              ? 'bg-active text-primary'
-              : 'text-muted hover:text-primary'"
+              :class="activeTab === 'active' ? 'bg-active text-primary' : 'text-muted hover:text-primary'"
           >
             En cours
             <span v-if="activeTorrents.length > 0" class="ml-1.5 text-[10px] text-accent">
@@ -98,9 +123,7 @@
           <button
               @click="activeTab = 'done'"
               class="px-4 py-1.5 text-xs rounded-md transition-colors"
-              :class="activeTab === 'done'
-              ? 'bg-active text-primary'
-              : 'text-muted hover:text-primary'"
+              :class="activeTab === 'done' ? 'bg-active text-primary' : 'text-muted hover:text-primary'"
           >
             Terminés
             <span v-if="doneTorrents.length > 0" class="ml-1.5 text-[10px] text-accent">
@@ -109,18 +132,35 @@
           </button>
         </div>
 
-        <div v-if="activeTab === 'done'" class="flex items-center gap-2">
-          <span class="text-xs text-muted">Masquer importés</span>
-          <button
-              @click="hideImported = !hideImported"
-              class="relative shrink-0 w-10 h-[22px] rounded-full transition-colors duration-200"
-              :class="hideImported ? 'bg-accent' : 'bg-border'"
-          >
-            <span
-                class="absolute top-[3px] left-[3px] w-4 h-4 rounded-full bg-white transition-transform duration-200"
-                :class="hideImported ? 'translate-x-[18px]' : 'translate-x-0'"
-            />
-          </button>
+        <div v-if="activeTab === 'done'" class="flex items-center gap-3">
+          <!-- Filtre seeds uniquement -->
+          <label class="flex items-center gap-1.5 cursor-pointer">
+            <span class="text-xs text-muted">Seeds uniquement</span>
+            <button
+                @click="seedingOnly = !seedingOnly"
+                class="relative shrink-0 w-10 h-[22px] rounded-full transition-colors duration-200"
+                :class="seedingOnly ? 'bg-green-500' : 'bg-border'"
+            >
+              <span
+                  class="absolute top-[3px] left-[3px] w-4 h-4 rounded-full bg-white transition-transform duration-200"
+                  :class="seedingOnly ? 'translate-x-[18px]' : 'translate-x-0'"
+              />
+            </button>
+          </label>
+          <!-- Masquer importés -->
+          <label class="flex items-center gap-1.5 cursor-pointer">
+            <span class="text-xs text-muted">Masquer importés</span>
+            <button
+                @click="hideImported = !hideImported"
+                class="relative shrink-0 w-10 h-[22px] rounded-full transition-colors duration-200"
+                :class="hideImported ? 'bg-accent' : 'bg-border'"
+            >
+              <span
+                  class="absolute top-[3px] left-[3px] w-4 h-4 rounded-full bg-white transition-transform duration-200"
+                  :class="hideImported ? 'translate-x-[18px]' : 'translate-x-0'"
+              />
+            </button>
+          </label>
         </div>
       </div>
 
@@ -162,12 +202,12 @@
                 <span class="text-[10px] px-2 py-0.5 rounded border" :class="stateBadge(t.state).class">
                   {{ stateBadge(t.state).label }}
                 </span>
-                <span class="text-xs text-muted">{{ t.client_name }}</span>
+                <span v-if="columns.client" class="text-xs text-muted">{{ t.client_name }}</span>
               </div>
             </div>
             <div class="text-right shrink-0">
               <p class="text-sm font-semibold text-primary">{{ clampedProgress(t) }}%</p>
-              <p class="text-xs text-muted mt-0.5">{{ formatSize(t.downloaded) }} / {{ formatSize(t.size) }}</p>
+              <p v-if="columns.size" class="text-xs text-muted mt-0.5">{{ formatSize(t.downloaded) }} / {{ formatSize(t.size) }}</p>
             </div>
           </div>
 
@@ -185,14 +225,29 @@
           <!-- Infos bas + actions -->
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-3 text-xs text-muted">
+              <!-- Downloading -->
               <span v-if="t.state === 'downloading'">↓ {{ formatSpeed(t.speed) }}</span>
               <span v-if="t.state === 'downloading' && t.eta > 0">ETA {{ formatEta(t.eta) }}</span>
-              <span v-if="t.state === 'seeding'" class="text-green-500">Complété</span>
+
+              <!-- Seeding : ratio + upload -->
+              <template v-if="t.state === 'seeding'">
+                <span class="text-green-500">Complété</span>
+                <span v-if="columns.ratio" class="text-xs font-mono"
+                      :class="t.ratio >= 1 ? 'text-green-400' : t.ratio >= 0.5 ? 'text-yellow-500' : 'text-muted'">
+                  R {{ t.ratio?.toFixed(2) ?? '0.00' }}
+                </span>
+                <span v-if="columns.uploaded" class="text-xs text-muted">
+                  ↑ {{ formatSize(t.uploaded ?? 0) }}
+                </span>
+                <span v-if="columns.upspeed && t.upspeed > 0" class="text-xs text-muted">
+                  {{ formatSpeed(t.upspeed) }}
+                </span>
+              </template>
+
               <span v-if="t.state === 'unknown'" class="text-yellow-500">État non remonté par le client</span>
             </div>
 
             <div v-if="t.state === 'seeding' || t.state === 'unknown'" class="flex items-center gap-2">
-
               <!-- Erreurs fichiers -->
               <div v-if="t.errorFiles?.length > 0" class="relative group/err">
                 <span class="text-xs px-2 py-0.5 rounded border border-red-500/40 text-red-400 cursor-default">
@@ -256,19 +311,41 @@ const importing    = ref<Record<string, boolean>>({})
 const importingAll = ref(false)
 const activeTab    = ref<'active' | 'done'>('active')
 const hideImported = ref(false)
-const search    = ref('')
-const sortOpen  = ref(false)
-const activeSort = ref<'none' | 'name' | 'size' | 'progress' | 'state'>('none')
-const sortDir   = ref<'asc' | 'desc'>('asc')
-const sortRef   = ref<HTMLElement | null>(null)
+const seedingOnly  = ref(false)
+const search       = ref('')
+const sortOpen     = ref(false)
+const colOpen      = ref(false)
+const activeSort   = ref<'none' | 'name' | 'size' | 'progress' | 'state' | 'ratio'>('none')
+const sortDir      = ref<'asc' | 'desc'>('asc')
+const sortRef      = ref<HTMLElement | null>(null)
+const colRef       = ref<HTMLElement | null>(null)
+
+// Colonnes visibles
+const columns = ref({
+  client  : true,
+  size    : true,
+  ratio   : true,
+  uploaded: true,
+  upspeed : true,
+})
+
+const columnOptions = [
+  { key: 'client',   label: 'Client' },
+  { key: 'size',     label: 'Taille / Téléchargé' },
+  { key: 'ratio',    label: 'Ratio' },
+  { key: 'uploaded', label: 'Uploadé (total)' },
+  { key: 'upspeed',  label: 'Vitesse upload' },
+]
 
 onClickOutside(sortRef, () => { sortOpen.value = false })
+onClickOutside(colRef,  () => { colOpen.value  = false })
 
 const sortOptions = [
   { label: 'Nom',        value: 'name'     },
   { label: 'Taille',     value: 'size'     },
   { label: 'Progression', value: 'progress' },
   { label: 'État',       value: 'state'    },
+  { label: 'Ratio',      value: 'ratio'    },
 ]
 
 function setSort(val: typeof activeSort.value) {
@@ -283,7 +360,6 @@ function setSort(val: typeof activeSort.value) {
 
 let pollInterval: ReturnType<typeof setInterval> | null = null
 
-// FIX : unknown retiré de activeTorrents, ajouté dans doneTorrents
 const activeTorrents = computed(() =>
     torrents.value.filter(t => ['downloading', 'paused', 'checking', 'error'].includes(t.state))
 )
@@ -295,17 +371,18 @@ const doneTorrents = computed(() =>
 const visibleTorrents = computed(() => {
   let list = activeTab.value === 'active'
       ? activeTorrents.value
-      : hideImported.value
-          ? doneTorrents.value.filter(t => t.organizeState !== 'done')
-          : doneTorrents.value
+      : doneTorrents.value
 
-  // Recherche
+  if (activeTab.value === 'done') {
+    if (seedingOnly.value)  list = list.filter(t => t.state === 'seeding')
+    if (hideImported.value) list = list.filter(t => t.organizeState !== 'done')
+  }
+
   if (search.value.trim()) {
     const q = search.value.toLowerCase()
     list = list.filter(t => t.name.toLowerCase().includes(q))
   }
 
-  // Tri
   if (activeSort.value !== 'none') {
     const dir = sortDir.value === 'asc' ? 1 : -1
     list = [...list].sort((a, b) => {
@@ -314,6 +391,7 @@ const visibleTorrents = computed(() => {
         case 'size'    : return (a.size - b.size) * dir
         case 'progress': return (a.progress - b.progress) * dir
         case 'state'   : return a.state.localeCompare(b.state) * dir
+        case 'ratio'   : return ((a.ratio ?? 0) - (b.ratio ?? 0)) * dir
         default        : return 0
       }
     })
@@ -329,7 +407,6 @@ const stats = computed(() => [
   { label: 'Erreurs',   value: torrents.value.filter(t => t.state === 'error').length },
 ])
 
-// FIX : progress cappé à 100 pour éviter "278.2 GB / 278.1 GB" → 100%
 function clampedProgress(t: any): number {
   return Math.min(100, Math.max(0, t.progress ?? 0))
 }
@@ -420,14 +497,13 @@ function stateBadge(state: string) {
     paused     : { label: 'En pause',       class: 'border-border text-muted' },
     checking   : { label: 'Vérification',   class: 'border-yellow-500/40 text-yellow-500' },
     error      : { label: 'Erreur',         class: 'border-red-500/40 text-red-400' },
-    // FIX : badge jaune pour signaler état dégradé sans alarmer
     unknown    : { label: 'État inconnu',   class: 'border-yellow-500/40 text-yellow-500' },
   }
   return map[state] ?? map.unknown
 }
 
 function formatSize(bytes: number): string {
-  if (bytes === 0) return '0 B'
+  if (!bytes || bytes === 0) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
   const i = Math.floor(Math.log(bytes) / Math.log(1024))
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`

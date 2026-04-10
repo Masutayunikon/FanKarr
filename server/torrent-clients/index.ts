@@ -41,7 +41,10 @@ export interface TorrentInfo {
     progress  : number
     size      : number
     downloaded: number
+    uploaded  : number
+    ratio     : number
     speed     : number
+    upspeed   : number
     eta       : number
     save_path : string
     category  : string

@@ -94,7 +94,8 @@ const TR: TorrentClientDriver = {
     async list(config, category) {
         const fields = [
             'hashString', 'name', 'status', 'percentDone', 'totalSize',
-            'downloadedEver', 'rateDownload', 'eta', 'downloadDir', 'labels',
+            'downloadedEver', 'uploadedEver', 'uploadRatio',
+            'rateDownload', 'rateUpload', 'eta', 'downloadDir', 'labels',
         ]
         const data = await trRequest(config, 'torrent-get', { fields })
         const torrents: any[] = data.arguments?.torrents ?? []
@@ -111,7 +112,10 @@ const TR: TorrentClientDriver = {
                 progress  : Math.round(t.percentDone * 100),
                 size      : t.totalSize,
                 downloaded: t.downloadedEver,
+                uploaded  : t.uploadedEver ?? 0,
+                ratio     : Math.round((t.uploadRatio ?? 0) * 100) / 100,
                 speed     : t.rateDownload,
+                upspeed   : t.rateUpload ?? 0,
                 eta       : t.eta ?? -1,
                 save_path : t.downloadDir,
                 category  : t.labels?.[0] ?? '',

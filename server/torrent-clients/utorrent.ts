@@ -62,7 +62,7 @@ function mapTorrent(t: any[]): TorrentInfo {
     // [hash, status, name, size, progress, downloaded, uploaded, ratio,
     //  ul_speed, dl_speed, eta, label, peers_connected, peers_swarm,
     //  seeds_connected, seeds_swarm, availability, queue_order, remaining]
-    const [hash, status, name, size, progress, downloaded, , , , dlSpeed, eta, label] = t
+    const [hash, status, name, size, progress, downloaded, uploaded, ratio, ulSpeed, dlSpeed, eta, label] = t
     return {
         hash      : hash.toLowerCase(),
         name,
@@ -70,9 +70,12 @@ function mapTorrent(t: any[]): TorrentInfo {
         progress  : Math.min(100, Math.round(progress / 10)),
         size,
         downloaded,
+        uploaded  : uploaded ?? 0,
+        ratio     : Math.round(((ratio ?? 0) / 1000) * 100) / 100, // uTorrent ratio est x1000
         speed     : dlSpeed ?? 0,
+        upspeed   : ulSpeed ?? 0,
         eta       : eta ?? -1,
-        save_path : '',   // récupéré séparément via torrent properties si besoin
+        save_path : '',
         category  : label ?? '',
     }
 }

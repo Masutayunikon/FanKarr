@@ -108,11 +108,6 @@ const DS: TorrentClientDriver = {
         const tasks: any[] = data?.tasks ?? []
 
         return tasks
-            .filter(t => {
-                if (!category) return true
-                // Synology n'a pas de labels natifs — on filtre par destination si elle contient la catégorie
-                return (t.additional?.detail?.destination as string)?.includes(String(category))
-            })
             .map(t => {
                 const transfer = t.additional?.transfer ?? {}
                 const size     = t.size ?? 0
@@ -124,10 +119,13 @@ const DS: TorrentClientDriver = {
                     progress  : size > 0 ? Math.min(100, Math.round((dl / size) * 100)) : 0,
                     size,
                     downloaded: dl,
+                    uploaded  : transfer.size_uploaded ?? 0,
+                    ratio     : size > 0 ? Math.round(((transfer.size_uploaded ?? 0) / size) * 100) / 100 : 0,
                     speed     : transfer.speed_download ?? 0,
+                    upspeed   : transfer.speed_upload ?? 0,
                     eta       : -1,
                     save_path : t.additional?.detail?.destination ?? '',
-                    category  : '',
+                    category  : category ?? '',
                 } satisfies TorrentInfo
             })
     },

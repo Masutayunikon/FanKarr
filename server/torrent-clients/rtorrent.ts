@@ -178,11 +178,13 @@ const RT: TorrentClientDriver = {
             'd.complete',
             'd.size_bytes',
             'd.bytes_done',
+            'd.up.total',    // total uploadé
+            'd.ratio',       // ratio x1000
             'd.down.rate',
+            'd.up.rate',
             'd.left_bytes',
-            'd.down.rate',
             'd.directory',
-            'd.custom1',  // label rTorrent
+            'd.custom1',
         ]
 
         const rows = await d_multicall(config, 'main', methods)
@@ -190,10 +192,11 @@ const RT: TorrentClientDriver = {
         return rows
             .map(r => {
                 const [hash, name, isOpen, isActive, isChecking, isComplete,
-                    size, downloaded, speed, leftBytes, , directory, label] = r
+                    size, downloaded, uploadedTotal, ratioRaw,
+                    dlSpeed, ulSpeed, leftBytes, directory, label] = r
 
                 const progress = size > 0 ? Math.min(100, Math.round(((size - leftBytes) / size) * 100)) : 0
-                const eta      = speed > 0 && leftBytes > 0 ? Math.round(leftBytes / speed) : -1
+                const eta      = Number(dlSpeed) > 0 && Number(leftBytes) > 0 ? Math.round(Number(leftBytes) / Number(dlSpeed)) : -1
 
                 return {
                     hash      : String(hash).toLowerCase(),
@@ -202,7 +205,10 @@ const RT: TorrentClientDriver = {
                     progress,
                     size      : Number(size),
                     downloaded: Number(downloaded),
-                    speed     : Number(speed),
+                    uploaded  : Number(uploadedTotal ?? 0),
+                    ratio     : Math.round((Number(ratioRaw ?? 0) / 1000) * 100) / 100,
+                    speed     : Number(dlSpeed),
+                    upspeed   : Number(ulSpeed ?? 0),
                     eta,
                     save_path : String(directory),
                     category  : String(label ?? ''),
