@@ -48,9 +48,8 @@ jobs:
             bun-target: bun-windows-x64
             binary: binaries/fankarr.exe
             archive: fankarr-windows-x64.zip
-          # Baseline pour les CPUs Windows anciens (sans AVX2, avant ~2013)
           - target: windows-x64-baseline
-            os: windows-latest
+            os: ubuntu-latest
             bun-target: bun-windows-x64-baseline
             binary: binaries/fankarr.exe
             archive: fankarr-windows-x64-baseline.zip
@@ -107,6 +106,8 @@ jobs:
           New-Item -ItemType Directory -Force -Path binaries
           bun build server/index.ts --compile --target ${{ matrix.bun-target }} --outfile ${{ matrix.binary }}
         shell: pwsh
+        env:
+          BUN_DOWNLOAD_TIMEOUT: 120000
 
       - name: Build worker
         run: bun build server/organize-worker.ts --target node --outfile organize-worker.js
