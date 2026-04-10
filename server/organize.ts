@@ -64,7 +64,8 @@ export async function scanMediaPath(
 
     logger.info('organize', `Scan de la médiathèque : ${mediaPath}`)
 
-    // Map : nom_sur_disque → { hash, srcFilename, episodeId, season, episode }
+    // Map : nom_sans_extension → { hash, srcFilename, episodeId, season, episode }
+    // On indexe par nom sans extension pour matcher quelle que soit l'extension sur le disque
     const filenameIndex = new Map<string, {
         hash        : string
         srcFilename : string
@@ -85,7 +86,6 @@ export async function scanMediaPath(
                     const srcFilename = p.path.replace(/\\/g, '/').split('/').pop()
                     if (!srcFilename) continue
 
-                    const srcExt = path.extname(srcFilename)
                     const entry = {
                         hash,
                         srcFilename,
@@ -95,24 +95,25 @@ export async function scanMediaPath(
                         destFilename: srcFilename,
                     }
 
-                    // 1. Nom brut source
-                    filenameIndex.set(srcFilename, entry)
-
-                    // 2. nfo_filename avec extension swappée
-                    if (ep.nfo_filename) {
-                        const nfoRenamed = swapExt(ep.nfo_filename, srcExt)
-                        filenameIndex.set(nfoRenamed, { ...entry, destFilename: nfoRenamed })
+                    // Helper : indexer par nom sans extension
+                    const idx = (filename: string, destFilename?: string) => {
+                        const base = filename.replace(/\.[^.]+$/, '')
+                        filenameIndex.set(base, { ...entry, destFilename: destFilename ?? filename })
                     }
+
+                    // 1. Nom brut source
+                    idx(srcFilename)
+
+                    // 2. nfo_filename (sans extension — le swap se fera au moment du match)
+                    if (ep.nfo_filename) idx(ep.nfo_filename)
 
                     // 3. original_filename
-                    if (ep.original_filename) {
-                        filenameIndex.set(ep.original_filename, { ...entry, destFilename: ep.original_filename })
-                    }
+                    if (ep.original_filename) idx(ep.original_filename)
 
-                    // 4. formatted_name + .mkv
+                    // 4. formatted_name
                     if (ep.formatted_name?.trim()) {
-                        const fmtName = ep.formatted_name.replace(/[<>:"/\\|?*]/g, '').trim() + '.mkv'
-                        filenameIndex.set(fmtName, { ...entry, destFilename: fmtName })
+                        const fmtBase = ep.formatted_name.replace(/[<>:"/\\|?*]/g, '').trim()
+                        filenameIndex.set(fmtBase, { ...entry, destFilename: fmtBase })
                     }
                 }
             }
@@ -136,12 +137,18 @@ export async function scanMediaPath(
             const full = path.join(dir, entry.name)
             if (entry.isDirectory()) {
                 walk(full)
-            } else if (entry.isFile() && entry.name.endsWith('.mkv')) {
+            } else if (entry.isFile() && /\.(mkv|mp4|avi|m4v|mov|wmv)$/i.test(entry.name)) {
                 result.found++
-                const match = filenameIndex.get(entry.name)
+                // Chercher par nom sans extension pour matcher quelle que soit l'extension
+                const nameWithoutExt = entry.name.replace(/\.[^.]+$/, '')
+                const match = filenameIndex.get(nameWithoutExt)
                 if (!match) continue
 
-                const { hash, srcFilename, episodeId, season, episode, destFilename } = match
+                const { hash, srcFilename, episodeId, season, episode } = match
+                // Le destFilename prend l'extension réelle du fichier sur le disque
+                const realExt     = path.extname(entry.name)
+                const destBase    = match.destFilename.replace(/\.[^.]+$/, '')
+                const destFilename = destBase + realExt
                 presentFiles.add(`${hash}:${episodeId}`)
 
                 if (organized[hash]?.[String(episodeId)]) continue
