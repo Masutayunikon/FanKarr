@@ -48,11 +48,11 @@ jobs:
             bun-target: bun-windows-x64
             binary: binaries/fankarr.exe
             archive: fankarr-windows-x64.zip
-          - target: windows-x64-baseline
+          - target: windows-x64-legacy
             os: ubuntu-latest
             bun-target: bun-windows-x64-baseline
             binary: binaries/fankarr.exe
-            archive: fankarr-windows-x64-baseline.zip
+            archive: fankarr-windows-x64-legacy.zip
           - target: linux-x64
             os: ubuntu-latest
             bun-target: bun-linux-x64
@@ -62,7 +62,7 @@ jobs:
             os: ubuntu-latest
             bun-target: bun-linux-arm64
             binary: binaries/fankarr
-            archive: fankarr-linux-arm64-termux.zip
+            archive: fankarr-linux-arm64.zip
           - target: macos
             os: macos-latest
             bun-target: bun-darwin-arm64
@@ -95,32 +95,29 @@ jobs:
           path: public/
 
       - name: Build binary (Unix)
-        if: matrix.target != 'windows-x64' && matrix.target != 'windows-x64-baseline'
+        if: matrix.target != 'windows-x64'
         run: |
           mkdir -p binaries
           bun build server/index.ts --compile --target ${{ matrix.bun-target }} --outfile ${{ matrix.binary }}
 
       - name: Build binary (Windows)
-        if: matrix.target == 'windows-x64' || matrix.target == 'windows-x64-baseline'
+        if: matrix.target == 'windows-x64'
         run: |
           New-Item -ItemType Directory -Force -Path binaries
           bun build server/index.ts --compile --target ${{ matrix.bun-target }} --outfile ${{ matrix.binary }}
         shell: pwsh
-        env:
-          BUN_DOWNLOAD_TIMEOUT: 120000
 
       - name: Build worker
         run: bun build server/organize-worker.ts --target node --outfile organize-worker.js
 
       - name: Package archive (Windows)
-        if: matrix.target == 'windows-x64' || matrix.target == 'windows-x64-baseline'
+        if: matrix.target == 'windows-x64'
         run: Compress-Archive -Path ${{ matrix.binary }}, organize-worker.js, public -DestinationPath ${{ matrix.archive }}
         shell: pwsh
 
       - name: Package archive (Unix)
-        if: matrix.target != 'windows-x64' && matrix.target != 'windows-x64-baseline'
+        if: matrix.target != 'windows-x64'
         run: |
-          chmod +x ${{ matrix.binary }}
           zip -r ${{ matrix.archive }} ${{ matrix.binary }} organize-worker.js public/
 
       - name: Upload archive to Release
