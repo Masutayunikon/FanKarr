@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.6.1](https://github.com/Masutayunikon/FanKarr/compare/v3.6.0...v3.6.1) (2026-04-10)
+
+
+### Bug Fixes
+
+* windows baseline ([0469031](https://github.com/Masutayunikon/FanKarr/commit/0469031ff05c8794b20f73bc7c3ac417ab473e5d))
+
 ## [3.6.0](https://github.com/Masutayunikon/FanKarr/compare/v3.5.0...v3.6.0) (2026-04-10)
 
 
