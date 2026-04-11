@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.8.0](https://github.com/Masutayunikon/FanKarr/compare/v3.7.1...v3.8.0) (2026-04-11)
+
+
+### Features
+
+* force release for test ([d921fc1](https://github.com/Masutayunikon/FanKarr/commit/d921fc16d6b19d8aeb354fc3a5fc533afc81cb5b))
+
 ## [3.7.1](https://github.com/Masutayunikon/FanKarr/compare/v3.7.0...v3.7.1) (2026-04-11)
 
 
