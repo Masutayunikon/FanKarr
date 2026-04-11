@@ -647,18 +647,29 @@ app.post('/api/manual-import', requireAuth, async (req, res) => {
         try {
             if (!fs.existsSync(file_path)) throw new Error('Fichier source introuvable')
             fs.mkdirSync(destDir, { recursive: true })
-            if (!fs.existsSync(destPath)) {
-                if (organizeMode === 'hardlink') {
-                    try { fs.linkSync(file_path, destPath) }
-                    catch { await fs.promises.copyFile(file_path, destPath) }
-                } else if (organizeMode === 'move') {
-                    await fs.promises.copyFile(file_path, destPath)
-                    await fs.promises.unlink(file_path)
-                } else {
-                    // copy
-                    await fs.promises.copyFile(file_path, destPath)
+
+            if (file_path !== destPath) {
+                // Si le fichier est déjà dans mediaPath/[série]/ → rename sur place
+                const serieRootPath  = path.join(mediaPath, serieTitle)
+                const isInSeriePath  = file_path.startsWith(serieRootPath + path.sep) || file_path.startsWith(serieRootPath + '/')
+
+                if (isInSeriePath && !fs.existsSync(destPath)) {
+                    fs.renameSync(file_path, destPath)
+                    logger.info('api', `Import manuel (rename) : "${srcFilename}" → "${destFilename}"`)
+                } else if (!isInSeriePath && !fs.existsSync(destPath)) {
+                    if (organizeMode === 'hardlink') {
+                        try { fs.linkSync(file_path, destPath) }
+                        catch { await fs.promises.copyFile(file_path, destPath) }
+                    } else if (organizeMode === 'move') {
+                        await fs.promises.copyFile(file_path, destPath)
+                        await fs.promises.unlink(file_path)
+                    } else {
+                        await fs.promises.copyFile(file_path, destPath)
+                    }
+                    logger.info('api', `Import manuel : "${srcFilename}" → "${destPath}"`)
                 }
             }
+
             const torrentHash = String(hash || '').toLowerCase() || 'manual'
             if (!organized[torrentHash]) organized[torrentHash] = {}
             organized[torrentHash][String(episode_id)] = {
@@ -667,7 +678,6 @@ app.post('/api/manual-import', requireAuth, async (req, res) => {
                 src_filename: srcFilename, dest_filename: destFilename, dest_path: destPath,
             }
             done.push(episode_id)
-            logger.info('api', `Import manuel : "${srcFilename}" → "${destPath}"`)
         } catch (err) {
             const msg = err instanceof Error ? err.message : 'Erreur inconnue'
             errors.push({ file: srcFilename, error: msg })

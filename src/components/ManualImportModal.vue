@@ -7,14 +7,17 @@
         <div class="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
           <div>
             <h3 class="text-sm font-semibold text-primary">Import manuel — {{ serieName }}</h3>
-            <p class="text-xs text-muted mt-0.5">Associez vos fichiers existants aux épisodes du catalogue</p>
+            <p class="text-xs text-muted mt-0.5">
+              {{ step === 'folder' ? 'Sélectionnez le dossier contenant vos fichiers vidéo' :
+                step === 'match'  ? 'Associez vos fichiers aux épisodes du catalogue' :
+                    'Import terminé' }}
+            </p>
           </div>
           <button @click="$emit('close')" class="text-muted hover:text-primary transition-colors text-lg leading-none">✕</button>
         </div>
 
         <!-- Étape 1 : Choisir un dossier -->
         <div v-if="step === 'folder'" class="flex flex-col gap-4 px-6 py-5">
-          <p class="text-sm text-secondary">Sélectionnez le dossier contenant vos fichiers vidéo :</p>
           <button
               @click="pickerOpen = true"
               class="settings-input text-left font-mono truncate"
@@ -36,9 +39,10 @@
           <!-- Toolbar -->
           <div class="flex items-center justify-between px-6 py-3 border-b border-border shrink-0 gap-3">
             <p class="text-xs text-muted">
-              <span class="text-primary font-medium">{{ files.length }}</span> fichier{{ files.length > 1 ? 's' : '' }} trouvé{{ files.length > 1 ? 's' : '' }}
-              · <span class="text-green-400">{{ matchedCount }} matché{{ matchedCount > 1 ? 's' : '' }}</span>
-              <span v-if="unmatchedCount > 0"> · <span class="text-yellow-500">{{ unmatchedCount }} non matché{{ unmatchedCount > 1 ? 's' : '' }}</span></span>
+              <span class="text-primary font-medium">{{ items.length }}</span> fichier{{ items.length > 1 ? 's' : '' }}
+              · <span class="text-green-400">{{ matchedCount }} associé{{ matchedCount > 1 ? 's' : '' }}</span>
+              <span v-if="alreadyImportedCount > 0"> · <span class="text-blue-400">{{ alreadyImportedCount }} déjà importé{{ alreadyImportedCount > 1 ? 's' : '' }}</span></span>
+              <span v-if="unmatchedCount > 0"> · <span class="text-yellow-500">{{ unmatchedCount }} non associé{{ unmatchedCount > 1 ? 's' : '' }}</span></span>
             </p>
             <button @click="step = 'folder'" class="text-xs text-muted hover:text-primary transition-colors">← Changer de dossier</button>
           </div>
@@ -49,28 +53,35 @@
                 v-for="(item, i) in items"
                 :key="item.file.path"
                 class="flex items-center gap-3 p-3 rounded-lg border transition-colors"
-                :class="item.episode_id
-                  ? 'border-green-500/20 bg-green-500/5'
-                  : 'border-border bg-shell'"
+                :class="item.alreadyImported
+                  ? 'border-blue-500/20 bg-blue-500/5'
+                  : item.episode_id
+                    ? 'border-green-500/20 bg-green-500/5'
+                    : 'border-border bg-shell'"
             >
               <!-- Icône état -->
-              <div class="w-5 h-5 rounded-md flex items-center justify-center shrink-0"
-                   :class="item.episode_id ? 'bg-green-500/15 text-green-400' : 'bg-border text-muted'">
-                <svg v-if="item.episode_id" width="10" height="10" viewBox="0 0 12 12" stroke="currentColor" stroke-width="2.5" fill="none"><polyline points="2 6 5 9 10 3"/></svg>
+              <div class="w-5 h-5 rounded-md flex items-center justify-center shrink-0 text-[10px]"
+                   :class="item.alreadyImported ? 'bg-blue-500/15 text-blue-400' :
+                           item.episode_id ? 'bg-green-500/15 text-green-400' : 'bg-border text-muted'">
+                <svg v-if="item.alreadyImported" width="10" height="10" viewBox="0 0 12 12" stroke="currentColor" stroke-width="2.5" fill="none"><polyline points="2 6 5 9 10 3"/><polyline points="6 2 10 6 6 10" opacity="0.4"/></svg>
+                <svg v-else-if="item.episode_id" width="10" height="10" viewBox="0 0 12 12" stroke="currentColor" stroke-width="2.5" fill="none"><polyline points="2 6 5 9 10 3"/></svg>
                 <svg v-else width="10" height="10" viewBox="0 0 12 12" stroke="currentColor" stroke-width="2" fill="none"><line x1="6" y1="2" x2="6" y2="7"/><circle cx="6" cy="9.5" r="0.5" fill="currentColor"/></svg>
               </div>
 
               <!-- Nom fichier -->
               <div class="flex-1 min-w-0">
                 <p class="text-xs text-primary font-mono truncate">{{ item.file.name }}</p>
-                <p class="text-[11px] text-muted mt-0.5">{{ formatSize(item.file.size) }}</p>
+                <p class="text-[11px] text-muted mt-0.5">
+                  {{ formatSize(item.file.size) }}
+                  <span v-if="item.alreadyImported" class="text-blue-400 ml-1">— déjà importé</span>
+                </p>
               </div>
 
               <!-- Sélecteur épisode -->
               <select
                   v-model="items[i].episode_id"
                   class="settings-input text-xs py-1 max-w-[260px] shrink-0"
-                  @change="items[i].hash = getHashForEpisode(Number(items[i].episode_id))"
+                  @change="items[i].hash = getHashForEpisode(Number(items[i].episode_id)); items[i].alreadyImported = false"
               >
                 <option :value="null">— Non associé —</option>
                 <optgroup v-for="season in seasons" :key="season.id" :label="season.season_number === 0 ? 'Spéciaux' : `Saison ${season.season_number}`">
@@ -94,6 +105,7 @@
             <p v-if="importError" class="text-xs text-red-400">{{ importError }}</p>
             <p v-else class="text-xs text-muted">
               Seuls les fichiers associés à un épisode seront importés.
+              <span v-if="isInSeriePath" class="text-accent ml-1">Les fichiers déjà dans la médiathèque seront renommés sur place.</span>
             </p>
             <div class="flex gap-2">
               <button @click="$emit('close')" class="btn-secondary">Annuler</button>
@@ -170,22 +182,30 @@ const step           = ref<'folder' | 'match' | 'done'>('folder')
 const pickerOpen     = ref(false)
 const selectedFolder = ref(props.initialPath || '')
 const scanning       = ref(false)
-const importing     = ref(false)
-const importError   = ref('')
-const importResult  = ref({ done: 0, errors: [] as { file: string; error: string }[] })
+const importing      = ref(false)
+const importError    = ref('')
+const importResult   = ref({ done: 0, errors: [] as { file: string; error: string }[] })
 
 interface FileItem {
-  file      : { name: string; path: string; size: number }
-  episode_id: number | null
-  hash      : string | null
+  file           : { name: string; path: string; size: number }
+  episode_id     : number | null
+  hash           : string | null
+  alreadyImported: boolean  // fichier déjà dans organized.json
 }
 
-const files = ref<{ name: string; path: string; size: number }[]>([])
 const items = ref<FileItem[]>([])
 
-// ─── Computed ─────────────────────────────────────────────────
-const matchedCount   = computed(() => items.value.filter(i => i.episode_id !== null).length)
-const unmatchedCount = computed(() => items.value.filter(i => i.episode_id === null).length)
+// ─── Computed ──────────────────────────────────────────────────
+const matchedCount        = computed(() => items.value.filter(i => i.episode_id !== null).length)
+const unmatchedCount      = computed(() => items.value.filter(i => i.episode_id === null).length)
+const alreadyImportedCount = computed(() => items.value.filter(i => i.alreadyImported).length)
+
+// Vérifier si le dossier sélectionné est dans mediaPath/[série]/
+const isInSeriePath = computed(() => {
+  if (!selectedFolder.value || !props.initialPath) return false
+  const serieFolder = `${props.initialPath}/${props.serieName}`.replace(/\/+/g, '/')
+  return selectedFolder.value.startsWith(serieFolder)
+})
 
 // ─── Helpers ──────────────────────────────────────────────────
 function isEpisodeOrganized(epId: number): boolean {
@@ -208,36 +228,44 @@ function getHashForEpisode(episodeId: number): string | null {
   return null
 }
 
-// Auto-match : on essaie de matcher par original_filename, nfo_filename, formatted_name
+// Construire un index inversé : dest_path/dest_filename → episode_id depuis organized
+function buildOrganizedIndex(): Map<string, number> {
+  const index = new Map<string, number>()
+  for (const [epIdStr, entry] of Object.entries(props.organized)) {
+    if (entry?.dest_path) index.set(entry.dest_path, Number(epIdStr))
+    if (entry?.dest_filename) index.set(entry.dest_filename, Number(epIdStr))
+  }
+  return index
+}
+
+// Auto-match : essaie de matcher par original_filename, nfo_filename, formatted_name
 function autoMatch(filename: string): { episode_id: number | null; hash: string | null } {
   const lower = filename.toLowerCase()
+  const nameNoExt = filename.replace(/\.[^.]+$/, '').toLowerCase()
 
   for (const season of props.seasons) {
     for (const ep of season.episodes) {
       const candidates = [
         ep.original_filename,
+        ep.nfo_filename?.replace(/\.nfo$/, ''),
         ep.nfo_filename?.replace(/\.nfo$/, '.mkv'),
-        ep.formatted_name ? ep.formatted_name.replace(/[<>:"/\\|?*]/g, '') + '.mkv' : null,
-      ].filter(Boolean).map((s: string) => s.toLowerCase())
+        ep.formatted_name ? ep.formatted_name.replace(/[<>:"/\\|?*]/g, '').trim() : null,
+      ].filter(Boolean).map((s: string) => s.toLowerCase().replace(/\.[^.]+$/, ''))
 
-      if (candidates.some(c => c === lower || lower.includes(c.replace(/\.mkv$/, '')))) {
-        const hash = getHashForEpisode(ep.id)
-        return { episode_id: ep.id, hash }
+      if (candidates.some(c => c === nameNoExt || nameNoExt.startsWith(c + '.'))) {
+        return { episode_id: ep.id, hash: getHashForEpisode(ep.id) }
       }
     }
   }
 
-  // Fallback : match par numéro d'épisode dans le nom de fichier
+  // Fallback : numéro d'épisode
   const numMatch = filename.match(/(?:e|ep|episode|épisode)[.\s_-]?0*(\d+)/i)
-      ?? filename.match(/\b0*(\d{1,3})\b/)
+      ?? filename.match(/[.\s_-]0*(\d{1,3})[.\s_-]/i)
   if (numMatch) {
     const num = parseInt(numMatch[1], 10)
     for (const season of props.seasons) {
       const ep = season.episodes.find((e: any) => e.episode_number === num)
-      if (ep) {
-        const hash = getHashForEpisode(ep.id)
-        return { episode_id: ep.id, hash }
-      }
+      if (ep) return { episode_id: ep.id, hash: getHashForEpisode(ep.id) }
     }
   }
 
@@ -264,11 +292,26 @@ async function scanFolder() {
     const res = await fetch(`/api/browse-files?path=${encodeURIComponent(selectedFolder.value)}`, { credentials: 'include' })
     if (!res.ok) { toast('Erreur lors du scan', 'error'); return }
     const data = await res.json()
-    files.value = data.files ?? []
+    const files: { name: string; path: string; size: number }[] = data.files ?? []
 
-    items.value = files.value.map(f => {
+    // Construire un index des fichiers déjà importés (dest_path → episode_id)
+    const organizedIndex = buildOrganizedIndex()
+
+    items.value = files.map(f => {
+      // Vérifier si ce fichier est déjà dans organized via son path ou son nom
+      const existingEpId = organizedIndex.get(f.path) ?? organizedIndex.get(f.name) ?? null
+
+      if (existingEpId) {
+        return {
+          file           : f,
+          episode_id     : existingEpId,
+          hash           : getHashForEpisode(existingEpId),
+          alreadyImported: true,
+        }
+      }
+
       const match = autoMatch(f.name)
-      return { file: f, ...match }
+      return { file: f, ...match, alreadyImported: false }
     })
 
     step.value = 'match'
@@ -280,7 +323,7 @@ async function scanFolder() {
 }
 
 async function doImport() {
-  importing.value  = true
+  importing.value   = true
   importError.value = ''
 
   const payload = items.value
