@@ -330,6 +330,16 @@ app.get('/api/series/:id', requireAuth, async (req, res) => {
         const seasonTorrentMapBySn : Record<number, any> = {}
         const integraleTorrents    : any[] = []
         const organizedEpisodeIds  = new Set<number>()
+
+        // Vérifier les imports manuels (clé "manual") pour tous les épisodes de la série
+        const manualOrg = organized['manual'] ?? {}
+        if (serieData) {
+            for (const season of serieData.seasons ?? []) {
+                for (const ep of season.episodes ?? []) {
+                    if (manualOrg[String(ep.id)]) organizedEpisodeIds.add(ep.id)
+                }
+            }
+        }
         if (serieData) {
             for (const t of (serieData.torrents ?? [])) {
                 integraleTorrents.push({ ...t, raw: t.title })
