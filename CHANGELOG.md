@@ -1,5 +1,41 @@
 # Changelog
 
+## [3.7.0](https://github.com/Masutayunikon/FanKarr/compare/v3.6.1...v3.7.0) (2026-04-11)
+
+
+### Features
+
+* activation de l'import manuel ([9712644](https://github.com/Masutayunikon/FanKarr/commit/971264446c45401f5aaa3b3acae0fab6cae15264))
+* ajout d'une "notification" dans la navbar si une nouvelle versions est disponible ([9712644](https://github.com/Masutayunikon/FanKarr/commit/971264446c45401f5aaa3b3acae0fab6cae15264))
+* ajout d'une hashmap pour matcher les titres sur synologie et ajouter les hash de torrent manuellement ([3b8c448](https://github.com/Masutayunikon/FanKarr/commit/3b8c448ea0b0917e40d493ad4bf0e81cd35dff5a))
+* ajout de l'option supprimé le torrent si l'option déplacer est activé ([3e83dc0](https://github.com/Masutayunikon/FanKarr/commit/3e83dc0d79107e46cac14f73dd3ef04794ad824d))
+* ajout de la suppression des torrents depuis l'interface ([3e83dc0](https://github.com/Masutayunikon/FanKarr/commit/3e83dc0d79107e46cac14f73dd3ef04794ad824d))
+* ajout du bouton copie ([3e83dc0](https://github.com/Masutayunikon/FanKarr/commit/3e83dc0d79107e46cac14f73dd3ef04794ad824d))
+* ajout du ratio, upload speed, etc dans les activités ([ee34a53](https://github.com/Masutayunikon/FanKarr/commit/ee34a5350086dcd7e783f9c14ca60e09c60eb032))
+* edit d'episodes importer dans le menu d'importation ([3017cac](https://github.com/Masutayunikon/FanKarr/commit/3017cac67a5d3f5ccb9f153f233a446b0afaaec8))
+
+
+### Bug Fixes
+
+* ajout de l'option de suppresion dans l'interface settings.ts ([a70e65f](https://github.com/Masutayunikon/FanKarr/commit/a70e65f0e4323369d1fd7401665fb3033352a286))
+* ajout de logs lors de non match ([0c6c802](https://github.com/Masutayunikon/FanKarr/commit/0c6c802cbfdf297df40aa5944eacf16f58489bd1))
+* ajout des series non disponible pour pouvoir les add manuellement ([9e0664a](https://github.com/Masutayunikon/FanKarr/commit/9e0664aa49d6f99be8ca7e7bbd7c8e7cec0f9e7c))
+* changer le noms de build arm64 et windows legacy pour une meilleur comprehension ([47d81e6](https://github.com/Masutayunikon/FanKarr/commit/47d81e692d866beedf80a6c46317dfe79213547d))
+* formatage ([82a61eb](https://github.com/Masutayunikon/FanKarr/commit/82a61ebe74b8196891a50c1380ffaa89178c1fd1))
+* formatage ([f6b384e](https://github.com/Masutayunikon/FanKarr/commit/f6b384ec49bf018e23eb0a0b15917aee4578d66e))
+* l'import a le meme comportement que radarr/sonarr en ouvrant l'import dans le dossier de la serie attendu directement ([1485efe](https://github.com/Masutayunikon/FanKarr/commit/1485efe053d3281521978bb2d29a6c9ce219c2fd))
+* les series sans torrent et non ajoutées manuellement sont bien grisé ([2bdafd8](https://github.com/Masutayunikon/FanKarr/commit/2bdafd8e377d1a957903f228c61c1f3ab3a45955))
+* les series sans torrent et non ajoutées manuellement sont bien grisé ([d854247](https://github.com/Masutayunikon/FanKarr/commit/d854247b7fe6d5e01b0803ff7d415aba431c4f0d))
+* les series sans torrents sont bien organiser si importé manuellement ([6ed77c1](https://github.com/Masutayunikon/FanKarr/commit/6ed77c1196c45e57dbd989cc049f42403f522821))
+* les series sans torrents sont bien organiser si importé manuellement ([bc10889](https://github.com/Masutayunikon/FanKarr/commit/bc1088903053b7b98cabbe24c9cdcb8ac4c489b2))
+* log ([ef4b364](https://github.com/Masutayunikon/FanKarr/commit/ef4b3643c2852500f048ee330b92d60fed4b5ba5))
+* organisation utilise l'extension du fichier au lieu de tester si ça existe ([2b7bf48](https://github.com/Masutayunikon/FanKarr/commit/2b7bf4808e4a11d450403f477ea3031add8a2ebc))
+* settings ([60a548f](https://github.com/Masutayunikon/FanKarr/commit/60a548f6bd658fe9986d94c094cad0fbed103882))
+* type ([f4305b5](https://github.com/Masutayunikon/FanKarr/commit/f4305b537f2ab0a1370445eae9e9150a34e44e86))
+* type ([bdfe74b](https://github.com/Masutayunikon/FanKarr/commit/bdfe74bb8132b6bff0b14ccb135bb3b90f3441b6))
+* vue des series importer ([6786cb5](https://github.com/Masutayunikon/FanKarr/commit/6786cb50f4c50b95f1dcd48d15742b1ae6602ed5))
+* vue des series importer ([50efd74](https://github.com/Masutayunikon/FanKarr/commit/50efd74a5b918c4ff61e7d4feac2643693db1861))
+
 ## [3.6.1](https://github.com/Masutayunikon/FanKarr/compare/v3.6.0...v3.6.1) (2026-04-10)
 
 
