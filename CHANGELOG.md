@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.8.1](https://github.com/Masutayunikon/FanKarr/compare/v3.8.0...v3.8.1) (2026-04-11)
+
+
+### Bug Fixes
+
+* la version dev se met uniquement en dev ([79e5478](https://github.com/Masutayunikon/FanKarr/commit/79e547859720f36330d95036de813240da034bbd))
+
 ## [3.8.0](https://github.com/Masutayunikon/FanKarr/compare/v3.7.1...v3.8.0) (2026-04-11)
 
 
