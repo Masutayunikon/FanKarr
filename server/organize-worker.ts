@@ -330,7 +330,9 @@ async function organizeTorrent(hash: string, name: string, savePath: string, ser
 
         if (!fs.existsSync(dest)) {
             fs.mkdirSync(destDir, { recursive: true })
-            if (organizeMode === 'hardlink') {
+            if (organizeMode === 'copy') {
+              await  fsp.copyFile(src, dest)
+            } else if (organizeMode === 'hardlink') {
                 if (!tryHardlink(src, dest)) await fsp.copyFile(src, dest)
             } else {
                 await fsp.copyFile(src, dest)
@@ -398,7 +400,9 @@ async function organizeTorrent(hash: string, name: string, savePath: string, ser
 
         try {
             fs.mkdirSync(destDir, { recursive: true })
-            if (organizeMode === 'hardlink') {
+            if (organizeMode === 'copy') {
+                await  fsp.copyFile(src, dest)
+            } else if (organizeMode === 'hardlink') {
                 if (!tryHardlink(src, dest)) await fsp.copyFile(src, dest)
                 markOrganized(hash, episode_id, {
                     at: new Date().toISOString(), season: season_number,
