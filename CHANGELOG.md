@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.7.1](https://github.com/Masutayunikon/FanKarr/compare/v3.7.0...v3.7.1) (2026-04-11)
+
+
+### Bug Fixes
+
+* ajout de la copy dans le worker ([a7d4488](https://github.com/Masutayunikon/FanKarr/commit/a7d44886ddb4c5ca4e12bfa5dbb15e115257d9c8))
+
 ## [3.7.0](https://github.com/Masutayunikon/FanKarr/compare/v3.6.1...v3.7.0) (2026-04-11)
 
 
