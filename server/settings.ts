@@ -7,12 +7,23 @@ const DATA_PATH = path.join(DATA_DIR, 'settings.json')
 export interface Settings {
     mediaPath           : string
     completePath        : string
-    organizeMode        : 'hardlink' | 'copy' | 'move'
+    organizeMode        : 'hardlink' | 'copy' | 'move'  // ← ajouter 'copy'
     category            : string
     nfoSupport          : boolean
     autoImport          : boolean
     devMode             : boolean
-    deleteTorrentOnMove : boolean
+    deleteTorrentOnMove : boolean  // ← ajouter
+}
+
+const defaults: Settings = {
+    mediaPath   : '',
+    completePath: '',
+    organizeMode: 'hardlink',
+    category    : 'fankai',
+    nfoSupport  : false,
+    autoImport  : true,
+    devMode     : false,
+    deleteTorrentOnMove: false,
 }
 
 export function readSettings(): Settings {
