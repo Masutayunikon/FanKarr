@@ -541,6 +541,11 @@ app.get('/api/browse-files', requireAuth, (req, res) => {
     const dirPath = (req.query.path as string) || '/'
     const VIDEO_EXTS = new Set(['.mkv', '.mp4', '.avi', '.m4v', '.mov', '.wmv'])
     try {
+        // Créer le dossier s'il n'existe pas (cas import manuel série non encore importée)
+        if (!fs.existsSync(dirPath)) {
+            fs.mkdirSync(dirPath, { recursive: true })
+            logger.info('api', `Dossier créé : ${dirPath}`)
+        }
         const files: { name: string; path: string; size: number }[] = []
         function walk(dir: string) {
             let entries: fs.Dirent[]
