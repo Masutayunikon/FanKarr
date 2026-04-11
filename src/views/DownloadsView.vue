@@ -284,6 +284,40 @@
               >
                 {{ importing[t.hash] ? '...' : 'Importer' }}
               </button>
+
+              <!-- Bouton supprimer -->
+              <div class="relative group/del">
+                <button
+                    @click="confirmDelete = confirmDelete === t.hash ? null : t.hash"
+                    :disabled="deleting[t.hash]"
+                    class="w-7 h-7 flex items-center justify-center rounded-lg border border-border text-muted hover:border-red-500/40 hover:text-red-400 transition-colors"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
+                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
+                  </svg>
+                </button>
+
+                <!-- Confirmation -->
+                <div
+                    v-if="confirmDelete === t.hash"
+                    class="absolute bottom-full right-0 mb-2 bg-card border border-border rounded-xl p-3 z-10 w-52 shadow-xl"
+                >
+                  <p class="text-xs text-primary font-medium mb-2">Supprimer ce torrent ?</p>
+                  <label class="flex items-center gap-2 text-xs text-muted mb-3 cursor-pointer">
+                    <input type="checkbox" v-model="deleteWithFiles[t.hash]" class="accent-red-500" />
+                    Supprimer aussi les fichiers
+                  </label>
+                  <div class="flex gap-1.5">
+                    <button @click="deleteTorrent(t)" class="flex-1 text-xs py-1 px-2 rounded-lg bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20 transition-colors">
+                      {{ deleting[t.hash] ? '...' : 'Confirmer' }}
+                    </button>
+                    <button @click="confirmDelete = null" class="flex-1 text-xs py-1 px-2 rounded-lg border border-border text-muted hover:text-primary transition-colors">
+                      Annuler
+                    </button>
+                  </div>
+                </div>
+              </div>
+
             </div>
           </div>
 
@@ -441,27 +475,51 @@ function togglePolling() {
 onMounted(startPolling)
 onUnmounted(stopPolling)
 
-async function importTorrent(torrent: any) {
-  importing.value[torrent.hash] = true
+const confirmDelete   = ref<string | null>(null)
+const deleting        = ref<Record<string, boolean>>({})
+const deleteWithFiles = ref<Record<string, boolean>>({})
+
+async function deleteTorrent(torrent: any) {
+  deleting.value[torrent.hash] = true
   try {
-    const res = await fetch('/api/organize', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const withFiles = deleteWithFiles.value[torrent.hash] ?? false
+    const res = await fetch(`/api/torrent/${torrent.hash}?deleteFiles=${withFiles}`, {
+      method     : 'DELETE',
       credentials: 'include',
-      body: JSON.stringify({ hash: torrent.hash, save_path: torrent.save_path, name: torrent.name }),
     })
     if (res.ok) {
-      toast(`${torrent.name} importé ✓`, 'success')
+      toast(`"${torrent.name}" supprimé ✓`, 'success')
+      confirmDelete.value = null
       await fetchTorrents()
     } else {
-      const { error } = await res.json()
-      toast(error ?? "Erreur lors de l'import", 'error')
+      toast('Erreur lors de la suppression', 'error')
     }
   } catch {
     toast('Impossible de contacter le serveur', 'error')
   } finally {
-    importing.value[torrent.hash] = false
+    deleting.value[torrent.hash] = false
   }
+}
+importing.value[torrent.hash] = true
+try {
+  const res = await fetch('/api/organize', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ hash: torrent.hash, save_path: torrent.save_path, name: torrent.name }),
+  })
+  if (res.ok) {
+    toast(`${torrent.name} importé ✓`, 'success')
+    await fetchTorrents()
+  } else {
+    const { error } = await res.json()
+    toast(error ?? "Erreur lors de l'import", 'error')
+  }
+} catch {
+  toast('Impossible de contacter le serveur', 'error')
+} finally {
+  importing.value[torrent.hash] = false
+}
 }
 
 async function importAll() {

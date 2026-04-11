@@ -56,6 +56,7 @@ export interface TorrentClientDriver {
     healthcheck : (config: Record<string, string | number>) => Promise<{ online: boolean; version?: string }>
     add         : (config: Record<string, string | number>, url: string) => Promise<void>
     list        : (config: Record<string, string | number>, category?: string) => Promise<TorrentInfo[]>
+    remove      : (config: Record<string, string | number>, hash: string, deleteFiles?: boolean) => Promise<void>
 }
 
 // ─── Registry ─────────────────────────────────────────────────────────────────
@@ -238,7 +239,25 @@ export async function dispatchDownload(url: string): Promise<{ uuid: string; nam
     return results
 }
 
-// ─── Dispatch list ─────────────────────────────────────────────────────────────
+// ─── Dispatch remove ───────────────────────────────────────────────────────────
+
+export async function dispatchRemove(hash: string, deleteFiles = false): Promise<{ ok: boolean; error?: string }> {
+    const clients = loadClients()
+    let found = false
+    for (const client of clients) {
+        const driver = getDriver(client.type)
+        if (!driver) continue
+        try {
+            await driver.remove(client.config, hash, deleteFiles)
+            logger.info('torrent-clients', `Torrent ${hash.slice(0, 8)}… supprimé de "${client.name}"${deleteFiles ? ' (avec fichiers)' : ''}`)
+            found = true
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : 'Erreur inconnue'
+            logger.warn('torrent-clients', `Impossible de supprimer le torrent de "${client.name}" : ${msg}`)
+        }
+    }
+    return found ? { ok: true } : { ok: false, error: 'Torrent introuvable dans les clients' }
+}
 
 // Map inversée : titre normalisé → infohash (pour matcher les torrents Synology)
 function buildTitleIndex(infohashMap: Record<string, string>): Map<string, string> {

@@ -194,6 +194,15 @@ const UT: TorrentClientDriver = {
 
         logger.info('utorrent', `Torrent ajouté avec succès (catégorie: ${config.category ?? 'aucune'}${config.savePath ? `, dossier: ${config.savePath}` : ''})`)
     },
+
+    async remove(config, hash, deleteFiles = false) {
+        const s = await utGetSession(config)
+        await utRequest(config, {
+            action: deleteFiles ? 'removedata' : 'remove',
+            hash  : hash.toUpperCase(),
+        }, s)
+        logger.info('utorrent', `Torrent ${hash.slice(0, 8)}… supprimé${deleteFiles ? ' (avec fichiers)' : ''}`)
+    },
 }
 
 export default UT

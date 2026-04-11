@@ -118,6 +118,20 @@ const QB: TorrentClientDriver = {
         if (text !== 'Ok.') throw new Error(`Ajout échoué : ${text}`)
         logger.info('qbittorrent', `Torrent ajouté avec succès (catégorie: ${config.category ?? 'aucune'}${config.savePath ? `, dossier: ${config.savePath}` : ''})`)
     },
+
+    async remove(config, hash, deleteFiles = false) {
+        const sid  = await qbLogin(config)
+        const form = new FormData()
+        form.append('hashes', hash)
+        form.append('deleteFiles', deleteFiles ? 'true' : 'false')
+        const res = await fetch(`${config.url}/api/v2/torrents/delete`, {
+            method : 'POST',
+            body   : form,
+            headers: { Cookie: `SID=${sid}` },
+        })
+        if (!res.ok) throw new Error(`Suppression échouée : ${res.status}`)
+        logger.info('qbittorrent', `Torrent ${hash.slice(0, 8)}… supprimé${deleteFiles ? ' (avec fichiers)' : ''}`)
+    },
 }
 
 export default QB

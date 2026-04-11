@@ -236,6 +236,18 @@ const RT: TorrentClientDriver = {
         await rpcCall(config, method, args)
         logger.info('rtorrent', `Torrent ajouté avec succès${config.savePath ? ` (dossier: ${config.savePath})` : ''}`)
     },
+
+    async remove(config, hash, deleteFiles = false) {
+        const h = hash.toUpperCase()
+        if (deleteFiles) {
+            // Supprimer les fichiers puis effacer
+            await rpcCall(config, 'd.delete_tied', [h])
+            await rpcCall(config, 'd.erase', [h])
+        } else {
+            await rpcCall(config, 'd.erase', [h])
+        }
+        logger.info('rtorrent', `Torrent ${hash.slice(0, 8)}… supprimé${deleteFiles ? ' (avec fichiers)' : ''}`)
+    },
 }
 
 export default RT

@@ -136,6 +136,16 @@ const TR: TorrentClientDriver = {
         await trRequest(config, 'torrent-add', args)
         logger.info('transmission', `Torrent ajouté avec succès (catégorie: ${config.category ?? 'aucune'}${config.savePath ? `, dossier: ${config.savePath}` : ''})`)
     },
+
+    async remove(config, hash, deleteFiles = false) {
+        // Transmission identifie les torrents par ID numérique — on cherche via la liste
+        const data = await trRequest(config, 'torrent-get', { fields: ['hashString', 'id'] })
+        const torrents: any[] = data.arguments?.torrents ?? []
+        const found = torrents.find(t => t.hashString?.toLowerCase() === hash.toLowerCase())
+        if (!found) throw new Error(`Torrent ${hash.slice(0, 8)}… introuvable`)
+        await trRequest(config, 'torrent-remove', { ids: [found.id], 'delete-local-data': deleteFiles })
+        logger.info('transmission', `Torrent ${hash.slice(0, 8)}… supprimé${deleteFiles ? ' (avec fichiers)' : ''}`)
+    },
 }
 
 export default TR

@@ -8,7 +8,7 @@ import { readSettings, writeSettings } from './settings.js'
 import {
     registerDriver, getDriver, getAvailableClients,
     listClients, addClient, removeClient, getClient,
-    sanitizeClient, dispatchDownload, dispatchList, updateClient
+    sanitizeClient, dispatchDownload, dispatchList, updateClient, dispatchRemove
 } from './torrent-clients/index.js'
 import qbittorrentDriver  from './torrent-clients/qbittorrent.js'
 import transmissionDriver from './torrent-clients/transmission.js'
@@ -54,15 +54,16 @@ app.get('/api/settings', requireAuth, (_req, res) => {
     res.json(readSettings())
 })
 app.post('/api/settings', requireAuth, (req, res) => {
-    const { mediaPath, completePath, organizeMode, category, nfoSupport, autoImport, devMode } = req.body
+    const { mediaPath, completePath, organizeMode, category, nfoSupport, autoImport, devMode, deleteTorrentOnMove } = req.body
     const patch: Record<string, any> = {}
-    if (mediaPath     !== undefined) patch.mediaPath     = mediaPath
-    if (completePath  !== undefined) patch.completePath  = completePath
-    if (organizeMode  !== undefined) patch.organizeMode  = organizeMode
-    if (category      !== undefined) patch.category      = category
-    if (nfoSupport    !== undefined) patch.nfoSupport    = nfoSupport
-    if (autoImport    !== undefined) patch.autoImport    = autoImport
-    if (devMode       !== undefined) patch.devMode       = devMode
+    if (mediaPath           !== undefined) patch.mediaPath           = mediaPath
+    if (completePath        !== undefined) patch.completePath        = completePath
+    if (organizeMode        !== undefined) patch.organizeMode        = organizeMode
+    if (category            !== undefined) patch.category            = category
+    if (nfoSupport          !== undefined) patch.nfoSupport          = nfoSupport
+    if (autoImport          !== undefined) patch.autoImport          = autoImport
+    if (devMode             !== undefined) patch.devMode             = devMode
+    if (deleteTorrentOnMove !== undefined) patch.deleteTorrentOnMove = deleteTorrentOnMove
     const updated = writeSettings(patch)
     logger.info('api', 'Paramètres mis à jour')
     res.json(updated)
@@ -424,6 +425,19 @@ app.post('/api/download', requireAuth, async (req, res) => {
     logger.info('api', 'Téléchargement demandé')
     const results = await dispatchDownload(url)
     res.status(results.every((r: any) => r.ok) ? 200 : 207).json({ results })
+})
+
+app.delete('/api/torrent/:hash', requireAuth, async (req, res) => {
+    const { hash }        = req.params
+    const deleteFiles     = req.query.deleteFiles === 'true'
+    if (!hash) { res.status(400).json({ error: 'hash requis' }); return }
+    try {
+        const result = await dispatchRemove(hash, deleteFiles)
+        res.json(result)
+    } catch (err) {
+        logger.error('api', `Suppression torrent échouée : ${err instanceof Error ? err.message : err}`)
+        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
+    }
 })
 
 // ── Downloads list ─────────────────────────────────────────────
@@ -920,9 +934,19 @@ server.listen(PORT, async () => {
             await autoOrganizeAll(
                 () => dispatchList(category ?? 'fankai', infohashMap),
                 seriesData,
-                (result) => {
+                async (result) => {
                     if (result.done > 0 || result.errors > 0) {
                         pushNotif({ ...result, at: new Date().toISOString() })
+                    }
+                    // Supprimer le torrent après move si option activée
+                    const { organizeMode, deleteTorrentOnMove } = readSettings()
+                    if (organizeMode === 'move' && deleteTorrentOnMove && result.done > 0) {
+                        try {
+                            await dispatchRemove(result.hash, false)
+                            logger.info('api', `Torrent "${result.name}" supprimé après move`)
+                        } catch (err) {
+                            logger.warn('api', `Impossible de supprimer le torrent "${result.name}" : ${err instanceof Error ? err.message : err}`)
+                        }
                     }
                 }
             )

@@ -17,7 +17,7 @@ export interface Settings {
 const defaults: Settings = {
     mediaPath   : '',
     completePath: '',
-    organizeMode: 'hardlink',
+    organizeMode : 'hardlink' | 'copy' | 'move',
     category    : 'fankai',
     nfoSupport  : false,
     autoImport  : true,

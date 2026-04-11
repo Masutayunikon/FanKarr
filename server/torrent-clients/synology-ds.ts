@@ -151,6 +151,27 @@ const DS: TorrentClientDriver = {
 
         logger.info('synology-ds', `Torrent ajouté avec succès${config.savePath ? ` (dossier: ${config.savePath})` : ''}`)
     },
+
+    async remove(config, hash, deleteFiles = false) {
+        const sid = await dsLogin(config)
+        // Synology utilise son ID interne — on cherche via la liste
+        const data = await dsRequest(config, 'SYNO.DownloadStation.Task', 'list', '1', { additional: 'detail' }, sid)
+        const tasks: any[] = data?.tasks ?? []
+        // Matcher par hash si résolu, sinon par id
+        const found = tasks.find(t => t.id?.toLowerCase() === hash.toLowerCase())
+        if (!found) throw new Error(`Torrent ${hash.slice(0, 8)}… introuvable`)
+        const params = new URLSearchParams({
+            api    : 'SYNO.DownloadStation.Task',
+            version: '1',
+            method : 'delete',
+            id     : found.id,
+            force_complete: deleteFiles ? 'false' : 'false',
+            _sid   : sid,
+        })
+        const res = await fetch(`${config.url}/webapi/DownloadStation/task.cgi?${params}`)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        logger.info('synology-ds', `Torrent ${found.id} supprimé`)
+    },
 }
 
 export default DS

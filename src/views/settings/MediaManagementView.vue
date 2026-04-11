@@ -67,6 +67,15 @@
           Hardlink
         </button>
         <button
+            @click="form.organizeMode = 'copy'"
+            class="px-4 py-2 text-xs rounded-lg border transition-colors"
+            :class="form.organizeMode === 'copy'
+            ? 'border-accent text-accent bg-accent-muted'
+            : 'border-border text-muted hover:border-secondary'"
+        >
+          Copier
+        </button>
+        <button
             @click="form.organizeMode = 'move'"
             class="px-4 py-2 text-xs rounded-lg border transition-colors"
             :class="form.organizeMode === 'move'
@@ -94,6 +103,13 @@
           v-model="form.nfoSupport"
           label="NFO / Métadonnées"
           description="Télécharge les NFO et images depuis GitLab lors de l'import (Kodi, Infuse, etc.)."
+      />
+
+      <SettingsToggle
+          v-if="form.organizeMode === 'move'"
+          v-model="form.deleteTorrentOnMove"
+          label="Supprimer le torrent après déplacement"
+          description="Supprime automatiquement le torrent du client après un import en mode Déplacer."
       />
 
     </div>
@@ -140,11 +156,12 @@ const isDocker   = ref(false)
 const scanResult = ref<{ found: number; added: number } | null>(null)
 
 const form = ref({
-  mediaPath    : '',
-  completePath : '',
-  organizeMode : 'hardlink' as 'hardlink' | 'move',
-  nfoSupport   : false,
-  autoImport   : true,
+  mediaPath          : '',
+  completePath       : '',
+  organizeMode       : 'hardlink' as 'hardlink' | 'copy' | 'move',
+  nfoSupport         : false,
+  autoImport         : true,
+  deleteTorrentOnMove: false,
 })
 
 const picker = ref<{ open: boolean; field: 'completePath' | 'mediaPath'; currentPath: string }>({
