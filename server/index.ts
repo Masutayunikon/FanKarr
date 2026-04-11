@@ -400,7 +400,15 @@ app.get('/api/series/:id', requireAuth, async (req, res) => {
             })
             const total    = eps.filter((e: any) => e.available).length
             const orgCount = eps.filter((e: any) => e.organized).length
-            return { ...season, torrent: seasonTorrentMapBySn[season.season_number] ?? null, organized_state: orgCount === 0 ? 'none' : orgCount >= total && total > 0 ? 'complete' : 'partial', organized_count: orgCount, episodes: eps }
+            const epTotal  = eps.length  // total réel incluant les imports manuels
+            const orgState = orgCount === 0
+                ? 'none'
+                : orgCount >= epTotal
+                    ? 'complete'
+                    : total > 0 && orgCount >= total
+                        ? 'complete'
+                        : 'partial'
+            return { ...season, torrent: seasonTorrentMapBySn[season.season_number] ?? null, organized_state: orgState, organized_count: orgCount, episodes: eps }
         })
         res.json({ serie, seasons: enrichedSeasons, torrents_integrale: integraleTorrents.map(t => ({ label: 'Intégrale', torrent_url: t.torrent_url, magnet: t.magnet, raw: t.title ?? t.raw })) })
     } catch (err) {

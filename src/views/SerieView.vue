@@ -135,7 +135,9 @@
                 </h2>
                 <p class="text-xs text-muted mt-0.5">
                   {{ season.episodes.length }} épisode{{ season.episodes.length > 1 ? 's' : '' }}
-                  · {{ seasonAvailableCount(season) }}/{{ season.episodes.length }} dispo
+                  <template v-if="seasonAvailableCount(season) > 0">
+                    · {{ seasonAvailableCount(season) }}/{{ season.episodes.length }} dispo
+                  </template>
                   <span
                       v-if="season.organized_state !== 'none'"
                       class="ml-1.5 px-1.5 py-0.5 rounded text-[10px]"
@@ -145,7 +147,7 @@
                   >
                     {{ season.organized_state === 'complete'
                       ? `✓ ${season.organized_count} importé${season.organized_count > 1 ? 's' : ''}`
-                      : `${season.organized_count}/${seasonAvailableCount(season)} importés` }}
+                      : `${season.organized_count}/${seasonAvailableCount(season) || season.episodes.length} importés` }}
                   </span>
                 </p>
               </div>
