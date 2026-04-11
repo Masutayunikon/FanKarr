@@ -140,7 +140,7 @@
             :key="serie.id"
             :to="`/series/${serie.id}`"
             class="group flex flex-col gap-1.5 transition-transform duration-200 hover:-translate-y-0.5"
-            :class="{ 'opacity-40': !serie.has_torrents }"
+            :class="{ 'opacity-40': !serie.has_torrents && serie.download_state === 'none' }"
         >
           <div class="relative aspect-[2/3] rounded-lg overflow-hidden bg-card border border-border">
             <img
