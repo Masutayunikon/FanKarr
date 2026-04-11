@@ -5,16 +5,6 @@ import { DATA_DIR } from './config.js'
 const DATA_PATH = path.join(DATA_DIR, 'settings.json')
 
 export interface Settings {
-    mediaPath    : string
-    completePath : string
-    organizeMode : 'hardlink' | 'move'
-    category     : string
-    nfoSupport   : boolean
-    autoImport   : boolean
-    devMode      : boolean
-}
-
-export interface Settings {
     mediaPath           : string
     completePath        : string
     organizeMode        : 'hardlink' | 'copy' | 'move'
