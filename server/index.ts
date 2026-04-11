@@ -19,6 +19,7 @@ import { organizeTorrent, autoOrganizeAll, scanMediaPath, workerRunning } from '
 import { logger, readLogs, clearLogs, logsFileSize } from './logger.js'
 import { DATA_DIR, BASE_DIR } from './config.js'
 import { systemInfo } from './system.js'
+import { getGitlabTitle } from './gitlab-map.js'
 
 registerDriver(qbittorrentDriver)
 registerDriver(transmissionDriver)
@@ -635,6 +636,34 @@ app.post('/api/manual-import', requireAuth, async (req, res) => {
         }
     }
     fs.writeFileSync(ORGANIZED_PATH, JSON.stringify(organized, null, 2), 'utf-8')
+
+    // Télécharger les NFO en arrière-plan si activé
+    if (nfoSupport && done.length > 0) {
+        const gitlabTitle = getGitlabTitle(serieTitle)
+        ;(async () => {
+            try {
+                let files: any[] = [], page = 1
+                while (true) {
+                    const batch = await fetch(`${GITLAB_API_NFO}/tree?path=${encodeURIComponent('pack/' + gitlabTitle)}&recursive=true&per_page=100&page=${page}&ref=main`, { headers: { 'User-Agent': 'fankarr' } }).then(r => r.ok ? r.json() : [])
+                    if (!Array.isArray(batch) || batch.length === 0) break
+                    files.push(...batch); if (batch.length < 100) break; page++
+                }
+                for (const entry of files.filter((f: any) => f.type === 'blob')) {
+                    const rel  = entry.path.replace(`pack/${gitlabTitle}/`, '')
+                    const dest = path.join(mediaPath, serieTitle, rel)
+                    if (fs.existsSync(dest)) continue
+                    const raw  = await fetch(`${GITLAB_RAW_NFO}/${encodeURIComponent(gitlabTitle)}/${rel.split('/').map(encodeURIComponent).join('/')}`, { headers: { 'User-Agent': 'fankarr' } })
+                    if (!raw.ok) continue
+                    fs.mkdirSync(path.dirname(dest), { recursive: true })
+                    fs.writeFileSync(dest, Buffer.from(await raw.arrayBuffer()))
+                }
+                logger.info('api', `NFO téléchargés pour "${gitlabTitle}" (import manuel)`)
+            } catch (err) {
+                logger.warn('api', `Échec téléchargement NFO pour "${gitlabTitle}" : ${err instanceof Error ? err.message : err}`)
+            }
+        })()
+    }
+
     res.json({ ok: true, done: done.length, errors })
 })
 
@@ -703,20 +732,6 @@ const MAX_NFO_NOTIFS   = 30
 const NFO_COMMITS_PATH = path.join(DATA_DIR, 'nfo_commits.json')
 const GITLAB_API_NFO   = 'https://gitlab.com/api/v4/projects/ElPouki%2Ffankai_pack/repository'
 const GITLAB_RAW_NFO   = 'https://gitlab.com/ElPouki/fankai_pack/-/raw/main/pack'
-
-const SERIE_TITLE_GITLAB_MAP: Record<string, string> = {
-    'Enfer Et Paradis Henshū'          : 'Enfer et Paradis Henshū',
-    'Hajime No Ippo Henshū'            : 'Hajime no Ippo Henshū',
-    'Hikaru No Go Henshū'              : 'Hikaru no Go Henshū',
-    'Hokuto No Ken Kaï'                : 'Hokuto no Ken Kaï',
-    'Kaguya-sama : Love is War Henshū' : 'Kaguya-sama - Love is War Henshū',
-    'Kenshin le Vagabond Henshū'       : 'Kenshin le vagabond Henshū',
-    'Kuroko No Basket Henshū'          : 'Kuroko no Basket Henshū',
-    'Shingeki No Kyojin Henshū'        : 'Shingeki no Kyojin Henshū',
-    'Tower Of God Henshū'              : 'Tower of God Henshū',
-}
-
-function getGitlabTitle(title: string): string { return SERIE_TITLE_GITLAB_MAP[title] ?? title }
 
 function loadNfoCommits(): Record<string, string> {
     try { if (!fs.existsSync(NFO_COMMITS_PATH)) return {}; return JSON.parse(fs.readFileSync(NFO_COMMITS_PATH, 'utf-8')) }

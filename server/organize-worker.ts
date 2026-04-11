@@ -9,6 +9,7 @@ import fsp  from 'fs/promises'
 import path from 'path'
 import { parentPort } from 'worker_threads'
 import { DATA_DIR } from './config.js'
+import { getGitlabTitle } from './gitlab-map.js'
 
 const ORGANIZED_PATH = path.join(DATA_DIR, 'organized.json')
 
@@ -170,23 +171,6 @@ function isInExcludedFolder(filePath: string[]): boolean {
     return false
 }
 
-// ─── Map titres API → GitLab ──────────────────────────────────
-const SERIE_TITLE_GITLAB_MAP: Record<string, string> = {
-    'Enfer Et Paradis Henshū'          : 'Enfer et Paradis Henshū',
-    'Hajime No Ippo Henshū'            : 'Hajime no Ippo Henshū',
-    'Hikaru No Go Henshū'              : 'Hikaru no Go Henshū',
-    'Hokuto No Ken Kaï'                : 'Hokuto no Ken Kaï',
-    'Kaguya-sama : Love is War Henshū' : 'Kaguya-sama - Love is War Henshū',
-    'Kenshin le Vagabond Henshū'       : 'Kenshin le vagabond Henshū',
-    'Kuroko No Basket Henshū'          : 'Kuroko no Basket Henshū',
-    'Shingeki No Kyojin Henshū'        : 'Shingeki no Kyojin Henshū',
-    'Tower Of God Henshū'              : 'Tower of God Henshū',
-}
-
-function getGitlabSerieTitle(serieTitle: string): string {
-    return SERIE_TITLE_GITLAB_MAP[serieTitle] ?? serieTitle
-}
-
 // ─── GitLab NFO downloader ────────────────────────────────────
 const GITLAB_API      = 'https://gitlab.com/api/v4/projects/ElPouki%2Ffankai_pack/repository'
 const GITLAB_RAW_BASE = 'https://gitlab.com/ElPouki/fankai_pack/-/raw/main/pack'
@@ -206,7 +190,7 @@ async function fetchBinary(url: string): Promise<Buffer> {
 }
 
 async function downloadGitlabFolder(serieTitle: string, destRoot: string): Promise<void> {
-    const gitlabTitle = getGitlabSerieTitle(serieTitle)
+    const gitlabTitle = getGitlabTitle(serieTitle)
     const folderPath  = `pack/${gitlabTitle}`
     log(`Téléchargement NFO/images depuis GitLab pour "${gitlabTitle}"`)
 
