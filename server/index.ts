@@ -428,7 +428,7 @@ app.post('/api/download', requireAuth, async (req, res) => {
 })
 
 app.delete('/api/torrent/:hash', requireAuth, async (req, res) => {
-    const { hash }        = req.params
+    const hash = req.params.hash
     const deleteFiles     = req.query.deleteFiles === 'true'
     if (!hash) { res.status(400).json({ error: 'hash requis' }); return }
     try {
