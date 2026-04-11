@@ -251,15 +251,20 @@ async function loadEnrichedSeriesData(): Promise<any[]> {
 function computeSerieDownloadState(serieData: any | null, organized: Record<string, Record<string, any>>, activeTorrents: Set<string>): 'none' | 'downloading' | 'partial' | 'complete' {
     if (!serieData) return 'none'
     const allTorrents = extractTorrentsFromSerieData(serieData)
-    if (allTorrents.length === 0) return 'none'
+
     if (allTorrents.some(t => t.infohash && activeTorrents.has(t.infohash.toLowerCase()))) return 'downloading'
+
+    // Collecter tous les épisodes de la série
     const allEpisodeIds = new Set<number>()
-    const organizedEpisodeIds = new Set<number>()
     for (const season of serieData.seasons ?? []) {
         for (const ep of season.episodes ?? []) {
-            if ((ep.torrents ?? []).length > 0 || (ep.paths ?? []).length > 0) allEpisodeIds.add(ep.id)
+            allEpisodeIds.add(ep.id)
         }
     }
+
+    const organizedEpisodeIds = new Set<number>()
+
+    // Vérifier via les torrents
     for (const t of allTorrents) {
         const hash = t.infohash?.toLowerCase()
         if (!hash) continue
@@ -270,6 +275,15 @@ function computeSerieDownloadState(serieData: any | null, organized: Record<stri
             if (isOrganized) organizedEpisodeIds.add(ep.episode_id)
         }
     }
+
+    // Vérifier aussi les imports manuels (clé "manual" dans organized.json)
+    const manualOrg = organized['manual'] ?? {}
+    for (const season of serieData.seasons ?? []) {
+        for (const ep of season.episodes ?? []) {
+            if (manualOrg[String(ep.id)]) organizedEpisodeIds.add(ep.id)
+        }
+    }
+
     if (allEpisodeIds.size === 0 || organizedEpisodeIds.size === 0) return 'none'
     if (organizedEpisodeIds.size >= allEpisodeIds.size) return 'complete'
     return 'partial'
@@ -288,8 +302,8 @@ app.get('/api/series', requireAuth, async (_req, res) => {
         const serieDataMap = new Map<number, any>()
         await Promise.all(seriesRaw.filter((s: any) => availableSet.has(s.id)).map(async (s: any) => { const sd = await readSerieData(s.id); if (sd) serieDataMap.set(s.id, sd) }))
         res.json({ series: seriesRaw.map((serie: any) => {
-                const hasTorrents = availableSet.has(serie.id)
                 const serieData   = serieDataMap.get(serie.id) ?? null
+                const hasTorrents = serieData ? extractTorrentsFromSerieData(serieData).length > 0 : false
                 return { ...serie, torrent_count: serieData ? extractTorrentsFromSerieData(serieData).length : 0, has_torrents: hasTorrents, download_state: computeSerieDownloadState(serieData, organized, activeTorrents) }
             })})
     } catch (err) {
@@ -604,7 +618,11 @@ app.post('/api/manual-import', requireAuth, async (req, res) => {
         const resolvedName  = nfoSupport
             ? (ep.nfo_filename ?? ep.original_filename ?? srcFilename)
             : (fmtName ?? ep.nfo_filename ?? ep.original_filename ?? srcFilename)
-        const destFilename  = resolvedName.endsWith('.nfo') ? resolvedName.slice(0, -4) + srcExt : resolvedName
+        // FIX : swap l'extension avec celle du fichier source (.nfo/.mkv → .mp4 si besoin)
+        const resolvedExt  = path.extname(resolvedName)
+        const destFilename = resolvedExt && resolvedExt !== srcExt
+            ? resolvedName.slice(0, -resolvedExt.length) + srcExt
+            : resolvedName
         const seasonFolder  = season.season_number === 0 ? 'Specials' : `Saison ${season.season_number}`
         const destDir       = path.join(mediaPath, serieTitle, seasonFolder)
         const destPath      = path.join(destDir, destFilename)
@@ -615,9 +633,12 @@ app.post('/api/manual-import', requireAuth, async (req, res) => {
                 if (organizeMode === 'hardlink') {
                     try { fs.linkSync(file_path, destPath) }
                     catch { await fs.promises.copyFile(file_path, destPath) }
-                } else {
+                } else if (organizeMode === 'move') {
                     await fs.promises.copyFile(file_path, destPath)
                     await fs.promises.unlink(file_path)
+                } else {
+                    // copy
+                    await fs.promises.copyFile(file_path, destPath)
                 }
             }
             const torrentHash = String(hash || '').toLowerCase() || 'manual'
