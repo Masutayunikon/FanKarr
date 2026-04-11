@@ -133,7 +133,6 @@
         </div>
 
         <div v-if="activeTab === 'done'" class="flex items-center gap-3">
-          <!-- Filtre seeds uniquement -->
           <label class="flex items-center gap-1.5 cursor-pointer">
             <span class="text-xs text-muted">Seeds uniquement</span>
             <button
@@ -147,7 +146,6 @@
               />
             </button>
           </label>
-          <!-- Masquer importés -->
           <label class="flex items-center gap-1.5 cursor-pointer">
             <span class="text-xs text-muted">Masquer importés</span>
             <button
@@ -216,8 +214,8 @@
             <div
                 class="h-full rounded-full transition-all duration-500"
                 :class="t.state === 'seeding' || t.state === 'unknown' ? 'bg-green-500' :
-                      t.state === 'error'   ? 'bg-red-500'   :
-                      t.state === 'paused'  ? 'bg-muted'     : 'bg-accent'"
+                        t.state === 'error'   ? 'bg-red-500'   :
+                        t.state === 'paused'  ? 'bg-muted'     : 'bg-accent'"
                 :style="{ width: `${clampedProgress(t)}%` }"
             />
           </div>
@@ -225,29 +223,24 @@
           <!-- Infos bas + actions -->
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-3 text-xs text-muted">
-              <!-- Downloading -->
               <span v-if="t.state === 'downloading'">↓ {{ formatSpeed(t.speed) }}</span>
               <span v-if="t.state === 'downloading' && t.eta > 0">ETA {{ formatEta(t.eta) }}</span>
 
-              <!-- Seeding : ratio + upload -->
               <template v-if="t.state === 'seeding'">
                 <span class="text-green-500">Complété</span>
-                <span v-if="columns.ratio" class="text-xs font-mono"
+                <span v-if="columns.ratio" class="font-mono"
                       :class="t.ratio >= 1 ? 'text-green-400' : t.ratio >= 0.5 ? 'text-yellow-500' : 'text-muted'">
                   R {{ t.ratio?.toFixed(2) ?? '0.00' }}
                 </span>
-                <span v-if="columns.uploaded" class="text-xs text-muted">
-                  ↑ {{ formatSize(t.uploaded ?? 0) }}
-                </span>
-                <span v-if="columns.upspeed && t.upspeed > 0" class="text-xs text-muted">
-                  {{ formatSpeed(t.upspeed) }}
-                </span>
+                <span v-if="columns.uploaded">↑ {{ formatSize(t.uploaded ?? 0) }}</span>
+                <span v-if="columns.upspeed && t.upspeed > 0">{{ formatSpeed(t.upspeed) }}</span>
               </template>
 
               <span v-if="t.state === 'unknown'" class="text-yellow-500">État non remonté par le client</span>
             </div>
 
             <div v-if="t.state === 'seeding' || t.state === 'unknown'" class="flex items-center gap-2">
+
               <!-- Erreurs fichiers -->
               <div v-if="t.errorFiles?.length > 0" class="relative group/err">
                 <span class="text-xs px-2 py-0.5 rounded border border-red-500/40 text-red-400 cursor-default">
@@ -267,11 +260,11 @@
               <!-- Badge import -->
               <span
                   class="text-xs px-2 py-0.5 rounded border"
-                  :class="t.organizeState === 'done'    ? 'border-green-500/40 text-green-500' :
-                        t.organizeState === 'partial'  ? 'border-yellow-500/40 text-yellow-500' :
-                                                         'border-border text-muted'"
+                  :class="t.organizeState === 'done'   ? 'border-green-500/40 text-green-500' :
+                          t.organizeState === 'partial' ? 'border-yellow-500/40 text-yellow-500' :
+                                                          'border-border text-muted'"
               >
-                {{ t.organizeState === 'done'   ? `Importé (${t.organizeProgress?.done}/${t.organizeProgress?.total})` :
+                {{ t.organizeState === 'done'    ? `Importé (${t.organizeProgress?.done}/${t.organizeProgress?.total})` :
                   t.organizeState === 'partial' ? `En cours (${t.organizeProgress?.done}/${t.organizeProgress?.total})` :
                       'Non importé' }}
               </span>
@@ -286,18 +279,20 @@
               </button>
 
               <!-- Bouton supprimer -->
-              <div class="relative group/del">
+              <div class="relative">
                 <button
                     @click="confirmDelete = confirmDelete === t.hash ? null : t.hash"
                     :disabled="deleting[t.hash]"
                     class="w-7 h-7 flex items-center justify-center rounded-lg border border-border text-muted hover:border-red-500/40 hover:text-red-400 transition-colors"
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
-                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
+                    <polyline points="3 6 5 6 21 6"/>
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                    <path d="M10 11v6M14 11v6M9 6V4h6v2"/>
                   </svg>
                 </button>
 
-                <!-- Confirmation -->
+                <!-- Popup confirmation -->
                 <div
                     v-if="confirmDelete === t.hash"
                     class="absolute bottom-full right-0 mb-2 bg-card border border-border rounded-xl p-3 z-10 w-52 shadow-xl"
@@ -308,10 +303,17 @@
                     Supprimer aussi les fichiers
                   </label>
                   <div class="flex gap-1.5">
-                    <button @click="deleteTorrent(t)" class="flex-1 text-xs py-1 px-2 rounded-lg bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20 transition-colors">
+                    <button
+                        @click="deleteTorrent(t)"
+                        :disabled="deleting[t.hash]"
+                        class="flex-1 text-xs py-1 px-2 rounded-lg bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20 transition-colors"
+                    >
                       {{ deleting[t.hash] ? '...' : 'Confirmer' }}
                     </button>
-                    <button @click="confirmDelete = null" class="flex-1 text-xs py-1 px-2 rounded-lg border border-border text-muted hover:text-primary transition-colors">
+                    <button
+                        @click="confirmDelete = null"
+                        class="flex-1 text-xs py-1 px-2 rounded-lg border border-border text-muted hover:text-primary transition-colors"
+                    >
                       Annuler
                     </button>
                   </div>
@@ -337,24 +339,27 @@ import { useToast } from '@/composables/useToast'
 
 const { add: toast } = useToast()
 
-const torrents     = ref<any[]>([])
-const loading      = ref(true)
-const polling      = ref(true)
-const noClients    = ref(false)
-const importing    = ref<Record<string, boolean>>({})
-const importingAll = ref(false)
-const activeTab    = ref<'active' | 'done'>('active')
-const hideImported = ref(false)
-const seedingOnly  = ref(false)
-const search       = ref('')
-const sortOpen     = ref(false)
-const colOpen      = ref(false)
-const activeSort   = ref<'none' | 'name' | 'size' | 'progress' | 'state' | 'ratio'>('none')
-const sortDir      = ref<'asc' | 'desc'>('asc')
-const sortRef      = ref<HTMLElement | null>(null)
-const colRef       = ref<HTMLElement | null>(null)
+// ─── State ────────────────────────────────────────────────────
+const torrents        = ref<any[]>([])
+const loading         = ref(true)
+const polling         = ref(true)
+const noClients       = ref(false)
+const importing       = ref<Record<string, boolean>>({})
+const importingAll    = ref(false)
+const confirmDelete   = ref<string | null>(null)
+const deleting        = ref<Record<string, boolean>>({})
+const deleteWithFiles = ref<Record<string, boolean>>({})
+const activeTab       = ref<'active' | 'done'>('active')
+const hideImported    = ref(false)
+const seedingOnly     = ref(false)
+const search          = ref('')
+const sortOpen        = ref(false)
+const colOpen         = ref(false)
+const activeSort      = ref<'none' | 'name' | 'size' | 'progress' | 'state' | 'ratio'>('none')
+const sortDir         = ref<'asc' | 'desc'>('asc')
+const sortRef         = ref<HTMLElement | null>(null)
+const colRef          = ref<HTMLElement | null>(null)
 
-// Colonnes visibles
 const columns = ref({
   client  : true,
   size    : true,
@@ -371,29 +376,20 @@ const columnOptions = [
   { key: 'upspeed',  label: 'Vitesse upload' },
 ]
 
+const sortOptions = [
+  { label: 'Nom',         value: 'name'     },
+  { label: 'Taille',      value: 'size'     },
+  { label: 'Progression', value: 'progress' },
+  { label: 'État',        value: 'state'    },
+  { label: 'Ratio',       value: 'ratio'    },
+]
+
 onClickOutside(sortRef, () => { sortOpen.value = false })
 onClickOutside(colRef,  () => { colOpen.value  = false })
 
-const sortOptions = [
-  { label: 'Nom',        value: 'name'     },
-  { label: 'Taille',     value: 'size'     },
-  { label: 'Progression', value: 'progress' },
-  { label: 'État',       value: 'state'    },
-  { label: 'Ratio',      value: 'ratio'    },
-]
-
-function setSort(val: typeof activeSort.value) {
-  if (activeSort.value === val) {
-    sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
-  } else {
-    activeSort.value = val
-    sortDir.value = 'asc'
-  }
-  sortOpen.value = false
-}
-
 let pollInterval: ReturnType<typeof setInterval> | null = null
 
+// ─── Computed ─────────────────────────────────────────────────
 const activeTorrents = computed(() =>
     torrents.value.filter(t => ['downloading', 'paused', 'checking', 'error'].includes(t.state))
 )
@@ -403,9 +399,7 @@ const doneTorrents = computed(() =>
 )
 
 const visibleTorrents = computed(() => {
-  let list = activeTab.value === 'active'
-      ? activeTorrents.value
-      : doneTorrents.value
+  let list = activeTab.value === 'active' ? activeTorrents.value : doneTorrents.value
 
   if (activeTab.value === 'done') {
     if (seedingOnly.value)  list = list.filter(t => t.state === 'seeding')
@@ -441,111 +435,19 @@ const stats = computed(() => [
   { label: 'Erreurs',   value: torrents.value.filter(t => t.state === 'error').length },
 ])
 
+// ─── Helpers ──────────────────────────────────────────────────
+function setSort(val: typeof activeSort.value) {
+  if (activeSort.value === val) {
+    sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    activeSort.value = val
+    sortDir.value    = 'asc'
+  }
+  sortOpen.value = false
+}
+
 function clampedProgress(t: any): number {
   return Math.min(100, Math.max(0, t.progress ?? 0))
-}
-
-async function fetchTorrents() {
-  try {
-    const res = await fetch('/api/downloads', { credentials: 'include' })
-    if (res.status === 503) { noClients.value = true; return }
-    if (!res.ok) return
-    torrents.value  = await res.json()
-    noClients.value = false
-  } catch {
-  } finally {
-    loading.value = false
-  }
-}
-
-function startPolling() {
-  fetchTorrents()
-  pollInterval = setInterval(fetchTorrents, 60_000)
-}
-
-function stopPolling() {
-  if (pollInterval) { clearInterval(pollInterval); pollInterval = null }
-}
-
-function togglePolling() {
-  polling.value = !polling.value
-  polling.value ? startPolling() : stopPolling()
-}
-
-onMounted(startPolling)
-onUnmounted(stopPolling)
-
-const confirmDelete   = ref<string | null>(null)
-const deleting        = ref<Record<string, boolean>>({})
-const deleteWithFiles = ref<Record<string, boolean>>({})
-
-async function deleteTorrent(torrent: any) {
-  deleting.value[torrent.hash] = true
-  try {
-    const withFiles = deleteWithFiles.value[torrent.hash] ?? false
-    const res = await fetch(`/api/torrent/${torrent.hash}?deleteFiles=${withFiles}`, {
-      method     : 'DELETE',
-      credentials: 'include',
-    })
-    if (res.ok) {
-      toast(`"${torrent.name}" supprimé ✓`, 'success')
-      confirmDelete.value = null
-      await fetchTorrents()
-    } else {
-      toast('Erreur lors de la suppression', 'error')
-    }
-  } catch {
-    toast('Impossible de contacter le serveur', 'error')
-  } finally {
-    deleting.value[torrent.hash] = false
-  }
-}
-importing.value[torrent.hash] = true
-try {
-  const res = await fetch('/api/organize', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ hash: torrent.hash, save_path: torrent.save_path, name: torrent.name }),
-  })
-  if (res.ok) {
-    toast(`${torrent.name} importé ✓`, 'success')
-    await fetchTorrents()
-  } else {
-    const { error } = await res.json()
-    toast(error ?? "Erreur lors de l'import", 'error')
-  }
-} catch {
-  toast('Impossible de contacter le serveur', 'error')
-} finally {
-  importing.value[torrent.hash] = false
-}
-}
-
-async function importAll() {
-  const toImport = doneTorrents.value.filter(t => t.organizeState !== 'done')
-  if (toImport.length === 0) { toast('Tous les torrents sont déjà importés', 'success'); return }
-
-  importingAll.value = true
-  let done = 0, errors = 0
-
-  for (const t of toImport) {
-    try {
-      const res = await fetch('/api/organize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ hash: t.hash, save_path: t.save_path, name: t.name }),
-      })
-      res.ok ? done++ : errors++
-    } catch { errors++ }
-  }
-
-  importingAll.value = false
-  await fetchTorrents()
-  errors === 0
-      ? toast(`${done} torrent(s) importé(s) ✓`, 'success')
-      : toast(`${done} OK, ${errors} erreur(s)`, 'error')
 }
 
 function stateBadge(state: string) {
@@ -578,4 +480,106 @@ function formatEta(seconds: number): string {
   if (m > 0) return `${m}m${s.toString().padStart(2, '0')}s`
   return `${s}s`
 }
+
+// ─── Actions ──────────────────────────────────────────────────
+async function fetchTorrents() {
+  try {
+    const res = await fetch('/api/downloads', { credentials: 'include' })
+    if (res.status === 503) { noClients.value = true; return }
+    if (!res.ok) return
+    torrents.value  = await res.json()
+    noClients.value = false
+  } catch {
+  } finally {
+    loading.value = false
+  }
+}
+
+function startPolling() {
+  fetchTorrents()
+  pollInterval = setInterval(fetchTorrents, 60_000)
+}
+
+function stopPolling() {
+  if (pollInterval) { clearInterval(pollInterval); pollInterval = null }
+}
+
+function togglePolling() {
+  polling.value = !polling.value
+  polling.value ? startPolling() : stopPolling()
+}
+
+async function importTorrent(torrent: any) {
+  importing.value[torrent.hash] = true
+  try {
+    const res = await fetch('/api/organize', {
+      method     : 'POST',
+      headers    : { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body       : JSON.stringify({ hash: torrent.hash, save_path: torrent.save_path, name: torrent.name }),
+    })
+    if (res.ok) {
+      toast(`${torrent.name} importé ✓`, 'success')
+      await fetchTorrents()
+    } else {
+      const { error } = await res.json()
+      toast(error ?? "Erreur lors de l'import", 'error')
+    }
+  } catch {
+    toast('Impossible de contacter le serveur', 'error')
+  } finally {
+    importing.value[torrent.hash] = false
+  }
+}
+
+async function importAll() {
+  const toImport = doneTorrents.value.filter(t => t.organizeState !== 'done')
+  if (toImport.length === 0) { toast('Tous les torrents sont déjà importés', 'success'); return }
+
+  importingAll.value = true
+  let done = 0, errors = 0
+
+  for (const t of toImport) {
+    try {
+      const res = await fetch('/api/organize', {
+        method     : 'POST',
+        headers    : { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body       : JSON.stringify({ hash: t.hash, save_path: t.save_path, name: t.name }),
+      })
+      res.ok ? done++ : errors++
+    } catch { errors++ }
+  }
+
+  importingAll.value = false
+  await fetchTorrents()
+  errors === 0
+      ? toast(`${done} torrent(s) importé(s) ✓`, 'success')
+      : toast(`${done} OK, ${errors} erreur(s)`, 'error')
+}
+
+async function deleteTorrent(torrent: any) {
+  deleting.value[torrent.hash] = true
+  try {
+    const withFiles = deleteWithFiles.value[torrent.hash] ?? false
+    const res = await fetch(`/api/torrent/${torrent.hash}?deleteFiles=${withFiles}`, {
+      method     : 'DELETE',
+      credentials: 'include',
+    })
+    if (res.ok) {
+      toast(`"${torrent.name}" supprimé ✓`, 'success')
+      confirmDelete.value = null
+      await fetchTorrents()
+    } else {
+      toast('Erreur lors de la suppression', 'error')
+    }
+  } catch {
+    toast('Impossible de contacter le serveur', 'error')
+  } finally {
+    deleting.value[torrent.hash] = false
+  }
+}
+
+onMounted(startPolling)
+onUnmounted(stopPolling)
 </script>
