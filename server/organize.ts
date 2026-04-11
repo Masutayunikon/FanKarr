@@ -103,10 +103,10 @@ export async function scanMediaPath(
                     if (ep.nfo_filename) idx(ep.nfo_filename, hash, ep.nfo_filename)
                 }
 
-                // 2. original_filename et formatted_name — indexés même si paths est vide
-                // (pour les séries sans torrent importées manuellement)
+                // 2. original_filename, nfo_filename et formatted_name — indexés même si paths est vide
                 const fallbackHash = ep.paths?.[0]?.infohash?.toLowerCase() ?? 'manual'
                 if (ep.original_filename) idx(ep.original_filename, fallbackHash, ep.original_filename)
+                if (ep.nfo_filename)      idx(ep.nfo_filename, fallbackHash, ep.nfo_filename)
                 if (ep.formatted_name?.trim()) {
                     const fmtBase = ep.formatted_name.replace(/[<>:"/\\|?*]/g, '').trim()
                     idx(fmtBase, fallbackHash, fmtBase)
@@ -136,7 +136,20 @@ export async function scanMediaPath(
             } else if (entry.isFile() && /\.(mkv|mp4|avi|m4v|mov|wmv)$/i.test(entry.name)) {
                 result.found++
                 const nameWithoutExt = entry.name.replace(/\.[^.]+$/, '')
-                const match = filenameIndex.get(nameWithoutExt)
+                let match = filenameIndex.get(nameWithoutExt)
+
+                // Fallback : chercher si un candidat de l'index est un préfixe du nom du fichier
+                // ex: index a "Wind Breaker.S01E01.MULTI.1080p" et le fichier est "Wind Breaker.S01E01.MULTI.1080p.x264-FANKAI"
+                if (!match) {
+                    const lower = nameWithoutExt.toLowerCase()
+                    for (const [key, val] of filenameIndex.entries()) {
+                        if (lower.startsWith(key.toLowerCase() + '.') || lower === key.toLowerCase()) {
+                            match = val
+                            break
+                        }
+                    }
+                }
+
                 if (!match) {
                     noMatch++
                     const prefix    = nameWithoutExt.slice(0, 20).toLowerCase()
