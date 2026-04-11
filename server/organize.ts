@@ -78,43 +78,38 @@ export async function scanMediaPath(
     for (const sd of seriesData) {
         for (const season of sd.seasons ?? []) {
             for (const ep of season.episodes ?? []) {
-                for (const p of ep.paths ?? []) {
-                    if (typeof p === 'string') continue
-                    const hash = p.infohash?.toLowerCase()
-                    if (!hash || !p.path) continue
 
-                    const srcFilename = p.path.replace(/\\/g, '/').split('/').pop()
-                    if (!srcFilename) continue
-
-                    const entry = {
+                // Helper : indexer par nom sans extension
+                const idx = (filename: string, hash: string, destFilename?: string) => {
+                    const base = filename.replace(/\.[^.]+$/, '')
+                    if (!base) return
+                    filenameIndex.set(base, {
                         hash,
-                        srcFilename,
+                        srcFilename : filename,
                         episodeId   : ep.id,
                         season      : season.season_number,
                         episode     : ep.episode_number,
-                        destFilename: srcFilename,
-                    }
+                        destFilename: destFilename ?? filename,
+                    })
+                }
 
-                    // Helper : indexer par nom sans extension
-                    const idx = (filename: string, destFilename?: string) => {
-                        const base = filename.replace(/\.[^.]+$/, '')
-                        filenameIndex.set(base, { ...entry, destFilename: destFilename ?? filename })
-                    }
+                // 1. Noms depuis les paths (avec vrai infohash)
+                for (const p of ep.paths ?? []) {
+                    if (typeof p !== 'object' || !p.infohash || !p.path) continue
+                    const hash        = p.infohash.toLowerCase()
+                    const srcFilename = p.path.replace(/\\/g, '/').split('/').pop()
+                    if (!srcFilename) continue
+                    idx(srcFilename, hash)
+                    if (ep.nfo_filename) idx(ep.nfo_filename, hash, ep.nfo_filename)
+                }
 
-                    // 1. Nom brut source
-                    idx(srcFilename)
-
-                    // 2. nfo_filename (sans extension — le swap se fera au moment du match)
-                    if (ep.nfo_filename) idx(ep.nfo_filename)
-
-                    // 3. original_filename
-                    if (ep.original_filename) idx(ep.original_filename)
-
-                    // 4. formatted_name
-                    if (ep.formatted_name?.trim()) {
-                        const fmtBase = ep.formatted_name.replace(/[<>:"/\\|?*]/g, '').trim()
-                        filenameIndex.set(fmtBase, { ...entry, destFilename: fmtBase })
-                    }
+                // 2. original_filename et formatted_name — indexés même si paths est vide
+                // (pour les séries sans torrent importées manuellement)
+                const fallbackHash = ep.paths?.[0]?.infohash?.toLowerCase() ?? 'manual'
+                if (ep.original_filename) idx(ep.original_filename, fallbackHash, ep.original_filename)
+                if (ep.formatted_name?.trim()) {
+                    const fmtBase = ep.formatted_name.replace(/[<>:"/\\|?*]/g, '').trim()
+                    idx(fmtBase, fallbackHash, fmtBase)
                 }
             }
         }
