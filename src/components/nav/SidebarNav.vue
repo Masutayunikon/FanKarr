@@ -73,7 +73,9 @@ defineProps<{ items: NavItem[] }>()
 const router = useRouter()
 const auth   = useAuthStore()
 
-const currentVersion    = ref('dev')
+const currentVersion = ref(
+    import.meta.env.DEV ? 'dev' : ''
+)
 const latestVersion     = ref('')
 const latestReleaseUrl  = ref('https://github.com/masutayunikon/FanKarr/releases/latest')
 const updateAvailable   = ref(false)
