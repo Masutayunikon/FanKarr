@@ -14,14 +14,15 @@ export interface Settings {
     devMode      : boolean
 }
 
-const defaults: Settings = {
-    mediaPath   : '',
-    completePath: '',
-    organizeMode : 'hardlink' | 'copy' | 'move',
-    category    : 'fankai',
-    nfoSupport  : false,
-    autoImport  : true,
-    devMode     : false,
+export interface Settings {
+    mediaPath           : string
+    completePath        : string
+    organizeMode        : 'hardlink' | 'copy' | 'move'
+    category            : string
+    nfoSupport          : boolean
+    autoImport          : boolean
+    devMode             : boolean
+    deleteTorrentOnMove : boolean
 }
 
 export function readSettings(): Settings {
