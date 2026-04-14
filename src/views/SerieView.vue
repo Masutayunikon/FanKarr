@@ -97,9 +97,9 @@
 
             <!-- Boutons intégrale -->
             <div class="flex flex-wrap gap-2 mt-1">
-              <!-- Bouton Tout télécharger si pas de torrent intégrale mais des torrents par épisode/saison -->
+              <!-- Bouton Tout télécharger — visible dès qu'il y a des torrents non téléchargés -->
               <button
-                  v-if="data.torrents_integrale.length === 0 && hasDownloadableTorrents"
+                  v-if="hasDownloadableTorrents"
                   @click="downloadAll"
                   :disabled="downloadingAll"
                   class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-accent text-white hover:bg-accent-hover transition"
@@ -582,30 +582,63 @@ async function unimportSerie(deleteFile: boolean) {
 
 // ── Tout télécharger ─────────────────────────────────────────
 
-// Vérifie si la série a des torrents par épisode téléchargeables (sans intégrale)
-const hasDownloadableTorrents = computed(() => {
-  if (!data.value) return false
-  return data.value.seasons.some((season: any) => seasonHasDownloadable(season))
-})
+// Collecte tous les torrents à télécharger sans doublons
+function collectDownloadables(): { key: string; torrent_url: string | null; magnet: string | null; label: string }[] {
+  if (!data.value) return []
+  const result: { key: string; torrent_url: string | null; magnet: string | null; label: string }[] = []
+  const coveredEpisodeIds = new Set<number>()
+
+  // 1. Intégrales non téléchargées
+  data.value.torrents_integrale.forEach((t: any, i: number) => {
+    if (!isAlreadyQueued(t) && !isDownloaded(`integrale-${i}`)) {
+      result.push({ key: `integrale-${i}`, torrent_url: t.torrent_url, magnet: t.magnet, label: t.label })
+      // Marquer tous les épisodes comme couverts
+      for (const season of data.value!.seasons) {
+        for (const ep of season.episodes) coveredEpisodeIds.add(ep.id)
+      }
+    }
+  })
+
+  // 2. Packs saison
+  for (const season of data.value.seasons) {
+    if (!season.torrent || isAlreadyQueued(season.torrent) || isDownloaded(`season-${season.id}`)) continue
+    if (season.organized_state === 'complete') continue
+    result.push({ key: `season-${season.id}`, torrent_url: season.torrent.torrent_url, magnet: season.torrent.magnet, label: `Saison ${season.season_number}` })
+    // Marquer les épisodes de cette saison comme couverts
+    for (const ep of season.episodes) coveredEpisodeIds.add(ep.id)
+  }
+
+  // 3. Épisodes individuels non couverts par intégrale ou pack saison
+  for (const season of data.value.seasons) {
+    for (const ep of season.episodes) {
+      if (!ep.torrent || !ep.available || ep.organized) continue
+      if (isAlreadyQueued(ep.torrent) || isDownloaded(`ep-${ep.id}`)) continue
+      if (coveredEpisodeIds.has(ep.id)) continue
+      result.push({ key: `ep-${ep.id}`, torrent_url: ep.torrent.torrent_url, magnet: ep.torrent.magnet, label: `E${ep.episode_number}` })
+    }
+  }
+
+  return result
+}
+
+const hasDownloadableTorrents = computed(() => collectDownloadables().length > 0)
 
 function seasonHasDownloadable(season: any): boolean {
+  if (season.torrent && !isAlreadyQueued(season.torrent) && !isDownloaded(`season-${season.id}`) && season.organized_state !== 'complete') return true
   return season.episodes.some((ep: any) =>
-      ep.torrent && ep.available && !ep.organized && !isAlreadyQueued(ep.torrent)
+      ep.torrent && ep.available && !ep.organized && !isAlreadyQueued(ep.torrent) && !isDownloaded(`ep-${ep.id}`)
   )
 }
 
 async function downloadAll() {
-  if (!data.value) return
   downloadingAll.value = true
+  const torrents = collectDownloadables()
   let sent = 0
-  for (const season of data.value.seasons) {
-    for (const ep of season.episodes) {
-      if (!ep.torrent || !ep.available || ep.organized || isAlreadyQueued(ep.torrent)) continue
-      try {
-        const result = await store.download(ep.torrent.torrent_url, ep.torrent.magnet)
-        if (result.success) { addDownloaded(`ep-${ep.id}`); sent++ }
-      } catch {}
-    }
+  for (const t of torrents) {
+    try {
+      const result = await store.download(t.torrent_url, t.magnet)
+      if (result.success) { addDownloaded(t.key); sent++ }
+    } catch {}
   }
   downloadingAll.value = false
   if (sent > 0) { toast(`${sent} torrent(s) envoyé(s) ✓`, 'success'); fetchActiveDownloads() }
@@ -614,12 +647,25 @@ async function downloadAll() {
 
 async function downloadSeason(season: any) {
   downloadingSeason.value[season.id] = true
+  const torrents: { key: string; torrent_url: string | null; magnet: string | null }[] = []
+
+  // Pack saison en priorité
+  if (season.torrent && !isAlreadyQueued(season.torrent) && !isDownloaded(`season-${season.id}`) && season.organized_state !== 'complete') {
+    torrents.push({ key: `season-${season.id}`, torrent_url: season.torrent.torrent_url, magnet: season.torrent.magnet })
+  } else {
+    // Épisodes individuels
+    for (const ep of season.episodes) {
+      if (!ep.torrent || !ep.available || ep.organized) continue
+      if (isAlreadyQueued(ep.torrent) || isDownloaded(`ep-${ep.id}`)) continue
+      torrents.push({ key: `ep-${ep.id}`, torrent_url: ep.torrent.torrent_url, magnet: ep.torrent.magnet })
+    }
+  }
+
   let sent = 0
-  for (const ep of season.episodes) {
-    if (!ep.torrent || !ep.available || ep.organized || isAlreadyQueued(ep.torrent)) continue
+  for (const t of torrents) {
     try {
-      const result = await store.download(ep.torrent.torrent_url, ep.torrent.magnet)
-      if (result.success) { addDownloaded(`ep-${ep.id}`); sent++ }
+      const result = await store.download(t.torrent_url, t.magnet)
+      if (result.success) { addDownloaded(t.key); sent++ }
     } catch {}
   }
   downloadingSeason.value[season.id] = false
