@@ -160,10 +160,6 @@ export async function scanMediaPath(
                 }
 
                 const { hash, srcFilename, episodeId, season, episode } = match
-                // Le destFilename prend l'extension réelle du fichier sur le disque
-                const realExt     = path.extname(entry.name)
-                const destBase    = match.destFilename.replace(/\.[^.]+$/, '')
-                const destFilename = destBase + realExt
                 presentFiles.add(`${hash}:${episodeId}`)
 
                 if (organized[hash]?.[String(episodeId)]) continue
@@ -175,7 +171,7 @@ export async function scanMediaPath(
                     episode,
                     episode_id   : episodeId,
                     src_filename : srcFilename,
-                    dest_filename: destFilename,
+                    dest_filename: entry.name,   // vrai nom sur disque
                     dest_path    : full,
                 }
                 result.added++

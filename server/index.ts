@@ -795,19 +795,21 @@ app.post('/api/rename-episode', requireAuth, async (req, res) => {
     if (!orgEntry) { res.status(404).json({ error: 'Épisode non importé' }); return }
 
     // Calculer le nouveau nom selon le mode actuel
-    const srcExt = path.extname(orgEntry.dest_filename)
+    // Le nom actuel réel = basename du dest_path (plus fiable que dest_filename)
+    const currentName = orgEntry.dest_path ? path.basename(orgEntry.dest_path) : orgEntry.dest_filename
+    const srcExt = path.extname(currentName)
     let newName: string
     if (nfoSupport) {
         newName = ep.nfo_filename
             ? ep.nfo_filename.replace(/\.[^.]+$/, '') + srcExt
-            : orgEntry.dest_filename
+            : currentName
     } else {
         newName = ep.formatted_name?.trim()
             ? ep.formatted_name.replace(/[<>:"/\\|?*]/g, '').trim() + srcExt
-            : orgEntry.dest_filename
+            : currentName
     }
 
-    if (newName === orgEntry.dest_filename) {
+    if (newName === currentName) {
         res.json({ ok: true, renamed: false, message: 'Nom déjà correct' })
         return
     }
@@ -900,26 +902,31 @@ app.get('/api/organized-summary', requireAuth, async (_req, res) => {
                     }
                     if (!orgEntry) continue
 
+                    // Nom réel sur disque = basename du dest_path (plus fiable que dest_filename)
+                    const currentName = orgEntry.dest_path
+                        ? path.basename(orgEntry.dest_path)
+                        : orgEntry.dest_filename
+                    const srcExt = path.extname(currentName)
+
                     // Calculer le nom attendu selon nfoSupport actuel
-                    const srcExt = path.extname(orgEntry.dest_filename)
                     let expectedName: string
                     if (nfoSupport) {
                         expectedName = ep.nfo_filename
                             ? ep.nfo_filename.replace(/\.[^.]+$/, '') + srcExt
-                            : orgEntry.dest_filename
+                            : currentName
                     } else {
                         expectedName = ep.formatted_name?.trim()
                             ? ep.formatted_name.replace(/[<>:"/\\|?*]/g, '').trim() + srcExt
-                            : orgEntry.dest_filename
+                            : currentName
                     }
 
-                    const needsRename = expectedName !== orgEntry.dest_filename
+                    const needsRename = expectedName !== currentName
                     episodes.push({
                         episode_id    : ep.id,
                         episode_number: ep.episode_number,
                         season_number : season.season_number,
                         title         : ep.title,
-                        current_name  : orgEntry.dest_filename,
+                        current_name  : currentName,
                         expected_name : expectedName,
                         dest_path     : orgEntry.dest_path,
                         torrent_hash  : orgHash,
@@ -972,19 +979,20 @@ app.post('/api/rename-all', requireAuth, async (req, res) => {
                 }
                 if (!orgEntry || !orgHash) continue
 
-                const srcExt = path.extname(orgEntry.dest_filename)
+                const currentName = orgEntry.dest_path ? path.basename(orgEntry.dest_path) : orgEntry.dest_filename
+                const srcExt = path.extname(currentName)
                 let expectedName: string
                 if (nfoSupport) {
                     expectedName = ep.nfo_filename
                         ? ep.nfo_filename.replace(/\.[^.]+$/, '') + srcExt
-                        : orgEntry.dest_filename
+                        : currentName
                 } else {
                     expectedName = ep.formatted_name?.trim()
                         ? ep.formatted_name.replace(/[<>:"/\\|?*]/g, '').trim() + srcExt
-                        : orgEntry.dest_filename
+                        : currentName
                 }
 
-                if (expectedName === orgEntry.dest_filename) continue
+                if (expectedName === currentName) continue
 
                 const oldPath = orgEntry.dest_path
                 const newPath = path.join(path.dirname(oldPath), expectedName)
@@ -997,7 +1005,7 @@ app.post('/api/rename-all', requireAuth, async (req, res) => {
                         ...orgEntry, dest_filename: expectedName, dest_path: newPath, at: new Date().toISOString()
                     }
                     done.push(ep.id)
-                    logger.info('api', `Rename masse : "${orgEntry.dest_filename}" → "${expectedName}"`)
+                    logger.info('api', `Rename masse : "${currentName}" → "${expectedName}"`)
                 } catch (err) {
                     const msg = err instanceof Error ? err.message : 'Erreur'
                     errors.push({ episode_id: ep.id, error: msg })
