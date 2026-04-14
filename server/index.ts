@@ -1187,86 +1187,6 @@ app.post('/api/nfo-updates/check', requireAuth, async (_req, res) => {
     res.json({ ok: true, message: 'Vérification lancée en arrière-plan' })
 })
 
-// ── Catch-all SPA ──────────────────────────────────────────────
-if (fs.existsSync(PUBLIC_PATH)) {
-    app.get('*path', (_req, res) => { res.sendFile(path.join(PUBLIC_PATH, 'index.html')) })
-}
-
-// ── Démarrage ──────────────────────────────────────────────────
-const server = http.createServer({ maxHeaderSize: 32768 }, app)
-
-server.listen(PORT, async () => {
-    logger.info('api', `Serveur démarré sur le port ${PORT}`)
-    try {
-        const available = await readAvailable()
-        logger.info('api', `Cache GitHub initialisé — ${available.length} séries disponibles`)
-    } catch (err) {
-        logger.warn('api', `Impossible de charger available.json au démarrage : ${err instanceof Error ? err.message : err}`)
-    }
-
-    const ORGANIZED_PATH = path.join(DATA_DIR, 'organized.json')
-    const { mediaPath }  = readSettings()
-
-    // Migration organized.json : si ancien format (valeurs string) → reset + rescan
-    try {
-        if (fs.existsSync(ORGANIZED_PATH)) {
-            const raw = JSON.parse(fs.readFileSync(ORGANIZED_PATH, 'utf-8'))
-            const isOldFormat = Object.values(raw).some((entries: any) =>
-                Object.values(entries).some(v => typeof v === 'string')
-            )
-            if (isOldFormat) {
-                logger.info('api', 'Migration organized.json : ancien format détecté → réinitialisation')
-                fs.writeFileSync(ORGANIZED_PATH, '{}', 'utf-8')
-            }
-        }
-    } catch {}
-
-    loadEnrichedSeriesData()
-        .then(seriesData => scanMediaPath(mediaPath, ORGANIZED_PATH, seriesData))
-        .catch(err => logger.error('api', `Scan initial échoué : ${err instanceof Error ? err.message : err}`))
-
-    const autoOrganize = async () => {
-        try {
-            const { category } = readSettings()
-            const infohashMap  = await readInfohashMap()
-            const seriesData   = await loadEnrichedSeriesData()
-            await autoOrganizeAll(
-                () => dispatchList(category ?? 'fankai', infohashMap),
-                seriesData,
-                async (result) => {
-                    if (result.done > 0 || result.errors > 0) {
-                        pushNotif({ ...result, at: new Date().toISOString() })
-                    }
-                    // Supprimer le torrent après move si option activée
-                    const { organizeMode, deleteTorrentOnMove } = readSettings()
-                    if (organizeMode === 'move' && deleteTorrentOnMove && result.done > 0) {
-                        try {
-                            await dispatchRemove(result.hash, false)
-                            logger.info('api', `Torrent "${result.name}" supprimé après move`)
-                        } catch (err) {
-                            logger.warn('api', `Impossible de supprimer le torrent "${result.name}" : ${err instanceof Error ? err.message : err}`)
-                        }
-                    }
-                }
-            )
-        } catch (err) {
-            logger.error('api', `Auto-organise échoué : ${err instanceof Error ? err.message : err}`)
-        }
-    }
-
-    setTimeout(() => {
-        autoOrganize()
-        setInterval(autoOrganize, 5 * 60_000)
-    }, 10_000)
-
-    setTimeout(() => {
-        checkNfoUpdates().catch(err => logger.error('nfo-update', `Vérif initiale échouée : ${err instanceof Error ? err.message : err}`))
-        setInterval(() => {
-            checkNfoUpdates().catch(err => logger.error('nfo-update', `Vérif horaire échouée : ${err instanceof Error ? err.message : err}`))
-        }, 60 * 60_000)
-    }, 30_000)
-})
-
 // ── Plex ───────────────────────────────────────────────────────
 
 const PLEX_TV_API = 'https://plex.tv/api/v2'
@@ -1477,4 +1397,84 @@ app.post('/api/plex/setup', requireAuth, async (req, res) => {
         logger.error('plex', `Création bibliothèque échouée : ${msg}`)
         res.status(500).json({ ok: false, steps, error: msg })
     }
+})
+
+// ── Catch-all SPA ──────────────────────────────────────────────
+if (fs.existsSync(PUBLIC_PATH)) {
+    app.get('*path', (_req, res) => { res.sendFile(path.join(PUBLIC_PATH, 'index.html')) })
+}
+
+// ── Démarrage ──────────────────────────────────────────────────
+const server = http.createServer({ maxHeaderSize: 32768 }, app)
+
+server.listen(PORT, async () => {
+    logger.info('api', `Serveur démarré sur le port ${PORT}`)
+    try {
+        const available = await readAvailable()
+        logger.info('api', `Cache GitHub initialisé — ${available.length} séries disponibles`)
+    } catch (err) {
+        logger.warn('api', `Impossible de charger available.json au démarrage : ${err instanceof Error ? err.message : err}`)
+    }
+
+    const ORGANIZED_PATH = path.join(DATA_DIR, 'organized.json')
+    const { mediaPath }  = readSettings()
+
+    // Migration organized.json : si ancien format (valeurs string) → reset + rescan
+    try {
+        if (fs.existsSync(ORGANIZED_PATH)) {
+            const raw = JSON.parse(fs.readFileSync(ORGANIZED_PATH, 'utf-8'))
+            const isOldFormat = Object.values(raw).some((entries: any) =>
+                Object.values(entries).some(v => typeof v === 'string')
+            )
+            if (isOldFormat) {
+                logger.info('api', 'Migration organized.json : ancien format détecté → réinitialisation')
+                fs.writeFileSync(ORGANIZED_PATH, '{}', 'utf-8')
+            }
+        }
+    } catch {}
+
+    loadEnrichedSeriesData()
+        .then(seriesData => scanMediaPath(mediaPath, ORGANIZED_PATH, seriesData))
+        .catch(err => logger.error('api', `Scan initial échoué : ${err instanceof Error ? err.message : err}`))
+
+    const autoOrganize = async () => {
+        try {
+            const { category } = readSettings()
+            const infohashMap  = await readInfohashMap()
+            const seriesData   = await loadEnrichedSeriesData()
+            await autoOrganizeAll(
+                () => dispatchList(category ?? 'fankai', infohashMap),
+                seriesData,
+                async (result) => {
+                    if (result.done > 0 || result.errors > 0) {
+                        pushNotif({ ...result, at: new Date().toISOString() })
+                    }
+                    // Supprimer le torrent après move si option activée
+                    const { organizeMode, deleteTorrentOnMove } = readSettings()
+                    if (organizeMode === 'move' && deleteTorrentOnMove && result.done > 0) {
+                        try {
+                            await dispatchRemove(result.hash, false)
+                            logger.info('api', `Torrent "${result.name}" supprimé après move`)
+                        } catch (err) {
+                            logger.warn('api', `Impossible de supprimer le torrent "${result.name}" : ${err instanceof Error ? err.message : err}`)
+                        }
+                    }
+                }
+            )
+        } catch (err) {
+            logger.error('api', `Auto-organise échoué : ${err instanceof Error ? err.message : err}`)
+        }
+    }
+
+    setTimeout(() => {
+        autoOrganize()
+        setInterval(autoOrganize, 5 * 60_000)
+    }, 10_000)
+
+    setTimeout(() => {
+        checkNfoUpdates().catch(err => logger.error('nfo-update', `Vérif initiale échouée : ${err instanceof Error ? err.message : err}`))
+        setInterval(() => {
+            checkNfoUpdates().catch(err => logger.error('nfo-update', `Vérif horaire échouée : ${err instanceof Error ? err.message : err}`))
+        }, 60 * 60_000)
+    }, 30_000)
 })
