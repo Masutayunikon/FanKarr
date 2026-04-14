@@ -669,7 +669,6 @@ app.post('/api/manual-import', requireAuth, async (req, res) => {
             fs.mkdirSync(destDir, { recursive: true })
 
             if (file_path !== destPath) {
-                // Si le fichier est déjà dans mediaPath/[série]/ → rename sur place
                 const serieRootPath  = path.join(mediaPath, serieTitle)
                 const isInSeriePath  = file_path.startsWith(serieRootPath + path.sep) || file_path.startsWith(serieRootPath + '/')
 
@@ -681,13 +680,19 @@ app.post('/api/manual-import', requireAuth, async (req, res) => {
                         try { fs.linkSync(file_path, destPath) }
                         catch { await fs.promises.copyFile(file_path, destPath) }
                     } else if (organizeMode === 'move') {
-                        await fs.promises.copyFile(file_path, destPath)
-                        await fs.promises.unlink(file_path)
+                        try { fs.renameSync(file_path, destPath) }
+                        catch {
+                            await fs.promises.copyFile(file_path, destPath)
+                            await fs.promises.unlink(file_path)
+                        }
                     } else {
                         await fs.promises.copyFile(file_path, destPath)
                     }
                     logger.info('api', `Import manuel : "${srcFilename}" → "${destPath}"`)
                 }
+            } else {
+                // src === dest — fichier déjà au bon endroit, juste marquer
+                logger.debug('api', `Import manuel : "${srcFilename}" déjà en place`)
             }
 
             const torrentHash = String(hash || '').toLowerCase() || 'manual'
@@ -1260,4 +1265,215 @@ server.listen(PORT, async () => {
             checkNfoUpdates().catch(err => logger.error('nfo-update', `Vérif horaire échouée : ${err instanceof Error ? err.message : err}`))
         }, 60 * 60_000)
     }, 30_000)
+})
+
+// ── Plex ───────────────────────────────────────────────────────
+
+const PLEX_TV_API = 'https://plex.tv/api/v2'
+
+async function plexFetch(url: string, options: RequestInit = {}): Promise<any> {
+    const res = await fetch(url, {
+        ...options,
+        headers: {
+            'Accept'                  : 'application/json',
+            'X-Plex-Client-Identifier': 'fankarr',
+            'X-Plex-Product'          : 'FanKarr',
+            'X-Plex-Version'          : '1.0',
+            ...(options.headers ?? {}),
+        },
+    })
+    if (!res.ok) throw new Error(`Plex ${res.status}: ${await res.text()}`)
+    const text = await res.text()
+    return text ? JSON.parse(text) : {}
+}
+
+// POST /api/plex/connect — auth plex.tv + liste serveurs
+app.post('/api/plex/connect', requireAuth, async (req, res) => {
+    const { username, password, code } = req.body
+    if (!username || !password) { res.status(400).json({ error: 'Email et mot de passe requis' }); return }
+
+    try {
+        const params = new URLSearchParams({ login: username, password })
+        if (code) params.set('verificationCode', code)
+
+        const authData = await plexFetch(`${PLEX_TV_API}/users/signin`, {
+            method : 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body   : params.toString(),
+        })
+
+        const token = authData.authToken ?? authData.user?.authToken
+        if (!token) throw new Error('Token non reçu')
+
+        // Récupérer les serveurs disponibles
+        const resources = await plexFetch(
+            'https://plex.tv/api/v2/resources?includeHttps=1&includeRelay=1&includeIPv6=1',
+            { headers: { 'X-Plex-Token': token } }
+        )
+
+        const servers = (Array.isArray(resources) ? resources : [])
+            .filter((r: any) => r.product === 'Plex Media Server')
+            .map((r: any) => ({
+                name       : r.name,
+                owned      : r.owned,
+                connections: (r.connections ?? []).map((c: any) => ({
+                    uri  : c.uri,
+                    local: c.local,
+                    relay: c.relay,
+                })),
+            }))
+
+        logger.info('plex', `Auth réussie pour ${username} — ${servers.length} serveur(s)`)
+        res.json({ ok: true, token, servers })
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Erreur inconnue'
+        if (msg.includes('401')) {
+            res.status(401).json({ error: '2FA requis ou identifiants incorrects', requires2FA: true })
+        } else {
+            logger.error('plex', `Auth échouée : ${msg}`)
+            res.status(401).json({ error: 'Authentification échouée — vérifiez vos identifiants' })
+        }
+    }
+})
+
+// POST /api/plex/oauth/start — démarre le flow OAuth (Google, Apple, etc.)
+app.post('/api/plex/oauth/start', requireAuth, async (_req, res) => {
+    try {
+        const data = await plexFetch(`${PLEX_TV_API}/pins`, {
+            method : 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body   : new URLSearchParams({ strong: 'true' }).toString(),
+        })
+        const pinId   = data.id
+        const pinCode = data.code
+        if (!pinId || !pinCode) throw new Error('Pin non reçu')
+
+        const authUrl = `https://app.plex.tv/auth#?clientID=fankarr&code=${pinCode}&context[device][product]=FanKarr&forwardUrl=`
+        logger.info('plex', `OAuth démarré — pinId ${pinId}`)
+        res.json({ ok: true, pinId, pinCode, authUrl })
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Erreur'
+        logger.error('plex', `OAuth start échoué : ${msg}`)
+        res.status(500).json({ error: msg })
+    }
+})
+
+// GET /api/plex/oauth/poll/:pinId — vérifie si l'OAuth est complété
+app.get('/api/plex/oauth/poll/:pinId', requireAuth, async (req, res) => {
+    const pinId = String(req.params.pinId)
+    try {
+        const data = await plexFetch(`${PLEX_TV_API}/pins/${pinId}`)
+        const token = data.authToken
+        if (!token) { res.json({ ok: false, pending: true }); return }
+
+        // Token récupéré — récupérer les serveurs
+        const resources = await plexFetch(
+            'https://plex.tv/api/v2/resources?includeHttps=1&includeRelay=1&includeIPv6=1',
+            { headers: { 'X-Plex-Token': token } }
+        )
+        const servers = (Array.isArray(resources) ? resources : [])
+            .filter((r: any) => r.product === 'Plex Media Server')
+            .map((r: any) => ({
+                name       : r.name,
+                owned      : r.owned,
+                connections: (r.connections ?? []).map((c: any) => ({
+                    uri  : c.uri,
+                    local: c.local,
+                    relay: c.relay,
+                })),
+            }))
+
+        logger.info('plex', `OAuth complété — ${servers.length} serveur(s)`)
+        res.json({ ok: true, pending: false, token, servers })
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Erreur'
+        res.status(500).json({ error: msg })
+    }
+})
+
+// POST /api/plex/setup — enregistre l'agent Fankai + crée la bibliothèque
+app.post('/api/plex/setup', requireAuth, async (req, res) => {
+    const { token, serverUrl, libraryName, libraryPath } = req.body
+    if (!token || !serverUrl || !libraryName || !libraryPath) {
+        res.status(400).json({ error: 'token, serverUrl, libraryName, libraryPath requis' }); return
+    }
+
+    const headers: Record<string, string> = { 'X-Plex-Token': token, 'Accept': 'application/json' }
+    const TARGET_AGENT_URI = 'https://metadata.fankai.fr/plex'
+    const steps: { step: string; ok: boolean; message: string }[] = []
+
+    let agentIdentifier = 'tv.plex.agents.custom.fankai'
+    let groupId: string | null = null
+    let agentSetupOk = false
+
+    // ── Étape 1 : Enregistrer le provider Fankai ─────────────
+    try {
+        const providersRes = await fetch(`${serverUrl}/media/providers/metadata`, { headers })
+        if (providersRes.ok) {
+            const data = await providersRes.json()
+            const providers: any[] = data?.MediaContainer?.MetadataAgentProvider ?? []
+            let provider = providers.find((p: any) => p.uri === TARGET_AGENT_URI)
+
+            if (!provider) {
+                const r = await fetch(`${serverUrl}/media/providers/metadata?uri=${encodeURIComponent(TARGET_AGENT_URI)}`, { method: 'POST', headers })
+                if (r.ok) provider = (await r.json())?.MediaContainer?.MetadataAgentProvider?.[0]
+            }
+
+            if (provider) {
+                agentIdentifier = provider.identifier ?? agentIdentifier
+                steps.push({ step: 'provider', ok: true, message: `Provider enregistré (${agentIdentifier})` })
+            }
+
+            // Groupe d'agents
+            const groupsRes = await fetch(`${serverUrl}/media/providers/metadata/group`, { headers })
+            if (groupsRes.ok) {
+                const gdata = await groupsRes.json()
+                const groups: any[] = gdata?.MediaContainer?.MetadataAgentProviderGroup ?? []
+                let group = groups.find((g: any) => g.primaryIdentifier === agentIdentifier)
+
+                if (!group) {
+                    const r = await fetch(
+                        `${serverUrl}/media/providers/metadata/group?title=Fankai&primaryIdentifier=${encodeURIComponent(agentIdentifier)}`,
+                        { method: 'POST', headers }
+                    )
+                    if (r.ok) group = (await r.json())?.MediaContainer?.MetadataAgentProviderGroup?.[0]
+                }
+
+                if (group) {
+                    groupId = String(group.id ?? '')
+                    steps.push({ step: 'group', ok: true, message: `Groupe d'agents créé (ID: ${groupId})` })
+                    agentSetupOk = true
+                }
+            }
+        }
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Erreur'
+        steps.push({ step: 'agent', ok: false, message: `Agent non configuré (Plex < 1.43 ?) — setup manuel requis` })
+        logger.warn('plex', `Setup agent Fankai échoué : ${msg}`)
+    }
+
+    // ── Étape 2 : Créer la bibliothèque ──────────────────────
+    try {
+        const params = new URLSearchParams({
+            type    : 'show',
+            name    : libraryName,
+            agent   : agentIdentifier,
+            scanner : 'Plex TV Series',
+            language: 'fr-FR',
+            location: libraryPath,
+        })
+        if (groupId) params.set('metadataAgentProviderGroupId', groupId)
+
+        const libRes = await fetch(`${serverUrl}/library/sections?${params}`, { method: 'POST', headers })
+        if (!libRes.ok) throw new Error(`HTTP ${libRes.status}: ${await libRes.text()}`)
+
+        steps.push({ step: 'library', ok: true, message: `Bibliothèque "${libraryName}" créée` })
+        logger.info('plex', `Bibliothèque "${libraryName}" créée sur ${serverUrl}`)
+        res.json({ ok: true, agentSetupOk, steps, manualSetup: !agentSetupOk })
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Erreur'
+        steps.push({ step: 'library', ok: false, message: `Création bibliothèque échouée : ${msg}` })
+        logger.error('plex', `Création bibliothèque échouée : ${msg}`)
+        res.status(500).json({ ok: false, steps, error: msg })
+    }
 })
