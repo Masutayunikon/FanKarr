@@ -112,6 +112,12 @@
           description="Supprime automatiquement le torrent du client après un import en mode Déplacer."
       />
 
+      <SettingsToggle
+          v-model="form.autoUnimportMissing"
+          label="Désimporter si fichier manquant"
+          description="Si un fichier importé n'est plus trouvé sur le disque lors du scan, il est automatiquement retiré de la bibliothèque."
+      />
+
     </div>
 
     <!-- Actions -->
@@ -156,12 +162,13 @@ const isDocker   = ref(false)
 const scanResult = ref<{ found: number; added: number } | null>(null)
 
 const form = ref({
-  mediaPath          : '',
-  completePath       : '',
-  organizeMode       : 'hardlink' as 'hardlink' | 'copy' | 'move',
-  nfoSupport         : false,
-  autoImport         : true,
-  deleteTorrentOnMove: false,
+  mediaPath           : '',
+  completePath        : '',
+  organizeMode        : 'hardlink' as 'hardlink' | 'copy' | 'move',
+  nfoSupport          : false,
+  autoImport          : true,
+  deleteTorrentOnMove : false,
+  autoUnimportMissing : false,
 })
 
 const picker = ref<{ open: boolean; field: 'completePath' | 'mediaPath'; currentPath: string }>({
