@@ -8,38 +8,47 @@
       </p>
     </div>
 
-    <!-- Bannière données manquantes -->
-    <div
-        v-if="status.empty"
-        class="border border-accent/30 bg-accent-muted rounded-lg p-4 flex items-center justify-between gap-4"
-    >
-      <div>
-        <p class="text-xs text-accent font-medium mb-1">Données manquantes</p>
-        <p class="text-sm text-secondary">
-          {{ status.exists ? 'Le catalogue est vide.' : 'Aucun catalogue trouvé.' }}
-          Téléchargez les données pour utiliser FanKarr.
+    <!-- Loading -->
+    <div v-if="!loaded" class="flex items-center justify-center gap-2 py-16 text-muted text-sm">
+      <div class="w-4 h-4 border border-border border-t-accent rounded-full animate-spin" />
+    </div>
+
+    <template v-else>
+
+      <!-- Bannière données manquantes -->
+      <div
+          v-if="status.empty"
+          class="border border-accent/30 bg-accent-muted rounded-lg p-4 flex items-center justify-between gap-4"
+      >
+        <div>
+          <p class="text-xs text-accent font-medium mb-1">Données manquantes</p>
+          <p class="text-sm text-secondary">
+            {{ status.exists ? 'Le catalogue est vide.' : 'Aucun catalogue trouvé.' }}
+            Téléchargez les données pour utiliser FanKarr.
+          </p>
+        </div>
+        <button @click="update" :disabled="updating" class="btn-primary whitespace-nowrap">
+          {{ updating ? 'Téléchargement...' : 'Télécharger' }}
+        </button>
+      </div>
+
+      <!-- Statut -->
+      <div class="settings-card">
+        <p class="text-xs text-muted mb-1">Statut</p>
+        <p class="text-sm text-primary font-medium">
+          {{ status.empty ? 'Aucune donnée chargée' : `${status.count} séries disponibles` }}
         </p>
       </div>
-      <button @click="update" :disabled="updating" class="btn-primary whitespace-nowrap">
-        {{ updating ? 'Téléchargement...' : 'Télécharger' }}
-      </button>
-    </div>
 
-    <!-- Statut -->
-    <div class="settings-card">
-      <p class="text-xs text-muted mb-1">Statut</p>
-      <p class="text-sm text-primary font-medium">
-        {{ status.empty ? 'Aucune donnée chargée' : `${status.count} séries disponibles` }}
-      </p>
-    </div>
+      <!-- Action -->
+      <div>
+        <button @click="update" :disabled="updating" class="btn-primary">
+          {{ updating ? 'Mise à jour...' : 'Mettre à jour maintenant' }}
+        </button>
+        <p class="text-xs text-muted mt-2">Force la synchronisation sans attendre le cache de 6h.</p>
+      </div>
 
-    <!-- Action -->
-    <div>
-      <button @click="update" :disabled="updating" class="btn-primary">
-        {{ updating ? 'Mise à jour...' : 'Mettre à jour maintenant' }}
-      </button>
-      <p class="text-xs text-muted mt-2">Force la synchronisation sans attendre le cache de 6h.</p>
-    </div>
+    </template>
 
   </div>
 </template>
@@ -51,11 +60,13 @@ import { useToast } from '@/composables/useToast'
 const { add: toast } = useToast()
 
 const updating = ref(false)
+const loaded   = ref(false)
 const status   = ref({ exists: false, count: 0, empty: true })
 
 onMounted(async () => {
   const res = await fetch('/api/torrents/status', { credentials: 'include' })
   if (res.ok) status.value = await res.json()
+  loaded.value = true
 })
 
 async function update() {
