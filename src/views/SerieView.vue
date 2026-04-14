@@ -228,6 +228,58 @@
                   <EpStateIcon :state="epState(ep)" :size="14" />
                 </button>
 
+                <!-- Actions épisode importé -->
+                <template v-if="ep.organized && organizedByEpisode[String(ep.id)]">
+                  <!-- Badge rename disponible -->
+                  <span
+                      v-if="epNeedsRename(ep)"
+                      class="shrink-0 text-[10px] px-1.5 py-0.5 rounded border bg-yellow-500/10 text-yellow-400 border-yellow-500/20 cursor-default"
+                      :title="`Actuel : ${organizedByEpisode[String(ep.id)]?.dest_filename}\nAttendu : ${epExpectedName(ep)}`"
+                  >
+                    Rename
+                  </span>
+
+                  <!-- Menu actions -->
+                  <div class="relative" @click.stop>
+                    <button
+                        @click="epMenuOpen = epMenuOpen === ep.id ? null : ep.id"
+                        class="w-6 h-6 flex items-center justify-center rounded text-muted hover:text-primary transition-colors"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+                    </button>
+                    <div
+                        v-if="epMenuOpen === ep.id"
+                        class="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl p-1 z-20 w-44 shadow-xl flex flex-col gap-0.5"
+                    >
+                      <button
+                          v-if="epNeedsRename(ep)"
+                          @click="renameEpisode(ep, season); epMenuOpen = null"
+                          :disabled="epActionLoading[ep.id]"
+                          class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-primary hover:bg-hover transition-colors"
+                      >
+                        <svg width="11" height="11" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        Renommer
+                      </button>
+                      <button
+                          @click="unimportEpisode(ep, season, false); epMenuOpen = null"
+                          :disabled="epActionLoading[ep.id]"
+                          class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-muted hover:bg-hover transition-colors"
+                      >
+                        <svg width="11" height="11" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+                        Désimporter
+                      </button>
+                      <button
+                          @click="unimportEpisode(ep, season, true); epMenuOpen = null"
+                          :disabled="epActionLoading[ep.id]"
+                          class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-red-400 hover:bg-red-500/10 transition-colors"
+                      >
+                        <svg width="11" height="11" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+                        Supprimer le fichier
+                      </button>
+                    </div>
+                  </div>
+                </template>
+
               </div>
 
               <!-- Barre progression épisode -->
@@ -316,6 +368,8 @@ const downloaded         = ref<string[]>([])
 const manualImportOpen   = ref(false)
 const organizedByEpisode = ref<Record<string, any>>({})
 const mediaPath          = ref('/')
+const epMenuOpen         = ref<number | null>(null)
+const epActionLoading    = ref<Record<number, boolean>>({})
 
 function isDownloading(key: string) { return downloading.value.includes(key) }
 function isDownloaded(key: string)  { return downloaded.value.includes(key) }
@@ -460,14 +514,88 @@ function formatDuration(seconds: number): string {
   return `${m} min`
 }
 
+// ── Rename / Désimport épisode ────────────────────────────────
+
+// Calcule le nom attendu selon les settings actuels
+function epExpectedName(ep: any): string {
+  const entry = organizedByEpisode.value[String(ep.id)]
+  if (!entry) return ''
+  const srcExt = entry.dest_filename ? '.' + entry.dest_filename.split('.').pop() : '.mkv'
+  // On ne connaît pas nfoSupport ici — on utilise ce qui est dispo
+  // Si nfo_filename existe dans ep, c'est le nom attendu en mode nfo
+  // On compare avec le nom actuel pour détecter si un rename est possible
+  if (ep.nfo_filename) {
+    const nfoName = ep.nfo_filename.replace(/\.[^.]+$/, '') + srcExt
+    return nfoName
+  }
+  if (ep.formatted_name?.trim()) {
+    return ep.formatted_name.replace(/[<>:"/\\|?*]/g, '').trim() + srcExt
+  }
+  return entry.dest_filename
+}
+
+function epNeedsRename(ep: any): boolean {
+  const entry = organizedByEpisode.value[String(ep.id)]
+  if (!entry) return false
+  const expected = epExpectedName(ep)
+  return !!expected && expected !== entry.dest_filename
+}
+
+async function renameEpisode(ep: any, season: any) {
+  epActionLoading.value[ep.id] = true
+  try {
+    // Trouver le hash du torrent pour cet épisode
+    const torrentHash = ep.paths?.[0]?.infohash ?? null
+    const res = await fetch('/api/rename-episode', {
+      method     : 'POST',
+      headers    : { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body       : JSON.stringify({ serie_id: Number(route.params.id), episode_id: ep.id, torrent_hash: torrentHash }),
+    })
+    const data = await res.json()
+    if (!res.ok) { toast(data.error ?? 'Erreur rename', 'error'); return }
+    if (data.renamed) {
+      toast(`Renommé : ${data.new_name}`, 'success')
+      await fetchOrganized()
+    } else {
+      toast(data.message ?? 'Nom déjà correct', 'success')
+    }
+  } catch {
+    toast('Impossible de contacter le serveur', 'error')
+  } finally {
+    epActionLoading.value[ep.id] = false
+  }
+}
+
+async function unimportEpisode(ep: any, season: any, deleteFile: boolean) {
+  epActionLoading.value[ep.id] = true
+  try {
+    const res = await fetch(`/api/organized/${route.params.id}/${ep.id}?deleteFile=${deleteFile}`, {
+      method     : 'DELETE',
+      credentials: 'include',
+    })
+    if (!res.ok) { const d = await res.json(); toast(d.error ?? 'Erreur désimport', 'error'); return }
+    toast(deleteFile ? 'Fichier supprimé ✓' : 'Désimporté ✓', 'success')
+    await fetchOrganized()
+    load()
+  } catch {
+    toast('Impossible de contacter le serveur', 'error')
+  } finally {
+    epActionLoading.value[ep.id] = false
+  }
+}
+
 onMounted(() => {
   load()
   fetchSettings()
   fetchActiveDownloads()
   pollTimer = setInterval(fetchActiveDownloads, 5000)
+  // Fermer le menu épisode au clic extérieur
+  document.addEventListener('click', () => { epMenuOpen.value = null })
 })
 
 onUnmounted(() => {
   if (pollTimer) clearInterval(pollTimer)
+  document.removeEventListener('click', () => { epMenuOpen.value = null })
 })
 </script>

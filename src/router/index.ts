@@ -64,6 +64,11 @@ const router = createRouter({
                             component: () => import('@/views/settings/MediaManagementView.vue'),
                         },
                         {
+                            path: 'import-management',
+                            name: 'setting-import',
+                            component: () => import('@/views/settings/ImportManagementView.vue'),
+                        },
+                        {
                             path: 'catalogue',
                             name: 'settings-catalogue',
                             component: () => import('@/views/settings/CatalogueView.vue'),

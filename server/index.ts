@@ -428,7 +428,7 @@ app.post('/api/download', requireAuth, async (req, res) => {
 })
 
 app.delete('/api/torrent/:hash', requireAuth, async (req, res) => {
-    const hash = req.params.hash as string
+    const { hash }        = req.params
     const deleteFiles     = req.query.deleteFiles === 'true'
     if (!hash) { res.status(400).json({ error: 'hash requis' }); return }
     try {
@@ -762,7 +762,252 @@ app.get('/api/organized/:serieId', requireAuth, async (req, res) => {
     }
 })
 
-// ── Debug ──────────────────────────────────────────────────────
+// ── Rename épisode ─────────────────────────────────────────────
+// Renomme un fichier déjà importé selon le mode actuel (nfoSupport)
+app.post('/api/rename-episode', requireAuth, async (req, res) => {
+    const { serie_id, episode_id, torrent_hash } = req.body
+    if (!serie_id || !episode_id) { res.status(400).json({ error: 'serie_id et episode_id requis' }); return }
+
+    const { nfoSupport } = readSettings()
+    const ORGANIZED_PATH = path.join(DATA_DIR, 'organized.json')
+    let organized: Record<string, Record<string, any>> = {}
+    try { if (fs.existsSync(ORGANIZED_PATH)) organized = JSON.parse(fs.readFileSync(ORGANIZED_PATH, 'utf-8')) } catch {}
+
+    const sd = await readSerieData(Number(serie_id))
+    if (!sd) { res.status(404).json({ error: 'Série introuvable' }); return }
+
+    // Trouver l'épisode dans les données
+    let foundEp: any = null
+    for (const season of sd.seasons ?? []) {
+        for (const ep of season.episodes ?? []) {
+            if (ep.id === Number(episode_id)) { foundEp = { ep, season }; break }
+        }
+        if (foundEp) break
+    }
+    if (!foundEp) { res.status(404).json({ error: 'Épisode introuvable' }); return }
+
+    const { ep, season } = foundEp
+
+    // Trouver l'entrée dans organized.json
+    const hash = torrent_hash?.toLowerCase() ?? 'manual'
+    const orgEntry = organized[hash]?.[String(episode_id)]
+        ?? organized['manual']?.[String(episode_id)]
+    if (!orgEntry) { res.status(404).json({ error: 'Épisode non importé' }); return }
+
+    // Calculer le nouveau nom selon le mode actuel
+    const srcExt = path.extname(orgEntry.dest_filename)
+    let newName: string
+    if (nfoSupport) {
+        newName = ep.nfo_filename
+            ? ep.nfo_filename.replace(/\.[^.]+$/, '') + srcExt
+            : orgEntry.dest_filename
+    } else {
+        newName = ep.formatted_name?.trim()
+            ? ep.formatted_name.replace(/[<>:"/\\|?*]/g, '').trim() + srcExt
+            : orgEntry.dest_filename
+    }
+
+    if (newName === orgEntry.dest_filename) {
+        res.json({ ok: true, renamed: false, message: 'Nom déjà correct' })
+        return
+    }
+
+    const oldPath = orgEntry.dest_path
+    const newPath = path.join(path.dirname(oldPath), newName)
+
+    try {
+        if (!fs.existsSync(oldPath)) throw new Error('Fichier source introuvable sur le disque')
+        if (fs.existsSync(newPath)) throw new Error(`Un fichier avec ce nom existe déjà : ${newName}`)
+        fs.renameSync(oldPath, newPath)
+
+        // Mettre à jour organized.json
+        const entryHash = organized[hash]?.[String(episode_id)] ? hash : 'manual'
+        organized[entryHash][String(episode_id)] = {
+            ...orgEntry,
+            dest_filename: newName,
+            dest_path    : newPath,
+            at           : new Date().toISOString(),
+        }
+        fs.writeFileSync(ORGANIZED_PATH, JSON.stringify(organized, null, 2), 'utf-8')
+        logger.info('api', `Rename : "${orgEntry.dest_filename}" → "${newName}"`)
+        res.json({ ok: true, renamed: true, old_name: orgEntry.dest_filename, new_name: newName })
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Erreur inconnue'
+        logger.error('api', `Rename échoué pour ep ${episode_id} : ${msg}`)
+        res.status(500).json({ error: msg })
+    }
+})
+
+// ── Désimport épisode ──────────────────────────────────────────
+app.delete('/api/organized/:serieId/:episodeId', requireAuth, async (req, res) => {
+    const { serieId, episodeId } = req.params
+    const deleteFile = req.query.deleteFile === 'true'
+    const ORGANIZED_PATH = path.join(DATA_DIR, 'organized.json')
+    let organized: Record<string, Record<string, any>> = {}
+    try { if (fs.existsSync(ORGANIZED_PATH)) organized = JSON.parse(fs.readFileSync(ORGANIZED_PATH, 'utf-8')) } catch {}
+
+    // Chercher l'entrée dans tous les hash
+    let foundHash: string | null = null
+    let foundEntry: any = null
+    for (const [hash, episodes] of Object.entries(organized)) {
+        if (episodes[episodeId]) { foundHash = hash; foundEntry = episodes[episodeId]; break }
+    }
+
+    if (!foundHash || !foundEntry) { res.status(404).json({ error: 'Épisode non importé' }); return }
+
+    try {
+        if (deleteFile && foundEntry.dest_path && fs.existsSync(foundEntry.dest_path)) {
+            fs.unlinkSync(foundEntry.dest_path)
+            logger.info('api', `Désimport + suppression fichier : "${foundEntry.dest_path}"`)
+        }
+
+        delete organized[foundHash][episodeId]
+        if (Object.keys(organized[foundHash]).length === 0) delete organized[foundHash]
+        fs.writeFileSync(ORGANIZED_PATH, JSON.stringify(organized, null, 2), 'utf-8')
+        logger.info('api', `Désimport ep ${episodeId} (série ${serieId})`)
+        res.json({ ok: true })
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Erreur inconnue'
+        logger.error('api', `Désimport échoué : ${msg}`)
+        res.status(500).json({ error: msg })
+    }
+})
+
+// ── Récap global des imports ───────────────────────────────────
+app.get('/api/organized-summary', requireAuth, async (_req, res) => {
+    try {
+        const { nfoSupport } = readSettings()
+        const ORGANIZED_PATH = path.join(DATA_DIR, 'organized.json')
+        let organized: Record<string, Record<string, any>> = {}
+        try { if (fs.existsSync(ORGANIZED_PATH)) organized = JSON.parse(fs.readFileSync(ORGANIZED_PATH, 'utf-8')) } catch {}
+
+        const seriesData = await loadEnrichedSeriesData()
+        const result: any[] = []
+
+        for (const sd of seriesData) {
+            const rawTitle   = sd.title ?? sd.show_title ?? ''
+            const serieTitle = rawTitle.replace(/:/g, ' -').replace(/[<>"/\\|?*]/g, '').replace(/\s+/g, ' ').trim()
+            const episodes: any[] = []
+
+            for (const season of sd.seasons ?? []) {
+                for (const ep of season.episodes ?? []) {
+                    // Chercher l'entrée dans organized.json
+                    let orgEntry: any = null
+                    let orgHash: string | null = null
+                    for (const [hash, eps] of Object.entries(organized)) {
+                        if (eps[String(ep.id)]) { orgEntry = eps[String(ep.id)]; orgHash = hash; break }
+                    }
+                    if (!orgEntry) continue
+
+                    // Calculer le nom attendu selon nfoSupport actuel
+                    const srcExt = path.extname(orgEntry.dest_filename)
+                    let expectedName: string
+                    if (nfoSupport) {
+                        expectedName = ep.nfo_filename
+                            ? ep.nfo_filename.replace(/\.[^.]+$/, '') + srcExt
+                            : orgEntry.dest_filename
+                    } else {
+                        expectedName = ep.formatted_name?.trim()
+                            ? ep.formatted_name.replace(/[<>:"/\\|?*]/g, '').trim() + srcExt
+                            : orgEntry.dest_filename
+                    }
+
+                    const needsRename = expectedName !== orgEntry.dest_filename
+                    episodes.push({
+                        episode_id    : ep.id,
+                        episode_number: ep.episode_number,
+                        season_number : season.season_number,
+                        title         : ep.title,
+                        current_name  : orgEntry.dest_filename,
+                        expected_name : expectedName,
+                        dest_path     : orgEntry.dest_path,
+                        torrent_hash  : orgHash,
+                        needs_rename  : needsRename,
+                    })
+                }
+            }
+
+            if (episodes.length > 0) {
+                const needsRenameCount = episodes.filter(e => e.needs_rename).length
+                result.push({
+                    serie_id         : sd.id,
+                    serie_title      : rawTitle,
+                    serie_title_clean: serieTitle,
+                    total            : episodes.length,
+                    needs_rename     : needsRenameCount,
+                    episodes,
+                })
+            }
+        }
+
+        res.json({ series: result, nfo_support: nfoSupport })
+    } catch (err) {
+        logger.error('api', `organized-summary échoué : ${err instanceof Error ? err.message : err}`)
+        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
+    }
+})
+
+// ── Rename en masse ────────────────────────────────────────────
+app.post('/api/rename-all', requireAuth, async (req, res) => {
+    const { serie_id } = req.body  // optionnel — si absent, rename toutes les séries
+    const { nfoSupport } = readSettings()
+    const ORGANIZED_PATH = path.join(DATA_DIR, 'organized.json')
+    let organized: Record<string, Record<string, any>> = {}
+    try { if (fs.existsSync(ORGANIZED_PATH)) organized = JSON.parse(fs.readFileSync(ORGANIZED_PATH, 'utf-8')) } catch {}
+
+    const seriesData = await loadEnrichedSeriesData()
+    const done: number[] = []
+    const errors: { episode_id: number; error: string }[] = []
+
+    for (const sd of seriesData) {
+        if (serie_id && sd.id !== Number(serie_id)) continue
+
+        for (const season of sd.seasons ?? []) {
+            for (const ep of season.episodes ?? []) {
+                let orgEntry: any = null
+                let orgHash: string | null = null
+                for (const [hash, eps] of Object.entries(organized)) {
+                    if (eps[String(ep.id)]) { orgEntry = eps[String(ep.id)]; orgHash = hash; break }
+                }
+                if (!orgEntry || !orgHash) continue
+
+                const srcExt = path.extname(orgEntry.dest_filename)
+                let expectedName: string
+                if (nfoSupport) {
+                    expectedName = ep.nfo_filename
+                        ? ep.nfo_filename.replace(/\.[^.]+$/, '') + srcExt
+                        : orgEntry.dest_filename
+                } else {
+                    expectedName = ep.formatted_name?.trim()
+                        ? ep.formatted_name.replace(/[<>:"/\\|?*]/g, '').trim() + srcExt
+                        : orgEntry.dest_filename
+                }
+
+                if (expectedName === orgEntry.dest_filename) continue
+
+                const oldPath = orgEntry.dest_path
+                const newPath = path.join(path.dirname(oldPath), expectedName)
+
+                try {
+                    if (!fs.existsSync(oldPath)) { errors.push({ episode_id: ep.id, error: 'Fichier introuvable' }); continue }
+                    if (fs.existsSync(newPath)) { errors.push({ episode_id: ep.id, error: `Fichier existant : ${expectedName}` }); continue }
+                    fs.renameSync(oldPath, newPath)
+                    organized[orgHash][String(ep.id)] = {
+                        ...orgEntry, dest_filename: expectedName, dest_path: newPath, at: new Date().toISOString()
+                    }
+                    done.push(ep.id)
+                    logger.info('api', `Rename masse : "${orgEntry.dest_filename}" → "${expectedName}"`)
+                } catch (err) {
+                    const msg = err instanceof Error ? err.message : 'Erreur'
+                    errors.push({ episode_id: ep.id, error: msg })
+                }
+            }
+        }
+    }
+
+    fs.writeFileSync(ORGANIZED_PATH, JSON.stringify(organized, null, 2), 'utf-8')
+    res.json({ ok: true, done: done.length, errors })
+})
 app.get('/api/debug/stats', requireAuth, (req, res) => {
     const { devMode } = readSettings()
     if (!devMode) { res.status(403).json({ error: 'Dev mode désactivé' }); return }
