@@ -428,8 +428,8 @@ app.post('/api/download', requireAuth, async (req, res) => {
 })
 
 app.delete('/api/torrent/:hash', requireAuth, async (req, res) => {
-    const { hash }        = req.params
-    const deleteFiles     = req.query.deleteFiles === 'true'
+    const hash        = String(req.params.hash)
+    const deleteFiles = req.query.deleteFiles === 'true'
     if (!hash) { res.status(400).json({ error: 'hash requis' }); return }
     try {
         const result = await dispatchRemove(hash, deleteFiles)
@@ -840,7 +840,8 @@ app.post('/api/rename-episode', requireAuth, async (req, res) => {
 
 // ── Désimport épisode ──────────────────────────────────────────
 app.delete('/api/organized/:serieId/:episodeId', requireAuth, async (req, res) => {
-    const { serieId, episodeId } = req.params
+    const serieId   = String(req.params.serieId)
+    const episodeId = String(req.params.episodeId)
     const deleteFile = req.query.deleteFile === 'true'
     const ORGANIZED_PATH = path.join(DATA_DIR, 'organized.json')
     let organized: Record<string, Record<string, any>> = {}
