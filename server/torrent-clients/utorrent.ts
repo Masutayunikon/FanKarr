@@ -155,7 +155,6 @@ const UT: TorrentClientDriver = {
         })
 
         if (config.savePath) {
-            qs.set('download_dir', '1')
             qs.set('path', String(config.savePath))
         }
 
