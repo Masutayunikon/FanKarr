@@ -54,16 +54,17 @@ app.get('/api/settings', requireAuth, (_req, res) => {
     res.json(readSettings())
 })
 app.post('/api/settings', requireAuth, (req, res) => {
-    const { mediaPath, completePath, organizeMode, category, nfoSupport, autoImport, devMode, deleteTorrentOnMove } = req.body
+    const { mediaPath, completePath, organizeMode, category, nfoSupport, autoImport, devMode, deleteTorrentOnMove, autoUnimportMissing } = req.body
     const patch: Record<string, any> = {}
-    if (mediaPath           !== undefined) patch.mediaPath           = mediaPath
-    if (completePath        !== undefined) patch.completePath        = completePath
-    if (organizeMode        !== undefined) patch.organizeMode        = organizeMode
-    if (category            !== undefined) patch.category            = category
-    if (nfoSupport          !== undefined) patch.nfoSupport          = nfoSupport
-    if (autoImport          !== undefined) patch.autoImport          = autoImport
-    if (devMode             !== undefined) patch.devMode             = devMode
-    if (deleteTorrentOnMove !== undefined) patch.deleteTorrentOnMove = deleteTorrentOnMove
+    if (mediaPath             !== undefined) patch.mediaPath             = mediaPath
+    if (completePath          !== undefined) patch.completePath          = completePath
+    if (organizeMode          !== undefined) patch.organizeMode          = organizeMode
+    if (category              !== undefined) patch.category              = category
+    if (nfoSupport            !== undefined) patch.nfoSupport            = nfoSupport
+    if (autoImport            !== undefined) patch.autoImport            = autoImport
+    if (devMode               !== undefined) patch.devMode               = devMode
+    if (deleteTorrentOnMove   !== undefined) patch.deleteTorrentOnMove   = deleteTorrentOnMove
+    if (autoUnimportMissing   !== undefined) patch.autoUnimportMissing   = autoUnimportMissing
     const updated = writeSettings(patch)
     logger.info('api', 'Paramètres mis à jour')
     res.json(updated)
@@ -840,6 +841,43 @@ app.post('/api/rename-episode', requireAuth, async (req, res) => {
     }
 })
 
+// ── Désimport série complète ───────────────────────────────────
+app.delete('/api/organized/:serieId', requireAuth, async (req, res) => {
+    const serieId    = String(req.params.serieId)
+    const deleteFile = req.query.deleteFile === 'true'
+    const ORGANIZED_PATH = path.join(DATA_DIR, 'organized.json')
+    let organized: Record<string, Record<string, any>> = {}
+    try { if (fs.existsSync(ORGANIZED_PATH)) organized = JSON.parse(fs.readFileSync(ORGANIZED_PATH, 'utf-8')) } catch {}
+
+    const sd = await readSerieData(Number(serieId))
+    if (!sd) { res.status(404).json({ error: 'Série introuvable' }); return }
+
+    const episodeIds = new Set<string>()
+    for (const season of sd.seasons ?? []) {
+        for (const ep of season.episodes ?? []) episodeIds.add(String(ep.id))
+    }
+
+    let removed = 0
+    const errors: string[] = []
+
+    for (const [hash, episodes] of Object.entries(organized)) {
+        for (const epId of Object.keys(episodes)) {
+            if (!episodeIds.has(epId)) continue
+            const entry = episodes[epId]
+            if (deleteFile && entry?.dest_path && fs.existsSync(entry.dest_path)) {
+                try { fs.unlinkSync(entry.dest_path) } catch (err) { errors.push(entry.dest_path) }
+            }
+            delete organized[hash][epId]
+            removed++
+        }
+        if (Object.keys(organized[hash]).length === 0) delete organized[hash]
+    }
+
+    fs.writeFileSync(ORGANIZED_PATH, JSON.stringify(organized, null, 2), 'utf-8')
+    logger.info('api', `Désimport série ${serieId} — ${removed} épisode(s) retirés`)
+    res.json({ ok: true, removed, errors })
+})
+
 // ── Désimport épisode ──────────────────────────────────────────
 app.delete('/api/organized/:serieId/:episodeId', requireAuth, async (req, res) => {
     const serieId   = String(req.params.serieId)
@@ -921,6 +959,7 @@ app.get('/api/organized-summary', requireAuth, async (_req, res) => {
                     }
 
                     const needsRename = expectedName !== currentName
+                    const fileExists  = orgEntry.dest_path ? fs.existsSync(orgEntry.dest_path) : false
                     episodes.push({
                         episode_id    : ep.id,
                         episode_number: ep.episode_number,
@@ -931,6 +970,7 @@ app.get('/api/organized-summary', requireAuth, async (_req, res) => {
                         dest_path     : orgEntry.dest_path,
                         torrent_hash  : orgHash,
                         needs_rename  : needsRename,
+                        file_exists   : fileExists,
                     })
                 }
             }

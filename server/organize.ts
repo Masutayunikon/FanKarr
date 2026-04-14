@@ -196,11 +196,28 @@ export async function scanMediaPath(
         if (Object.keys(organized[hash]).length === 0) delete organized[hash]
     }
 
-    if (result.added > 0 || removed > 0) {
+    // Désimport automatique des fichiers manquants sur le disque
+    const { autoUnimportMissing } = readSettings() as any
+    let autoRemoved = 0
+    if (autoUnimportMissing) {
+        for (const [hash, episodes] of Object.entries(organized)) {
+            for (const [episodeId, entry] of Object.entries(episodes as Record<string, any>)) {
+                const destPath = entry?.dest_path
+                if (destPath && !fs.existsSync(destPath)) {
+                    delete (organized[hash] as any)[episodeId]
+                    autoRemoved++
+                    logger.info('organize', `Désimport auto : fichier introuvable "${destPath}"`)
+                }
+            }
+            if (Object.keys(organized[hash]).length === 0) delete organized[hash]
+        }
+    }
+
+    if (result.added > 0 || removed > 0 || autoRemoved > 0) {
         fs.writeFileSync(organizedPath, JSON.stringify(organized, null, 2), 'utf-8')
     }
 
-    logger.info('organize', `Scan terminé — ${result.found} fichiers, ${result.added} ajoutés, ${removed} orphelins supprimés${noMatch > 0 ? `, ${noMatch} non matchés` : ''}`)
+    logger.info('organize', `Scan terminé — ${result.found} fichiers, ${result.added} ajoutés, ${removed} orphelins supprimés${autoRemoved > 0 ? `, ${autoRemoved} désimportés auto (fichier manquant)` : ''}${noMatch > 0 ? `, ${noMatch} non matchés` : ''}`)
 
     return result
 }

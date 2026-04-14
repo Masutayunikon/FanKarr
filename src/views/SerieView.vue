@@ -43,7 +43,7 @@
               Séries
             </RouterLink>
 
-            <!-- Titre + bouton import manuel -->
+            <!-- Titre + boutons -->
             <div class="flex items-center gap-3 flex-wrap">
               <h1 class="text-2xl font-bold text-primary tracking-tight">{{ data.serie.title }}</h1>
               <button
@@ -57,6 +57,25 @@
                 </svg>
                 Import manuel
               </button>
+              <div v-if="Object.keys(organizedByEpisode).length > 0" class="relative" @click.stop>
+                <button
+                    @click="unimportMenuOpen = !unimportMenuOpen"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-border text-muted hover:text-red-400 hover:border-red-500/40 transition shrink-0"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
+                    <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>
+                  </svg>
+                  Désimporter
+                </button>
+                <div v-if="unimportMenuOpen" class="absolute top-full left-0 mt-1 bg-card border border-border rounded-xl p-1 z-20 w-48 shadow-xl flex flex-col gap-0.5">
+                  <button @click="unimportSerie(false); unimportMenuOpen = false" class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-muted hover:bg-hover transition-colors">
+                    Retirer de la bibliothèque
+                  </button>
+                  <button @click="unimportSerie(true); unimportMenuOpen = false" class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-red-400 hover:bg-red-500/10 transition-colors">
+                    Supprimer les fichiers
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div class="flex flex-wrap items-center gap-2">
@@ -78,6 +97,21 @@
 
             <!-- Boutons intégrale -->
             <div class="flex flex-wrap gap-2 mt-1">
+              <!-- Bouton Tout télécharger si pas de torrent intégrale mais des torrents par épisode/saison -->
+              <button
+                  v-if="data.torrents_integrale.length === 0 && hasDownloadableTorrents"
+                  @click="downloadAll"
+                  :disabled="downloadingAll"
+                  class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-accent text-white hover:bg-accent-hover transition"
+                  :class="downloadingAll ? 'opacity-50 cursor-not-allowed' : ''"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" :class="downloadingAll ? 'animate-spin' : ''">
+                  <path v-if="!downloadingAll" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline v-if="!downloadingAll" points="7 10 12 15 17 10"/><line v-if="!downloadingAll" x1="12" y1="15" x2="12" y2="3"/>
+                  <path v-else d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.36-2.64M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.36 2.64"/>
+                </svg>
+                {{ downloadingAll ? 'Envoi…' : 'Tout télécharger' }}
+              </button>
+
               <button
                   v-for="(t, i) in data.torrents_integrale"
                   :key="i"
@@ -153,18 +187,32 @@
               </div>
             </div>
 
-            <!-- Bouton pack saison -->
-            <button
-                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition"
-                :class="season.torrent && !isDownloaded(`season-${season.id}`) && !isAlreadyQueued(season.torrent) && season.organized_state !== 'complete'
-                ? 'bg-accent-muted text-accent border-accent/20 hover:bg-accent/20'
-                : 'text-muted border-border cursor-not-allowed opacity-50'"
-                :disabled="!season.torrent || isDownloading(`season-${season.id}`) || isDownloaded(`season-${season.id}`) || isAlreadyQueued(season.torrent) || season.organized_state === 'complete'"
-                @click="season.torrent && download(`season-${season.id}`, season.torrent.torrent_url, season.torrent.magnet)"
-            >
-              <EpStateIcon :state="seasonBtnState(season)" :size="12" />
-              {{ season.organized_state === 'complete' ? 'Importé' : isAlreadyQueued(season.torrent) ? 'Déjà ajouté' : isDownloaded(`season-${season.id}`) ? 'Envoyé' : 'Saison entière' }}
-            </button>
+            <!-- Boutons saison -->
+            <div class="flex items-center gap-2">
+              <!-- Tout télécharger (épisodes individuels sans pack saison) -->
+              <button
+                  v-if="!season.torrent && seasonHasDownloadable(season)"
+                  @click="downloadSeason(season)"
+                  :disabled="downloadingSeason[season.id]"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border bg-accent-muted text-accent border-accent/20 hover:bg-accent/20 transition"
+              >
+                <EpStateIcon :state="downloadingSeason[season.id] ? 'loading' : 'idle'" :size="12" />
+                {{ downloadingSeason[season.id] ? 'Envoi…' : 'Tout télécharger' }}
+              </button>
+
+              <!-- Bouton pack saison -->
+              <button
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition"
+                  :class="season.torrent && !isDownloaded(`season-${season.id}`) && !isAlreadyQueued(season.torrent) && season.organized_state !== 'complete'
+                  ? 'bg-accent-muted text-accent border-accent/20 hover:bg-accent/20'
+                  : 'text-muted border-border cursor-not-allowed opacity-50'"
+                  :disabled="!season.torrent || isDownloading(`season-${season.id}`) || isDownloaded(`season-${season.id}`) || isAlreadyQueued(season.torrent) || season.organized_state === 'complete'"
+                  @click="season.torrent && download(`season-${season.id}`, season.torrent.torrent_url, season.torrent.magnet)"
+              >
+                <EpStateIcon :state="seasonBtnState(season)" :size="12" />
+                {{ season.organized_state === 'complete' ? 'Importé' : isAlreadyQueued(season.torrent) ? 'Déjà ajouté' : isDownloaded(`season-${season.id}`) ? 'Envoyé' : 'Saison entière' }}
+              </button>
+            </div>
           </div>
 
           <!-- Progression saison -->
@@ -370,6 +418,9 @@ const organizedByEpisode = ref<Record<string, any>>({})
 const mediaPath          = ref('/')
 const epMenuOpen         = ref<number | null>(null)
 const epActionLoading    = ref<Record<number, boolean>>({})
+const unimportMenuOpen   = ref(false)
+const downloadingAll     = ref(false)
+const downloadingSeason  = ref<Record<number, boolean>>({})
 
 function isDownloading(key: string) { return downloading.value.includes(key) }
 function isDownloaded(key: string)  { return downloaded.value.includes(key) }
@@ -514,6 +565,68 @@ function formatDuration(seconds: number): string {
   return `${m} min`
 }
 
+async function unimportSerie(deleteFile: boolean) {
+  try {
+    const res = await fetch(`/api/organized/${route.params.id}?deleteFile=${deleteFile}`, {
+      method: 'DELETE', credentials: 'include',
+    })
+    if (!res.ok) { const d = await res.json(); toast(d.error ?? 'Erreur désimport', 'error'); return }
+    const data = await res.json()
+    toast(`${data.removed} épisode(s) désimporté(s) ✓`, 'success')
+    await fetchOrganized()
+    load()
+  } catch {
+    toast('Impossible de contacter le serveur', 'error')
+  }
+}
+
+// ── Tout télécharger ─────────────────────────────────────────
+
+// Vérifie si la série a des torrents par épisode téléchargeables (sans intégrale)
+const hasDownloadableTorrents = computed(() => {
+  if (!data.value) return false
+  return data.value.seasons.some((season: any) => seasonHasDownloadable(season))
+})
+
+function seasonHasDownloadable(season: any): boolean {
+  return season.episodes.some((ep: any) =>
+      ep.torrent && ep.available && !ep.organized && !isAlreadyQueued(ep.torrent)
+  )
+}
+
+async function downloadAll() {
+  if (!data.value) return
+  downloadingAll.value = true
+  let sent = 0
+  for (const season of data.value.seasons) {
+    for (const ep of season.episodes) {
+      if (!ep.torrent || !ep.available || ep.organized || isAlreadyQueued(ep.torrent)) continue
+      try {
+        const result = await store.download(ep.torrent.torrent_url, ep.torrent.magnet)
+        if (result.success) { addDownloaded(`ep-${ep.id}`); sent++ }
+      } catch {}
+    }
+  }
+  downloadingAll.value = false
+  if (sent > 0) { toast(`${sent} torrent(s) envoyé(s) ✓`, 'success'); fetchActiveDownloads() }
+  else toast('Aucun nouveau torrent à télécharger', 'success')
+}
+
+async function downloadSeason(season: any) {
+  downloadingSeason.value[season.id] = true
+  let sent = 0
+  for (const ep of season.episodes) {
+    if (!ep.torrent || !ep.available || ep.organized || isAlreadyQueued(ep.torrent)) continue
+    try {
+      const result = await store.download(ep.torrent.torrent_url, ep.torrent.magnet)
+      if (result.success) { addDownloaded(`ep-${ep.id}`); sent++ }
+    } catch {}
+  }
+  downloadingSeason.value[season.id] = false
+  if (sent > 0) { toast(`${sent} torrent(s) envoyé(s) ✓`, 'success'); fetchActiveDownloads() }
+  else toast('Aucun nouveau torrent à télécharger pour cette saison', 'success')
+}
+
 // ── Rename / Désimport épisode ────────────────────────────────
 
 // Calcule le nom attendu selon les settings actuels
@@ -591,7 +704,7 @@ onMounted(() => {
   fetchActiveDownloads()
   pollTimer = setInterval(fetchActiveDownloads, 5000)
   // Fermer le menu épisode au clic extérieur
-  document.addEventListener('click', () => { epMenuOpen.value = null })
+  document.addEventListener('click', () => { epMenuOpen.value = null; unimportMenuOpen.value = false })
 })
 
 onUnmounted(() => {
