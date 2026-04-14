@@ -1342,13 +1342,14 @@ app.post('/api/plex/oauth/start', requireAuth, async (_req, res) => {
         const data = await plexFetch(`${PLEX_TV_API}/pins`, {
             method : 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body   : new URLSearchParams({ strong: 'true' }).toString(),
+            body   : new URLSearchParams({ strong: 'true', 'X-Plex-Client-Identifier': 'fankarr' }).toString(),
         })
         const pinId   = data.id
         const pinCode = data.code
         if (!pinId || !pinCode) throw new Error('Pin non reçu')
 
-        const authUrl = `https://app.plex.tv/auth#?clientID=fankarr&code=${pinCode}&context[device][product]=FanKarr&forwardUrl=`
+        // forwardUrl doit pointer vers une URL accessible pour que Plex valide le pin
+        const authUrl = `https://app.plex.tv/auth#?clientID=fankarr&code=${pinCode}&context%5Bdevice%5D%5Bproduct%5D=FanKarr&forwardUrl=https%3A%2F%2Fplex.tv`
         logger.info('plex', `OAuth démarré — pinId ${pinId}`)
         res.json({ ok: true, pinId, pinCode, authUrl })
     } catch (err) {
@@ -1362,11 +1363,11 @@ app.post('/api/plex/oauth/start', requireAuth, async (_req, res) => {
 app.get('/api/plex/oauth/poll/:pinId', requireAuth, async (req, res) => {
     const pinId = String(req.params.pinId)
     try {
-        const data = await plexFetch(`${PLEX_TV_API}/pins/${pinId}`)
+        // Le clientID doit correspondre exactement à celui utilisé pour créer le pin
+        const data = await plexFetch(`${PLEX_TV_API}/pins/${pinId}?X-Plex-Client-Identifier=fankarr`)
         const token = data.authToken
         if (!token) { res.json({ ok: false, pending: true }); return }
 
-        // Token récupéré — récupérer les serveurs
         const resources = await plexFetch(
             'https://plex.tv/api/v2/resources?includeHttps=1&includeRelay=1&includeIPv6=1',
             { headers: { 'X-Plex-Token': token } }
