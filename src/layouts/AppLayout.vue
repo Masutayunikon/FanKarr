@@ -72,6 +72,7 @@ const navItems = computed<NavItem[]>(() => [
     children: [
       { label: 'Clients de téléchargement', to: '/settings/download-client' },
       { label: 'Gestion des médias',        to: '/settings/media-management' },
+      { label: 'Management des séries',       to: '/settings/import-management' },
       { label: 'Catalogue Fankai',          to: '/settings/catalogue' },
       { label: 'Journaux',                  to: '/settings/logs' },
       { label: 'Avancé',                    to: '/settings/advanced' },
