@@ -104,6 +104,18 @@
         />
       </div>
 
+      <!-- Plex -->
+      <div class="settings-card flex items-center justify-between gap-4">
+        <div>
+          <p class="settings-label">Plex</p>
+          <p class="text-xs text-muted mt-0.5">
+            Créez une bibliothèque Plex connectée à l'agent de métadonnées Fankai.
+            Requiert Plex Media Server 1.43+ pour la configuration automatique de l'agent.
+          </p>
+        </div>
+        <button @click="plexOpen = true" class="btn-secondary shrink-0">Configurer Plex</button>
+      </div>
+
       <!-- Actions -->
       <div class="flex items-center gap-3">
         <button @click="save" :disabled="saving" class="btn-primary">
@@ -115,16 +127,6 @@
         <span v-if="scanResult" class="text-xs" :class="scanResult.added > 0 ? 'text-green-400' : 'text-muted'">
           {{ scanResult.found }} fichiers · {{ scanResult.added }} ajoutés
         </span>
-      </div>
-
-      <!-- Plex -->
-      <div>
-        <h3 class="text-sm font-semibold text-primary mb-1">Plex</h3>
-        <p class="text-xs text-muted mb-4">
-          Créez une bibliothèque Plex connectée à l'agent de métadonnées Fankai.
-          Requiert Plex Media Server 1.43+ pour la configuration automatique de l'agent.
-        </p>
-        <button @click="plexOpen = true" class="btn-secondary">Configurer Plex</button>
       </div>
 
     </template>
