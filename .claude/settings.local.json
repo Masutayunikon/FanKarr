@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find src:*)",
+      "Bash(find server:*)"
+    ]
+  }
+}
