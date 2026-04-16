@@ -1,5 +1,32 @@
 # Changelog
 
+## [3.9.0](https://github.com/Masutayunikon/FanKarr/compare/v3.8.1...v3.9.0) (2026-04-15)
+
+
+### Features
+
+* ajout d'un bouton supprimé l'importation dans le menu d'importation d'une serie ([286106e](https://github.com/Masutayunikon/FanKarr/commit/286106ef1eed2803cf14549af7a172b13b9c2b88))
+* ajout de badge quand le fichier est introuvable ([286106e](https://github.com/Masutayunikon/FanKarr/commit/286106ef1eed2803cf14549af7a172b13b9c2b88))
+* ajout de la possibilité de renommer des imports dans le bon format ([67444d4](https://github.com/Masutayunikon/FanKarr/commit/67444d418d65cf0d0323c8955adb8d9e136a8797))
+* ajout du bouton suppresion de torrent en cours ([286106e](https://github.com/Masutayunikon/FanKarr/commit/286106ef1eed2803cf14549af7a172b13b9c2b88))
+* ajout setup plex ([2123e73](https://github.com/Masutayunikon/FanKarr/commit/2123e73b7fec9c637b349e63da9c9a88dd9fccd6))
+* bouton tous télécharger sur les saisons et series ([286106e](https://github.com/Masutayunikon/FanKarr/commit/286106ef1eed2803cf14549af7a172b13b9c2b88))
+* suppression des series supprimé ([286106e](https://github.com/Masutayunikon/FanKarr/commit/286106ef1eed2803cf14549af7a172b13b9c2b88))
+
+
+### Bug Fixes
+
+* ajout d'un loader sur certaines pages pour pas avoir des trucs par default qui s'affiche ([d241be3](https://github.com/Masutayunikon/FanKarr/commit/d241be30d126f5b975aca72d2c21ab74e7215fa4))
+* ajout de la page management dans le layout ([5dc0531](https://github.com/Masutayunikon/FanKarr/commit/5dc0531bfd50ac9ca5a59126670757179ed8a226))
+* cast string ([16d1bfe](https://github.com/Masutayunikon/FanKarr/commit/16d1bfe7e7766987876db80f84e6c0dc31217403))
+* Deux corrections : ([5398a4f](https://github.com/Masutayunikon/FanKarr/commit/5398a4fe12b1ac235884bb9c6218174b0c438ac1))
+* le bouton tout telecharger apparait sur les packs de saisons et les integrals + autres et pas que sur les series avec des episodes telechargable ([e105587](https://github.com/Masutayunikon/FanKarr/commit/e105587147e03e39e2c3b985a114434c2512417a))
+* move plex settings en haut des boutons ([96af23d](https://github.com/Masutayunikon/FanKarr/commit/96af23d258e14dacf371b043b92b554c2b22f80c))
+* plex catcher ([ba0dc8d](https://github.com/Masutayunikon/FanKarr/commit/ba0dc8d21bca098b0203f9553d81a47048fad452))
+* suppression de dest_filename du fichier d'organisation qui est faux et ne sert à rien ([3c69eba](https://github.com/Masutayunikon/FanKarr/commit/3c69eba440f4f83180bd5d3f25a2ad0499b91940))
+* utorrent prend desormais le dossier cible correctement ([cc68fef](https://github.com/Masutayunikon/FanKarr/commit/cc68fef88d6e13339867f6b6b47667a141a86091))
+* wrong file copy ([fa7da76](https://github.com/Masutayunikon/FanKarr/commit/fa7da7681193e89214a521c5bd16106f0ca03f46))
+
 ## [3.8.1](https://github.com/Masutayunikon/FanKarr/compare/v3.8.0...v3.8.1) (2026-04-11)
 
 
