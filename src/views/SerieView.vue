@@ -43,6 +43,7 @@
             :organized-by-episode="organizedByEpisode"
             :ep-action-loading="epActionLoading"
             :downloading-season="!!downloadingSeason[season.id]"
+            :nfo-support="nfoSupport"
             @toggle="toggleSeason"
             @download="(key, url, magnet) => download(key, url, magnet)"
             @download-season="downloadSeason"
@@ -87,6 +88,7 @@ const downloaded         = ref<string[]>([])
 const manualImportOpen   = ref(false)
 const organizedByEpisode = ref<Record<string, any>>({})
 const mediaPath          = ref('/')
+const nfoSupport         = ref(false)
 const epActionLoading    = ref<Record<number, boolean>>({})
 const unimportMenuOpen   = ref(false)
 const downloadingAll     = ref(false)
@@ -128,7 +130,7 @@ async function fetchOrganized() {
 async function fetchSettings() {
   try {
     const res = await fetch('/api/settings', { credentials: 'include' })
-    if (res.ok) { const s = await res.json(); mediaPath.value = s.mediaPath || '/' }
+    if (res.ok) { const s = await res.json(); mediaPath.value = s.mediaPath || '/'; nfoSupport.value = !!s.nfoSupport }
   } catch {}
 }
 

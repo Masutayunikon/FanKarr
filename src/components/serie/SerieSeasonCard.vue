@@ -166,6 +166,7 @@ const props = defineProps<{
   organizedByEpisode: Record<string, any>
   epActionLoading   : Record<number, boolean>
   downloadingSeason ?: boolean
+  nfoSupport        ?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -253,9 +254,11 @@ function epExpectedName(ep: any): string {
   const entry = props.organizedByEpisode[String(ep.id)]
   if (!entry) return ''
   const srcExt = entry.dest_filename ? '.' + entry.dest_filename.split('.').pop() : '.mkv'
-  if (ep.nfo_filename) return ep.nfo_filename.replace(/\.[^.]+$/, '') + srcExt
-  if (ep.formatted_name?.trim()) return ep.formatted_name.replace(/[<>:"/\\|?*]/g, '').trim() + srcExt
-  return entry.dest_filename
+  if (props.nfoSupport) {
+    return ep.nfo_filename ? ep.nfo_filename.replace(/\.[^.]+$/, '') + srcExt : entry.dest_filename
+  } else {
+    return ep.formatted_name?.trim() ? ep.formatted_name.replace(/[<>:"/\\|?*]/g, '').trim() + srcExt : entry.dest_filename
+  }
 }
 function epNeedsRename(ep: any): boolean {
   const entry = props.organizedByEpisode[String(ep.id)]
