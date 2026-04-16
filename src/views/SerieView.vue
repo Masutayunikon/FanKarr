@@ -19,7 +19,7 @@
           :serie="data.serie"
           :torrents-integrale="data.torrents_integrale"
           :organized-by-episode="organizedByEpisode"
-          :has-downloadable-torrents="hasDownloadableTorrents"
+          :has-downloadable-torrents="hasNonIntegraleDownloadables"
           :downloading-all="downloadingAll"
           :active-torrents="activeTorrents"
           :downloading="downloading"
@@ -180,6 +180,24 @@ function collectDownloadables() {
 }
 
 const hasDownloadableTorrents = computed(() => collectDownloadables().length > 0)
+
+// "Tout télécharger" ne s'affiche que s'il y a des torrents saison/épisode à lancer
+// (les intégrales ont déjà leurs propres boutons dédiés dans le hero)
+const hasNonIntegraleDownloadables = computed(() => {
+  if (!data.value) return false
+  const covered = new Set<number>()
+  data.value.torrents_integrale.forEach((t: any, i: number) => {
+    if (!isAlreadyQueued(t) && !isDownloaded(`integrale-${i}`))
+      for (const season of data.value!.seasons) for (const ep of season.episodes) covered.add(ep.id)
+  })
+  for (const season of data.value.seasons) {
+    if (season.torrent && !isAlreadyQueued(season.torrent) && !isDownloaded(`season-${season.id}`) && season.organized_state !== 'complete') return true
+    for (const ep of season.episodes) {
+      if (ep.torrent && ep.available && !ep.organized && !isAlreadyQueued(ep.torrent) && !isDownloaded(`ep-${ep.id}`) && !covered.has(ep.id)) return true
+    }
+  }
+  return false
+})
 
 async function downloadAll() {
   downloadingAll.value = true
