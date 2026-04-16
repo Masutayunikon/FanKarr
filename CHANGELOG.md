@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.9.1](https://github.com/Masutayunikon/FanKarr/compare/v3.9.0...v3.9.1) (2026-04-16)
+
+
+### Bug Fixes
+
+* le badge de rename utilise la meme logique que coté serveur et n'apparait plus sur les vue series si il ne devrais pas ([9764d2d](https://github.com/Masutayunikon/FanKarr/commit/9764d2db8ed2531af3feb6ceba947eaf116c1e76))
+
 ## [3.9.0](https://github.com/Masutayunikon/FanKarr/compare/v3.8.1...v3.9.0) (2026-04-15)
 
 
