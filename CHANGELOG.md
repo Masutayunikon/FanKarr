@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.9.2](https://github.com/Masutayunikon/FanKarr/compare/v3.9.1...v3.9.2) (2026-04-16)
+
+
+### Bug Fixes
+
+* le bouton "tous télécharger" ne s'affiche plus si la series de contient que des integrales comme torrent ([d21270a](https://github.com/Masutayunikon/FanKarr/commit/d21270ae802ee43242365331922393b5cbf689fa))
+
 ## [3.9.1](https://github.com/Masutayunikon/FanKarr/compare/v3.9.0...v3.9.1) (2026-04-16)
 
 
