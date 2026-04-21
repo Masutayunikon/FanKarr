@@ -321,8 +321,9 @@ function epProgress(ep: any): ActiveTorrent | null {
       const sessionDl = isDownloaded(key0) || isDownloaded(keyI)
       if (active.files && active.files.length > 0) {
         const file = active.files.find(f => f.index === t.file_index)
-        // Afficher si : téléchargé cette session, fichier en cours (progress > 0), ou torrent terminé
-        if (file != null && (sessionDl || file.progress > 0 || active.state === 'seeding')) {
+        // Avec données par fichier on se fie à la progression réelle du fichier précis,
+        // pas à l'état global du torrent — évite d'afficher les fichiers non sélectionnés (progress 0).
+        if (file != null && (sessionDl || file.progress > 0)) {
           return { ...active, progress: file.progress }
         }
         if (!sessionDl) continue
