@@ -14,27 +14,57 @@
     </div>
 
     <template v-else-if="data">
-      <!-- Hero -->
-      <SerieHero
-          :serie="data.serie"
-          :organized-by-episode="organizedByEpisode"
-          @open-manual-import="openManualImport"
-          @unimport="(del) => unimportSerie(del)"
-      />
+      <!-- Hero — poster, titre, métadonnées, synopsis -->
+      <SerieHero :serie="data.serie" />
 
-      <!-- Zone d'actions téléchargement -->
-      <div
-          v-if="data.torrents_integrale.length > 0 || hasNonIntegraleDownloadables"
-          class="px-4 md:px-8 py-4 flex items-center justify-between gap-4 border-b border-border"
-      >
-        <h2 class="text-sm font-semibold text-primary shrink-0">Saisons</h2>
-        <div class="flex flex-wrap gap-2 justify-end">
-          <!-- Tout télécharger (saisons + épisodes individuels) -->
+      <!-- Barre d'actions -->
+      <div class="px-4 md:px-8 py-3 flex items-center justify-between gap-3 border-b border-border flex-wrap">
+
+        <!-- Gauche : gestion bibliothèque -->
+        <div class="flex items-center gap-2">
+          <!-- Import manuel -->
+          <button
+              @click="openManualImport"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-accent-muted text-accent border border-accent/20 hover:bg-accent/20 transition"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            Import manuel
+          </button>
+
+          <!-- Désimporter -->
+          <div v-if="Object.keys(organizedByEpisode).length > 0" class="relative" @click.stop>
+            <button
+                @click="unimportMenuOpen = !unimportMenuOpen"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
+                <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>
+              </svg>
+              Désimporter
+            </button>
+            <div v-if="unimportMenuOpen" class="absolute top-full left-0 mt-1 bg-card border border-border rounded-xl p-1 z-20 w-48 shadow-xl flex flex-col gap-0.5">
+              <button @click="unimportSerie(false); unimportMenuOpen = false" class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-muted hover:bg-hover transition-colors">
+                Retirer de la bibliothèque
+              </button>
+              <button @click="unimportSerie(true); unimportMenuOpen = false" class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-red-400 hover:bg-red-500/10 transition-colors">
+                Supprimer les fichiers
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Droite : téléchargements -->
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- Tout télécharger -->
           <button
               v-if="hasNonIntegraleDownloadables"
               @click="downloadAll"
               :disabled="downloadingAll"
-              class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg border border-border text-muted hover:text-primary hover:border-secondary transition"
+              class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg bg-accent text-white hover:bg-accent-hover transition"
               :class="downloadingAll ? 'opacity-50 cursor-not-allowed' : ''"
           >
             <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" :class="downloadingAll ? 'animate-spin' : ''">
@@ -60,7 +90,6 @@
                 <component :is="integraleIcon(`integrale-${i}`, t)" />
                 {{ isAlreadyQueued(t) ? 'Déjà ajouté' : isDownloaded(`integrale-${i}`) ? 'Envoyé ✓' : t.label }}
               </button>
-              <!-- Progression -->
               <div v-if="isDownloaded(`integrale-${i}`) && integraleProgress(t) && integraleProgress(t)!.progress < 100" class="h-0.5 bg-border rounded-full overflow-hidden">
                 <div class="h-full bg-accent rounded-full transition-all duration-500" :style="{ width: `${integraleProgress(t)!.progress}%` }" />
               </div>
@@ -130,6 +159,7 @@ const organizedByEpisode = ref<Record<string, any>>({})
 const mediaPath          = ref('/')
 const nfoSupport         = ref(false)
 const epActionLoading    = ref<Record<number, boolean>>({})
+const unimportMenuOpen   = ref(false)
 const downloadingAll     = ref(false)
 const downloadingSeason  = ref<Record<number, boolean>>({})
 
@@ -219,9 +249,16 @@ function collectDownloadables() {
     }
   })
   for (const season of data.value.seasons) {
-    if (!season.torrent || isAlreadyQueued(season.torrent) || isDownloaded(`season-${season.id}`) || season.organized_state === 'complete') continue
-    result.push({ key: `season-${season.id}`, torrent_url: season.torrent.torrent_url, magnet: season.torrent.magnet })
-    for (const ep of season.episodes) covered.add(ep.id)
+    if (!season.torrents || season.torrents.length === 0 || season.organized_state === 'complete') continue
+    let addedAny = false
+    season.torrents.forEach((t: any, i: number) => {
+      const key = i === 0 ? `season-${season.id}` : `season-${season.id}-${i}`
+      if (!isAlreadyQueued(t) && !isDownloaded(key)) {
+        result.push({ key, torrent_url: t.torrent_url, magnet: t.magnet })
+        addedAny = true
+      }
+    })
+    if (addedAny) for (const ep of season.episodes) covered.add(ep.id)
   }
   for (const season of data.value.seasons) {
     for (const ep of season.episodes) {
@@ -242,7 +279,13 @@ const hasNonIntegraleDownloadables = computed(() => {
       for (const season of data.value!.seasons) for (const ep of season.episodes) covered.add(ep.id)
   })
   for (const season of data.value.seasons) {
-    if (season.torrent && !isAlreadyQueued(season.torrent) && !isDownloaded(`season-${season.id}`) && season.organized_state !== 'complete') return true
+    if (season.torrents && season.torrents.length > 0 && season.organized_state !== 'complete') {
+      const hasAvailablePack = season.torrents.some((t: any, i: number) => {
+        const key = i === 0 ? `season-${season.id}` : `season-${season.id}-${i}`
+        return !isAlreadyQueued(t) && !isDownloaded(key)
+      })
+      if (hasAvailablePack) return true
+    }
     for (const ep of season.episodes) {
       if (ep.torrent && ep.available && !ep.organized && !isAlreadyQueued(ep.torrent) && !isDownloaded(`ep-${ep.id}`) && !covered.has(ep.id)) return true
     }
@@ -265,10 +308,16 @@ async function downloadAll() {
 async function downloadSeason(season: Season) {
   downloadingSeason.value[season.id] = true
   const torrents: { key: string; torrent_url: string | null; magnet: string | null; file_index?: number | null; file_path?: string | null }[] = []
-  if (season.torrent && !isAlreadyQueued(season.torrent) && !isDownloaded(`season-${season.id}`) && season.organized_state !== 'complete') {
-    torrents.push({ key: `season-${season.id}`, torrent_url: season.torrent.torrent_url, magnet: season.torrent.magnet })
+  const seasonAny = season as any
+  if (seasonAny.torrents && seasonAny.torrents.length > 0 && seasonAny.organized_state !== 'complete') {
+    seasonAny.torrents.forEach((t: any, i: number) => {
+      const key = i === 0 ? `season-${season.id}` : `season-${season.id}-${i}`
+      if (!isAlreadyQueued(t) && !isDownloaded(key)) {
+        torrents.push({ key, torrent_url: t.torrent_url, magnet: t.magnet })
+      }
+    })
   } else {
-    for (const ep of (season as any).episodes ?? []) {
+    for (const ep of seasonAny.episodes ?? []) {
       if (!ep.torrent || !ep.available || ep.organized || isAlreadyQueued(ep.torrent) || isDownloaded(`ep-${ep.id}`)) continue
       torrents.push({ key: `ep-${ep.id}`, torrent_url: ep.torrent.torrent_url, magnet: ep.torrent.magnet, file_index: ep.torrent.file_index ?? null, file_path: ep.torrent.file_path ?? null })
     }
@@ -325,11 +374,15 @@ async function unimportEpisode(ep: any, _season: any, deleteFile: boolean) {
   finally { epActionLoading.value[ep.id] = false }
 }
 
+const closeMenus = () => { unimportMenuOpen.value = false }
+
 onMounted(() => {
   load(); fetchSettings(); fetchOrganized(); fetchActiveDownloads()
   pollTimer = setInterval(fetchActiveDownloads, 5000)
+  document.addEventListener('click', closeMenus)
 })
 onUnmounted(() => {
   if (pollTimer) clearInterval(pollTimer)
+  document.removeEventListener('click', closeMenus)
 })
 </script>

@@ -33,7 +33,7 @@
       <div class="flex items-center gap-2">
         <!-- Pas de pack saison : bouton "Saison" qui déclenche les épisodes individuels -->
         <button
-            v-if="!season.torrent && hasDownloadable"
+            v-if="season.torrents.length === 0 && hasDownloadable"
             @click="emit('downloadSeason', season)"
             :disabled="downloadingSeason"
             class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border bg-accent-muted text-accent border-accent/20 hover:bg-accent/20 transition"
@@ -42,9 +42,9 @@
           {{ downloadingSeason ? 'Envoi…' : 'Saison' }}
         </button>
 
-        <!-- Pack saison disponible -->
+        <!-- Pack saison unique -->
         <button
-            v-if="season.torrent"
+            v-if="season.torrents.length === 1"
             class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition"
             :class="canDownloadSeason
             ? 'bg-accent-muted text-accent border-accent/20 hover:bg-accent/20'
@@ -55,6 +55,30 @@
           <component :is="seasonBtnIcon" />
           {{ seasonBtnLabel }}
         </button>
+
+        <!-- Dropdown packs saison multiples -->
+        <div v-if="season.torrents.length > 1" class="relative" @click.stop>
+          <button
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition bg-accent-muted text-accent border-accent/20 hover:bg-accent/20"
+              @click="seasonMenuOpen = !seasonMenuOpen"
+          >
+            <component :is="downloadIcon" />
+            Saison ▾
+          </button>
+          <div v-if="seasonMenuOpen" class="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl p-1 z-20 w-52 shadow-xl flex flex-col gap-0.5">
+            <button
+                v-for="(t, i) in season.torrents"
+                :key="i"
+                class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-primary hover:bg-hover transition-colors"
+                :class="(isDownloaded(`season-${season.id}-${i}`) || isAlreadyQueued(t)) ? 'opacity-50 cursor-not-allowed' : ''"
+                :disabled="isDownloaded(`season-${season.id}-${i}`) || isAlreadyQueued(t)"
+                @click="!isDownloaded(`season-${season.id}-${i}`) && !isAlreadyQueued(t) && (emit('download', `season-${season.id}-${i}`, t.torrent_url, t.magnet), seasonMenuOpen = false)"
+            >
+              <component :is="(isDownloaded(`season-${season.id}-${i}`) || isAlreadyQueued(t)) ? checkIcon : downloadIcon" />
+              {{ torrentLabel(t, i) }}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -109,6 +133,30 @@
           >
             <component :is="epStateIcon(ep)" />
           </button>
+
+          <!-- Options torrent supplémentaires pour épisodes multi-torrent -->
+          <div v-if="!ep.organized && ep.torrents && ep.torrents.length > 1" class="relative" @click.stop>
+            <button
+                @click="epOptionsOpen = epOptionsOpen === ep.id ? null : ep.id"
+                class="w-6 h-6 flex items-center justify-center rounded text-muted hover:text-primary transition-colors"
+                title="Autres options"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+            </button>
+            <div v-if="epOptionsOpen === ep.id" class="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl p-1 z-20 w-52 shadow-xl flex flex-col gap-0.5">
+              <button
+                  v-for="(t, i) in ep.torrents"
+                  :key="i"
+                  class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-primary hover:bg-hover transition-colors"
+                  :class="(isDownloaded(`ep-${ep.id}-${i}`) || isAlreadyQueued(t)) ? 'opacity-50 cursor-not-allowed' : ''"
+                  :disabled="isDownloaded(`ep-${ep.id}-${i}`) || isAlreadyQueued(t)"
+                  @click="!isDownloaded(`ep-${ep.id}-${i}`) && !isAlreadyQueued(t) && (emit('download', `ep-${ep.id}-${i}`, t.torrent_url, t.magnet, t.file_index ?? null, t.file_path ?? null), epOptionsOpen = null)"
+              >
+                <component :is="(isDownloaded(`ep-${ep.id}-${i}`) || isAlreadyQueued(t)) ? checkIcon : downloadIcon" />
+                {{ torrentLabel(t, i) }}
+              </button>
+            </div>
+          </div>
 
           <!-- Actions épisode importé -->
           <template v-if="ep.organized && organizedByEpisode[String(ep.id)]">
@@ -180,9 +228,12 @@ const emit = defineEmits<{
   unimportEpisode: [ep: any, season: any, deleteFile: boolean]
 }>()
 
-const epMenuOpen = ref<number | null>(null)
+const epMenuOpen    = ref<number | null>(null)
+const epOptionsOpen = ref<number | null>(null)
+const seasonMenuOpen = ref(false)
 const downloadIcon = h(Download, { size: 12 })
 const loaderIcon   = h(Loader, { size: 12, class: 'animate-spin' })
+const checkIcon    = h(Check, { size: 12 })
 
 // ── Helpers hash / progress ────────────────────────────────────
 function extractHash(torrent: any): string | null {
@@ -208,7 +259,16 @@ function isAlreadyQueued(torrent: any): boolean {
 
 // ── Computed saison ────────────────────────────────────────────
 const availableCount = computed(() => props.season.episodes.filter((e: any) => e.available).length)
-const seasonProgress = computed(() => torrentProgress(extractHash(props.season.torrent)))
+const seasonProgress = computed(() => {
+  if (props.season.torrents && props.season.torrents.length > 1) {
+    for (const t of props.season.torrents) {
+      const prog = torrentProgress(extractHash(t))
+      if (prog) return prog
+    }
+    return null
+  }
+  return torrentProgress(extractHash(props.season.torrent))
+})
 const hasDownloadable = computed(() =>
     props.season.episodes.some((ep: any) =>
         ep.torrent && ep.available && !ep.organized && !isAlreadyQueued(ep.torrent) && !isDownloaded(`ep-${ep.id}`)
@@ -294,6 +354,16 @@ function epNeedsRename(ep: any): boolean {
   return !!expected && expected !== entry.dest_filename
 }
 
+function torrentLabel(torrent: any, index: number): string {
+  const raw = torrent.raw ?? ''
+  const quality = raw.match(/\b(2160p|4K|1080p|720p|480p)\b/i)?.[1]?.toUpperCase()
+  const lang = raw.match(/\b(VOSTFR|MULTI|VF|VO|FR|EN)\b/i)?.[1]?.toUpperCase()
+  if (quality && lang) return `${quality} · ${lang}`
+  if (quality) return quality
+  if (lang) return lang
+  return raw.length > 40 ? raw.slice(0, 40) + '…' : (raw || `Option ${index + 1}`)
+}
+
 function formatDate(d: string): string {
   if (!d) return ''
   return new Date(d).toLocaleDateString('fr-FR', { year: 'numeric', month: 'short', day: 'numeric' })
@@ -306,5 +376,5 @@ function formatDuration(seconds: number): string {
   return `${m} min`
 }
 
-defineExpose({ closeEpMenu: () => { epMenuOpen.value = null } })
+defineExpose({ closeEpMenu: () => { epMenuOpen.value = null; epOptionsOpen.value = null; seasonMenuOpen.value = false } })
 </script>

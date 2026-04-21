@@ -51,8 +51,8 @@ router.get('/series/:id', requireAuth, async (req, res) => {
         try { const p = path.join(DATA_DIR, 'organized.json'); if (fs.existsSync(p)) organized = JSON.parse(fs.readFileSync(p, 'utf-8')) } catch {}
 
         const availableEpisodeIds  = new Set<number>()
-        const episodeTorrentMap    : Record<number, any> = {}
-        const seasonTorrentMapBySn : Record<number, any> = {}
+        const episodeTorrentMap    : Record<number, any[]> = {}
+        const seasonTorrentMapBySn : Record<number, any[]> = {}
         const integraleTorrents    : any[] = []
         const organizedEpisodeIds  = new Set<number>()
 
@@ -85,7 +85,8 @@ router.get('/series/:id', requireAuth, async (req, res) => {
             }
             for (const season of serieData.seasons ?? []) {
                 for (const t of (season.torrents ?? [])) {
-                    seasonTorrentMapBySn[season.season_number] = { torrent_url: t.torrent_url, magnet: t.magnet, type: 'pack_saison', raw: t.title, manual: t.manual ?? false }
+                    if (!seasonTorrentMapBySn[season.season_number]) seasonTorrentMapBySn[season.season_number] = []
+                    seasonTorrentMapBySn[season.season_number].push({ torrent_url: t.torrent_url, magnet: t.magnet, type: 'pack_saison', raw: t.title, manual: t.manual ?? false })
                     const resolved = buildResolvedEpisodes(serieData, t.infohash, season.season_number)
                     for (const ep of resolved) availableEpisodeIds.add(ep.episode_id)
                     const orgFiles = organized[t.infohash?.toLowerCase()] ?? {}
@@ -96,8 +97,9 @@ router.get('/series/:id', requireAuth, async (req, res) => {
                 }
                 for (const ep of season.episodes ?? []) {
                     for (const t of (ep.torrents ?? [])) {
+                        if (!episodeTorrentMap[ep.id]) episodeTorrentMap[ep.id] = []
                         const pathEntry = (ep.paths ?? []).find((p: any) => typeof p === 'object' && p.infohash?.toLowerCase() === t.infohash?.toLowerCase())
-                        episodeTorrentMap[ep.id] = { torrent_url: t.torrent_url, magnet: t.magnet, type: 'episode', raw: t.title, manual: t.manual ?? false, fankai: t.fankai ?? true, file_index: pathEntry?.file_index ?? null, file_path: pathEntry?.path ?? null }
+                        episodeTorrentMap[ep.id].push({ torrent_url: t.torrent_url, magnet: t.magnet, type: 'episode', raw: t.title, manual: t.manual ?? false, fankai: t.fankai ?? true, file_index: pathEntry?.file_index ?? null, file_path: pathEntry?.path ?? null })
                         availableEpisodeIds.add(ep.id)
                         const orgFiles = organized[t.infohash?.toLowerCase()] ?? {}
                         const isOrg = orgFiles[String(ep.id)] !== undefined
@@ -110,15 +112,20 @@ router.get('/series/:id', requireAuth, async (req, res) => {
                         }
                     }
                     // Fallback : si l'épisode n'a pas de torrent individuel,
-                    // on crée un torrent synthétique depuis ep.paths (fichier dans un pack)
-                    if (!episodeTorrentMap[ep.id]) {
+                    // on crée un torrent synthétique depuis ep.paths (fichier dans un pack).
+                    // On ajoute TOUTES les entrées valides (un pack par path unique).
+                    if (!episodeTorrentMap[ep.id] || episodeTorrentMap[ep.id].length === 0) {
+                        const seenPackHashes = new Set<string>()
                         for (const pathEntry of (ep.paths ?? [])) {
                             if (typeof pathEntry !== 'object' || !pathEntry.infohash) continue
-                            const pack = torrentByHash.get(pathEntry.infohash.toLowerCase())
+                            const hashKey = pathEntry.infohash.toLowerCase()
+                            if (seenPackHashes.has(hashKey)) continue
+                            const pack = torrentByHash.get(hashKey)
                             if (!pack) continue
-                            episodeTorrentMap[ep.id] = { torrent_url: pack.torrent_url, magnet: pack.magnet, type: pack.type, raw: pack.raw, manual: false, fankai: pack.fankai, file_index: pathEntry.file_index ?? null, file_path: pathEntry.path ?? null }
+                            seenPackHashes.add(hashKey)
+                            if (!episodeTorrentMap[ep.id]) episodeTorrentMap[ep.id] = []
+                            episodeTorrentMap[ep.id].push({ torrent_url: pack.torrent_url, magnet: pack.magnet, type: pack.type, raw: pack.raw, manual: false, fankai: pack.fankai, file_index: pathEntry.file_index ?? null, file_path: pathEntry.path ?? null })
                             availableEpisodeIds.add(ep.id)
-                            break
                         }
                     }
                 }
@@ -127,7 +134,8 @@ router.get('/series/:id', requireAuth, async (req, res) => {
 
         const enrichedSeasons = seasonsWithEpisodes.map((season: any) => {
             const eps = season.episodes.map((ep: any) => {
-                const epTorrent = episodeTorrentMap[ep.id] ?? null
+                const epTorrents = episodeTorrentMap[ep.id] ?? []
+                const epTorrent = epTorrents[0] ?? null
                 let fankai: boolean | null = epTorrent ? (epTorrent.fankai ?? true) : null
                 if (fankai === null && serieData) {
                     outer: for (const sd_season of serieData.seasons ?? []) {
@@ -142,7 +150,15 @@ router.get('/series/:id', requireAuth, async (req, res) => {
                         }
                     }
                 }
-                return { ...ep, available: availableEpisodeIds.has(ep.id), torrent: epTorrent ? { ...epTorrent, fankai: fankai ?? true } : null, fankai, organized: organizedEpisodeIds.has(ep.id) }
+                const resolvedFankai = fankai ?? true
+                return {
+                    ...ep,
+                    available: availableEpisodeIds.has(ep.id),
+                    torrent: epTorrent ? { ...epTorrent, fankai: resolvedFankai } : null,
+                    torrents: epTorrents.map((t: any) => ({ ...t, fankai: resolvedFankai ?? t.fankai ?? true })),
+                    fankai,
+                    organized: organizedEpisodeIds.has(ep.id),
+                }
             })
             const total    = eps.filter((e: any) => e.available).length
             const orgCount = eps.filter((e: any) => e.organized).length
@@ -154,7 +170,15 @@ router.get('/series/:id', requireAuth, async (req, res) => {
                     : total > 0 && orgCount >= total
                         ? 'complete'
                         : 'partial'
-            return { ...season, torrent: seasonTorrentMapBySn[season.season_number] ?? null, organized_state: orgState, organized_count: orgCount, episodes: eps }
+            const seasonTorrents = seasonTorrentMapBySn[season.season_number] ?? []
+            return {
+                ...season,
+                torrent: seasonTorrents[0] ?? null,
+                torrents: seasonTorrents,
+                organized_state: orgState,
+                organized_count: orgCount,
+                episodes: eps,
+            }
         })
 
         res.json({ serie, seasons: enrichedSeasons, torrents_integrale: integraleTorrents.map(t => ({ label: 'Intégrale', torrent_url: t.torrent_url, magnet: t.magnet, raw: t.title ?? t.raw })) })

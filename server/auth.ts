@@ -7,6 +7,18 @@ import { JWT_SECRET } from './secret.js'
 import { DATA_DIR } from './config.js'
 import { logger } from './logger.js'
 
+// AUTH_TOKEN_EXPIRY : durée de validité du token JWT
+//   Exemples : "1d", "7d", "30d", "1y", "never" / "0" = pas d'expiration
+const RAW_EXPIRY  = process.env.AUTH_TOKEN_EXPIRY ?? '30d'
+const NO_EXPIRY   = RAW_EXPIRY === '0' || RAW_EXPIRY.toLowerCase() === 'never'
+const TOKEN_EXPIRY: string | undefined = NO_EXPIRY ? undefined : RAW_EXPIRY
+
+function signToken(username: string): string {
+    return NO_EXPIRY
+        ? jwt.sign({ username }, JWT_SECRET)
+        : jwt.sign({ username }, JWT_SECRET, { expiresIn: TOKEN_EXPIRY as any })
+}
+
 const DATA_PATH  = path.join(DATA_DIR, 'auth.json')
 const SALT_ROUNDS = 10
 
@@ -66,7 +78,7 @@ export function authSetup(req: Request, res: Response): void {
     writeAuth({ username, passwordHash })
     logger.info('auth', `Compte créé pour "${username}"`)
 
-    const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: '1d' })
+    const token = signToken(username)
     res.cookie('fankarr_token', token, { httpOnly: true, sameSite: 'lax' })
     res.json({ success: true })
 }
@@ -91,9 +103,9 @@ export function authLogin(req: Request, res: Response): void {
         return
     }
 
-    const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: '1d' })
+    const token = signToken(username)
     res.cookie('fankarr_token', token, { httpOnly: true, sameSite: 'lax' })
-    logger.info('auth', `Connexion réussie pour "${username}"`)
+    logger.info('auth', `Connexion réussie pour "${username}" (expiry: ${NO_EXPIRY ? 'aucune' : TOKEN_EXPIRY})`)
     res.json({ success: true })
 }
 
