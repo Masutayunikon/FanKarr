@@ -163,9 +163,14 @@ const unimportMenuOpen   = ref(false)
 const downloadingAll     = ref(false)
 const downloadingSeason  = ref<Record<number, boolean>>({})
 
-export interface ActiveTorrent { hash: string; progress: number; state: string; files?: { index: number; progress: number }[] }
+export interface ActiveTorrent { hash: string; progress: number; state: string; files?: { index: number; progress: number }[]; save_path?: string; name?: string }
 const activeTorrents = ref<ActiveTorrent[]>([])
 let pollTimer: ReturnType<typeof setInterval> | null = null
+
+// Suivi des états précédents pour détecter les transitions (download → seeding)
+const _prevTorrentStates  = new Map<string, string>()   // hash → state
+const _prevFileProgresses = new Map<string, number>()   // hash:index → progress
+const _recentlyOrganized  = new Set<string>()           // hash:fileIndex ou hash seul
 
 const data = computed(() => store.currentSerie)
 
@@ -187,6 +192,7 @@ function addDownloading(key: string) { if (!downloading.value.includes(key)) dow
 function removeDownloading(key: string) { downloading.value = downloading.value.filter(k => k !== key) }
 function addDownloaded(key: string) { if (!downloaded.value.includes(key)) downloaded.value.push(key) }
 function extractHash(torrent: any): string | null {
+  if (torrent?.infohash) return torrent.infohash.toLowerCase()
   if (!torrent?.magnet) return null
   const m = torrent.magnet.match(/xt=urn:btih:([a-fA-F0-9]{40})/i)
   return m ? m[1].toLowerCase() : null
@@ -222,7 +228,62 @@ async function fetchActiveDownloads() {
     const res = await fetch('/api/downloads', { credentials: 'include' })
     if (!res.ok) return
     const list: any[] = await res.json()
-    activeTorrents.value = list.map(t => ({ hash: t.hash, progress: t.progress ?? 0, state: t.state, files: t.files }))
+
+    const isFirstPoll = _prevTorrentStates.size === 0
+
+    for (const t of list) {
+      const prevState = _prevTorrentStates.get(t.hash)
+
+      // Détecter fichier individuel terminé (progression par fichier)
+      if (t.files) {
+        for (const f of t.files) {
+          const key     = `${t.hash}:${f.index}`
+          const prevProg = _prevFileProgresses.get(key)
+          _prevFileProgresses.set(key, f.progress)
+          if (!isFirstPoll && prevProg !== undefined && prevProg < 100 && f.progress === 100 && !_recentlyOrganized.has(key)) {
+            _recentlyOrganized.add(key)
+            triggerOrganize(t)
+          }
+        }
+      }
+
+      // Détecter torrent entier passé en seeding (épisodes standalone sans per-file data)
+      if (!isFirstPoll && t.state === 'seeding' && prevState !== undefined && prevState !== 'seeding' && !_recentlyOrganized.has(t.hash)) {
+        _recentlyOrganized.add(t.hash)
+        triggerOrganize(t)
+      }
+
+      _prevTorrentStates.set(t.hash, t.state)
+    }
+
+    activeTorrents.value = list.map(t => ({
+      hash     : t.hash,
+      progress : t.progress ?? 0,
+      state    : t.state,
+      files    : t.files,
+      save_path: t.save_path,
+      name     : t.name,
+    }))
+  } catch {}
+}
+
+async function triggerOrganize(torrent: any) {
+  if (!torrent?.hash || !torrent?.name || !torrent?.save_path) return
+  try {
+    const res = await fetch('/api/organize', {
+      method : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ hash: torrent.hash, name: torrent.name, save_path: torrent.save_path }),
+    })
+    if (res.ok) {
+      const result = await res.json()
+      if (result.done > 0) {
+        toast(`${result.done} épisode(s) importé(s) automatiquement ✓`, 'success')
+        await fetchOrganized()
+        load()
+      }
+    }
   } catch {}
 }
 
