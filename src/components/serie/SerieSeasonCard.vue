@@ -232,10 +232,12 @@ const seasonBtnIcon = computed(() => {
 
 // ── État épisode ───────────────────────────────────────────────
 function epProgress(ep: any): ActiveTorrent | null {
-  // Pour les épisodes d'un pack (file_index défini), le hash du pack est partagé par tous les
-  // épisodes : consulter la progression du pack donnerait le même état à tous.
-  // On retourne null pour ignorer la progression globale du pack.
-  if (ep.torrent?.file_index != null) return null
+  if (ep.torrent?.file_index != null) {
+    // Épisode dans un pack : le hash est partagé par tous les épisodes du pack.
+    // On affiche la progression du pack UNIQUEMENT pour cet épisode s'il a été
+    // explicitement téléchargé dans cette session (isDownloaded).
+    return isDownloaded(`ep-${ep.id}`) ? torrentProgress(extractHash(ep.torrent)) : null
+  }
   return torrentProgress(extractHash(ep.torrent))
 }
 

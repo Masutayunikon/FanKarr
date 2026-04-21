@@ -17,21 +17,60 @@
       <!-- Hero -->
       <SerieHero
           :serie="data.serie"
-          :torrents-integrale="data.torrents_integrale"
           :organized-by-episode="organizedByEpisode"
-          :has-downloadable-torrents="hasNonIntegraleDownloadables"
-          :downloading-all="downloadingAll"
-          :active-torrents="activeTorrents"
-          :downloading="downloading"
-          :downloaded="downloaded"
           @open-manual-import="openManualImport"
           @unimport="(del) => unimportSerie(del)"
-          @download-all="downloadAll"
-          @download="(key, url, magnet, fi, fp) => download(key, url, magnet, fi, fp)"
       />
 
+      <!-- Zone d'actions téléchargement -->
+      <div
+          v-if="data.torrents_integrale.length > 0 || hasNonIntegraleDownloadables"
+          class="px-4 md:px-8 py-4 flex items-center justify-between gap-4 border-b border-border"
+      >
+        <h2 class="text-sm font-semibold text-primary shrink-0">Saisons</h2>
+        <div class="flex flex-wrap gap-2 justify-end">
+          <!-- Tout télécharger (saisons + épisodes individuels) -->
+          <button
+              v-if="hasNonIntegraleDownloadables"
+              @click="downloadAll"
+              :disabled="downloadingAll"
+              class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg border border-border text-muted hover:text-primary hover:border-secondary transition"
+              :class="downloadingAll ? 'opacity-50 cursor-not-allowed' : ''"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" :class="downloadingAll ? 'animate-spin' : ''">
+              <path v-if="!downloadingAll" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline v-if="!downloadingAll" points="7 10 12 15 17 10"/><line v-if="!downloadingAll" x1="12" y1="15" x2="12" y2="3"/>
+              <path v-else d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.36-2.64M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.36 2.64"/>
+            </svg>
+            {{ downloadingAll ? 'Envoi…' : 'Tout télécharger' }}
+          </button>
+
+          <!-- Boutons intégrale -->
+          <template v-for="(t, i) in data.torrents_integrale" :key="i">
+            <div class="flex flex-col gap-1">
+              <button
+                  :title="t.raw"
+                  class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg transition"
+                  :class="[
+                    'bg-accent text-white hover:bg-accent-hover',
+                    (isAlreadyQueued(t) || isDownloaded(`integrale-${i}`)) ? 'opacity-50 cursor-not-allowed' : ''
+                  ]"
+                  :disabled="isAlreadyQueued(t) || isDownloaded(`integrale-${i}`)"
+                  @click="download(`integrale-${i}`, t.torrent_url, t.magnet)"
+              >
+                <component :is="integraleIcon(`integrale-${i}`, t)" />
+                {{ isAlreadyQueued(t) ? 'Déjà ajouté' : isDownloaded(`integrale-${i}`) ? 'Envoyé ✓' : t.label }}
+              </button>
+              <!-- Progression -->
+              <div v-if="isDownloaded(`integrale-${i}`) && integraleProgress(t) && integraleProgress(t)!.progress < 100" class="h-0.5 bg-border rounded-full overflow-hidden">
+                <div class="h-full bg-accent rounded-full transition-all duration-500" :style="{ width: `${integraleProgress(t)!.progress}%` }" />
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+
       <!-- Saisons -->
-      <div class="px-4 md:px-8 pb-16 flex flex-col gap-4">
+      <div class="px-4 md:px-8 pb-16 flex flex-col gap-4 pt-4">
         <SerieSeasonCard
             v-for="season in data.seasons"
             :key="season.id"
@@ -69,10 +108,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, h } from 'vue'
 import { useRoute } from 'vue-router'
 import { useSeriesStore } from '@/stores/series'
 import { useToast } from '@/composables/useToast'
+import { Download, Check } from 'lucide-vue-next'
 import ManualImportModal from '@/components/ManualImportModal.vue'
 import SerieHero from '@/components/serie/SerieHero.vue'
 import SerieSeasonCard from '@/components/serie/SerieSeasonCard.vue'
@@ -90,7 +130,6 @@ const organizedByEpisode = ref<Record<string, any>>({})
 const mediaPath          = ref('/')
 const nfoSupport         = ref(false)
 const epActionLoading    = ref<Record<number, boolean>>({})
-const unimportMenuOpen   = ref(false)
 const downloadingAll     = ref(false)
 const downloadingSeason  = ref<Record<number, boolean>>({})
 
@@ -99,6 +138,17 @@ const activeTorrents = ref<ActiveTorrent[]>([])
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
 const data = computed(() => store.currentSerie)
+
+// ── Helpers intégrale ─────────────────────────────────────────
+function integraleIcon(key: string, torrent: any) {
+  if (isDownloaded(key) || isAlreadyQueued(torrent)) return h(Check, { size: 13 })
+  return h(Download, { size: 13 })
+}
+function integraleProgress(torrent: any) {
+  const hash = extractHash(torrent)
+  if (!hash) return null
+  return activeTorrents.value.find(t => t.hash.toLowerCase() === hash.toLowerCase()) ?? null
+}
 
 // ── Helpers d'état ────────────────────────────────────────────
 function isDownloading(key: string) { return downloading.value.includes(key) }
@@ -182,10 +232,8 @@ function collectDownloadables() {
   return result
 }
 
-const hasDownloadableTorrents = computed(() => collectDownloadables().length > 0)
-
-// "Tout télécharger" ne s'affiche que s'il y a des torrents saison/épisode à lancer
-// (les intégrales ont déjà leurs propres boutons dédiés dans le hero)
+// S'affiche uniquement s'il y a des torrents saison/épisode à lancer
+// (les intégrales ont leurs propres boutons dédiés dans la zone d'actions)
 const hasNonIntegraleDownloadables = computed(() => {
   if (!data.value) return false
   const covered = new Set<number>()
@@ -280,10 +328,8 @@ async function unimportEpisode(ep: any, _season: any, deleteFile: boolean) {
 onMounted(() => {
   load(); fetchSettings(); fetchOrganized(); fetchActiveDownloads()
   pollTimer = setInterval(fetchActiveDownloads, 5000)
-  document.addEventListener('click', () => { unimportMenuOpen.value = false })
 })
 onUnmounted(() => {
   if (pollTimer) clearInterval(pollTimer)
-  document.removeEventListener('click', () => { unimportMenuOpen.value = false })
 })
 </script>
