@@ -231,7 +231,13 @@ const seasonBtnIcon = computed(() => {
 })
 
 // ── État épisode ───────────────────────────────────────────────
-function epProgress(ep: any) { return torrentProgress(extractHash(ep.torrent)) }
+function epProgress(ep: any): ActiveTorrent | null {
+  // Pour les épisodes d'un pack (file_index défini), le hash du pack est partagé par tous les
+  // épisodes : consulter la progression du pack donnerait le même état à tous.
+  // On retourne null pour ignorer la progression globale du pack.
+  if (ep.torrent?.file_index != null) return null
+  return torrentProgress(extractHash(ep.torrent))
+}
 
 function epState(ep: any): 'idle' | 'loading' | 'done' | 'unavailable' {
   if (ep.organized || isDownloaded(`ep-${ep.id}`) || isAlreadyQueued(ep.torrent)) return 'done'
