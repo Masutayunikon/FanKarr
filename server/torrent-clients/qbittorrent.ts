@@ -216,7 +216,9 @@ const QB: TorrentClientDriver = {
     async add(config, url, options?: DownloadOptions) {
         const sid = await qbLogin(config)
 
+        // Extraire le hash depuis l'URL (si magnet) ou depuis options.magnet (si .torrent URL)
         const hashMatch = url.match(/xt=urn:btih:([a-fA-F0-9]{40,})/i)
+                       ?? options?.magnet?.match(/xt=urn:btih:([a-fA-F0-9]{40,})/i)
         const hash      = hashMatch?.[1]?.toLowerCase() ?? null
 
         if (options?.file_index != null && hash) {

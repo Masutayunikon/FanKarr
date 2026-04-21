@@ -25,42 +25,7 @@
           Séries
         </RouterLink>
 
-        <!-- Titre + boutons actions -->
-        <div class="flex items-center gap-3 flex-wrap">
-          <h1 class="text-2xl font-bold text-primary tracking-tight">{{ serie.title }}</h1>
-
-          <button
-              @click="emit('openManualImport')"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-border text-muted hover:text-primary hover:border-secondary transition shrink-0"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="17 8 12 3 7 8"/>
-              <line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
-            Import manuel
-          </button>
-
-          <div v-if="Object.keys(organizedByEpisode).length > 0" class="relative" @click.stop>
-            <button
-                @click="unimportMenuOpen = !unimportMenuOpen"
-                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-border text-muted hover:text-red-400 hover:border-red-500/40 transition shrink-0"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
-                <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>
-              </svg>
-              Désimporter
-            </button>
-            <div v-if="unimportMenuOpen" class="absolute top-full left-0 mt-1 bg-card border border-border rounded-xl p-1 z-20 w-48 shadow-xl flex flex-col gap-0.5">
-              <button @click="emit('unimport', false); unimportMenuOpen = false" class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-muted hover:bg-hover transition-colors">
-                Retirer de la bibliothèque
-              </button>
-              <button @click="emit('unimport', true); unimportMenuOpen = false" class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-red-400 hover:bg-red-500/10 transition-colors">
-                Supprimer les fichiers
-              </button>
-            </div>
-          </div>
-        </div>
+        <h1 class="text-2xl font-bold text-primary tracking-tight">{{ serie.title }}</h1>
 
         <!-- Métadonnées -->
         <div class="flex flex-wrap items-center gap-2">
@@ -77,28 +42,14 @@
         <p v-if="serie.plot" class="text-sm text-secondary leading-relaxed max-w-2xl line-clamp-3">
           {{ serie.plot }}
         </p>
-
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { ArrowLeft, Tv } from 'lucide-vue-next'
 
-const props = defineProps<{
-  serie              : any
-  organizedByEpisode : Record<string, any>
-}>()
-
-const emit = defineEmits<{
-  openManualImport: []
-  unimport        : [deleteFile: boolean]
-}>()
-
-const unimportMenuOpen = ref(false)
-
-defineExpose({ closeUnimportMenu: () => { unimportMenuOpen.value = false } })
+defineProps<{ serie: any }>()
 </script>

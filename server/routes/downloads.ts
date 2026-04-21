@@ -13,12 +13,15 @@ import { recentOrganized } from '../lib/notifs.js'
 const router = Router()
 
 router.post('/download', requireAuth, async (req, res) => {
-    const url = req.body.magnet ?? req.body.torrent_url
+    // Préférer le fichier .torrent au magnet : métadonnées immédiates, pas de dépendance DHT/trackers
+    const torrent_url: string | null = req.body.torrent_url ?? null
+    const magnet     : string | null = req.body.magnet      ?? null
+    const url = torrent_url ?? magnet
     if (!url) { res.status(400).json({ error: 'torrent_url ou magnet requis' }); return }
     const file_index: number | null = req.body.file_index != null ? Number(req.body.file_index) : null
-    const file_path: string | null = req.body.file_path ?? null
-    logger.info('api', `Téléchargement demandé${file_index != null ? ` (fichier #${file_index})` : ''}`)
-    const results = await dispatchDownload(url, { file_index, file_path })
+    const file_path : string | null = req.body.file_path ?? null
+    logger.info('api', `Téléchargement demandé via ${torrent_url ? '.torrent' : 'magnet'}${file_index != null ? ` (fichier #${file_index})` : ''}`)
+    const results = await dispatchDownload(url, { file_index, file_path, magnet })
     res.status(results.every((r: any) => r.ok) ? 200 : 207).json({ results })
 })
 

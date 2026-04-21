@@ -290,6 +290,7 @@ const RT: TorrentClientDriver = {
 
     async add(config, url, options?: DownloadOptions) {
         const hashMatch = url.match(/xt=urn:btih:([a-fA-F0-9]{40,})/i)
+                       ?? options?.magnet?.match(/xt=urn:btih:([a-fA-F0-9]{40,})/i)
         const hash      = hashMatch?.[1]?.toUpperCase() ?? null
 
         if (options?.file_index != null && hash) {
