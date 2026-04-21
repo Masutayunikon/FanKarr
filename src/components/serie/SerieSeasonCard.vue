@@ -136,7 +136,7 @@
             </button>
             <!-- Dropdown quand plusieurs options de torrent -->
             <div v-if="epOptionsOpen === ep.id && !ep.organized && ep.torrents && ep.torrents.length > 1"
-                 class="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl p-1 z-20 w-52 shadow-xl flex flex-col gap-0.5">
+                 class="absolute right-0 bottom-full mb-1 bg-card border border-border rounded-xl p-1 z-20 w-52 shadow-xl flex flex-col gap-0.5">
               <button
                   v-for="(t, i) in ep.torrents"
                   :key="i"
@@ -316,12 +316,16 @@ function epProgress(ep: any): ActiveTorrent | null {
     if (!active) continue
 
     if (t.file_index != null) {
-      // Pack : n'affiche la progression que si téléchargé dans cette session
-      if (!isDownloaded(key0) && !isDownloaded(keyI)) continue
-      // Progression précise par fichier si disponible
+      const sessionDl = isDownloaded(key0) || isDownloaded(keyI)
+      // Si le client remonte la progression par fichier, on s'en sert en priorité :
+      // affiche dès que le fichier a commencé (progress > 0) ou téléchargé cette session.
       if (active.files && active.files.length > 0) {
         const file = active.files.find(f => f.index === t.file_index)
-        if (file != null) return { ...active, progress: file.progress }
+        if (file != null && (sessionDl || file.progress > 0)) return { ...active, progress: file.progress }
+        if (!sessionDl) continue
+      } else if (!sessionDl) {
+        // Pas de données fichier → afficher uniquement si demandé cette session
+        continue
       }
     }
     return active
