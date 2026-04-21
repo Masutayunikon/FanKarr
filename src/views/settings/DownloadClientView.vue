@@ -40,6 +40,50 @@
       </div>
     </div>
 
+    <!-- Tableau comparatif -->
+    <div>
+      <h3 class="text-sm font-semibold text-primary mb-1">Comparatif des clients</h3>
+      <p class="text-xs text-muted mb-3">Fonctionnalités supportées par chaque client.</p>
+      <div class="overflow-x-auto rounded-xl border border-border">
+        <table class="w-full text-xs">
+          <thead>
+            <tr class="border-b border-border bg-shell">
+              <th class="text-left px-4 py-2.5 text-muted font-medium">Client</th>
+              <th class="text-center px-3 py-2.5 text-muted font-medium">Sélection fichier</th>
+              <th class="text-center px-3 py-2.5 text-muted font-medium">Catégories</th>
+              <th class="text-center px-3 py-2.5 text-muted font-medium">Dossier cible</th>
+              <th class="text-center px-3 py-2.5 text-muted font-medium">Remap. chemin</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-border/60">
+            <tr v-for="row in clientMatrix" :key="row.id" class="hover:bg-hover/40 transition-colors">
+              <td class="px-4 py-2.5">
+                <div class="flex items-center gap-2">
+                  <span class="w-1.5 h-1.5 rounded-full shrink-0"
+                        :class="healthStatus[clients.find(c => c.type === row.id)?.uuid ?? ''] === true ? 'bg-green-500' :
+                                healthStatus[clients.find(c => c.type === row.id)?.uuid ?? ''] === false ? 'bg-red-500' : 'bg-transparent'" />
+                  <span class="text-primary font-medium">{{ row.label }}</span>
+                </div>
+              </td>
+              <td class="text-center px-3 py-2.5">
+                <span :class="row.fileSelect === '✗' ? 'text-muted' : row.fileSelect.startsWith('Async') ? 'text-yellow-500' : 'text-green-400'">
+                  {{ row.fileSelect }}
+                </span>
+              </td>
+              <td class="text-center px-3 py-2.5" :class="row.categories ? 'text-green-400' : 'text-muted'">{{ row.categories ? '✓' : '✗' }}</td>
+              <td class="text-center px-3 py-2.5 text-green-400">✓</td>
+              <td class="text-center px-3 py-2.5 text-green-400">✓</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-[11px] text-muted mt-2">
+        <span class="text-green-400">✓ Natif</span> — appliqué à l'ajout ·
+        <span class="text-yellow-500">Async</span> — appliqué après récupération des métadonnées ·
+        <span class="text-muted">✗</span> — non supporté, torrent complet téléchargé
+      </p>
+    </div>
+
     <!-- Modal ajout -->
     <Teleport to="body">
       <div
@@ -117,6 +161,14 @@ const { add: toast } = useToast()
 const clients          = ref<any[]>([])
 const availableClients = ref<any[]>([])
 const healthStatus     = ref<Record<string, boolean | null>>({})
+
+const clientMatrix = [
+  { id: 'qbittorrent', label: 'qBittorrent',             fileSelect: 'Async',   categories: true  },
+  { id: 'transmission', label: 'Transmission',           fileSelect: '✓ Natif', categories: true  },
+  { id: 'rtorrent',     label: 'rTorrent / ruTorrent',   fileSelect: 'Async',   categories: true  },
+  { id: 'utorrent',     label: 'uTorrent',               fileSelect: '✗',       categories: true  },
+  { id: 'synology-ds',  label: 'Synology Download Station', fileSelect: '✗',    categories: false },
+]
 
 const modal = ref({
   open   : false,

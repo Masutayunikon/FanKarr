@@ -65,6 +65,14 @@ router.get('/series/:id', requireAuth, async (req, res) => {
             }
         }
         if (serieData) {
+            // Lookup rapide hash → torrent pack (intégrale ou saison)
+            const torrentByHash = new Map<string, { torrent_url: string; magnet: string; type: string; raw: string; fankai: boolean }>()
+            for (const t of (serieData.torrents ?? []))
+                if (t.infohash) torrentByHash.set(t.infohash.toLowerCase(), { torrent_url: t.torrent_url, magnet: t.magnet, type: 'pack_integrale', raw: t.title ?? '', fankai: t.fankai ?? true })
+            for (const sd_s of (serieData.seasons ?? []))
+                for (const t of (sd_s.torrents ?? []))
+                    if (t.infohash) torrentByHash.set(t.infohash.toLowerCase(), { torrent_url: t.torrent_url, magnet: t.magnet, type: 'pack_saison', raw: t.title ?? '', fankai: t.fankai ?? true })
+
             for (const t of (serieData.torrents ?? [])) {
                 integraleTorrents.push({ ...t, raw: t.title })
                 const resolved = buildResolvedEpisodes(serieData, t.infohash)
@@ -99,6 +107,18 @@ router.get('/series/:id', requireAuth, async (req, res) => {
                             if (filename && orgFiles[filename]) organizedEpisodeIds.add(ep.id)
                         } else {
                             organizedEpisodeIds.add(ep.id)
+                        }
+                    }
+                    // Fallback : si l'épisode n'a pas de torrent individuel,
+                    // on crée un torrent synthétique depuis ep.paths (fichier dans un pack)
+                    if (!episodeTorrentMap[ep.id]) {
+                        for (const pathEntry of (ep.paths ?? [])) {
+                            if (typeof pathEntry !== 'object' || !pathEntry.infohash) continue
+                            const pack = torrentByHash.get(pathEntry.infohash.toLowerCase())
+                            if (!pack) continue
+                            episodeTorrentMap[ep.id] = { torrent_url: pack.torrent_url, magnet: pack.magnet, type: pack.type, raw: pack.raw, manual: false, fankai: pack.fankai, file_index: pathEntry.file_index ?? null, file_path: pathEntry.path ?? null }
+                            availableEpisodeIds.add(ep.id)
+                            break
                         }
                     }
                 }
