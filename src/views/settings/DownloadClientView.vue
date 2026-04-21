@@ -78,8 +78,8 @@
         </table>
       </div>
       <p class="text-[11px] text-muted mt-2">
-        <span class="text-green-400">✓ Natif</span> — appliqué à l'ajout ·
-        <span class="text-yellow-500">Async</span> — appliqué après récupération des métadonnées ·
+        <span class="text-green-400">✓ Natif</span> — appliqué à l'ajout, aucun fichier superflu téléchargé ·
+        <span class="text-yellow-500">Async (pause)</span> — ajout en pause, sélection après métadonnées, puis reprise ·
         <span class="text-muted">✗</span> — non supporté, torrent complet téléchargé
       </p>
     </div>
@@ -163,11 +163,11 @@ const availableClients = ref<any[]>([])
 const healthStatus     = ref<Record<string, boolean | null>>({})
 
 const clientMatrix = [
-  { id: 'qbittorrent', label: 'qBittorrent',             fileSelect: 'Async',   categories: true  },
-  { id: 'transmission', label: 'Transmission',           fileSelect: '✓ Natif', categories: true  },
-  { id: 'rtorrent',     label: 'rTorrent / ruTorrent',   fileSelect: 'Async',   categories: true  },
-  { id: 'utorrent',     label: 'uTorrent',               fileSelect: '✗',       categories: true  },
-  { id: 'synology-ds',  label: 'Synology Download Station', fileSelect: '✗',    categories: false },
+  { id: 'qbittorrent',  label: 'qBittorrent',              fileSelect: 'Async (pause)',  categories: true  },
+  { id: 'transmission', label: 'Transmission',             fileSelect: '✓ Natif',        categories: true  },
+  { id: 'rtorrent',     label: 'rTorrent / ruTorrent',     fileSelect: 'Async (pause)',  categories: true  },
+  { id: 'utorrent',     label: 'uTorrent',                 fileSelect: '✗',              categories: true  },
+  { id: 'synology-ds',  label: 'Synology Download Station', fileSelect: '✗',             categories: false },
 ]
 
 const modal = ref({

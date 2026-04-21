@@ -8,7 +8,7 @@ import { logger } from '../logger.js'
 function mapState(state: string): TorrentInfo['state'] {
     if (['downloading', 'metaDL', 'queuedDL', 'stalledDL', 'forcedDL'].includes(state)) return 'downloading'
     if (['uploading', 'queuedUP', 'stalledUP', 'forcedUP'].includes(state))              return 'seeding'
-    if (['pausedDL', 'pausedUP'].includes(state))                                         return 'paused'
+    if (['pausedDL', 'pausedUP', 'stoppedDL', 'stoppedUP'].includes(state))              return 'paused'
     if (['checkingDL', 'checkingUP', 'checkingResumeData'].includes(state))               return 'checking'
     if (state === 'error' || state === 'missingFiles')                                    return 'error'
     return 'unknown'
@@ -34,9 +34,32 @@ async function qbLogin(config: Record<string, string | number>): Promise<string>
     return sid
 }
 
-async function qbSetFilePriority(config: Record<string, string | number>, hash: string, fileIndex: number): Promise<void> {
-    for (let attempt = 0; attempt < 15; attempt++) {
-        await new Promise(r => setTimeout(r, 2000))
+async function qbTorrentExists(config: Record<string, string | number>, sid: string, hash: string): Promise<boolean> {
+    try {
+        const res = await fetch(`${config.url}/api/v2/torrents/info?hashes=${hash}`, {
+            headers: { Cookie: `SID=${sid}` },
+        })
+        if (!res.ok) return false
+        const list = await res.json()
+        return Array.isArray(list) && list.length > 0
+    } catch {
+        return false
+    }
+}
+
+/**
+ * Attend les métadonnées, applique les priorités de fichiers, puis reprend le torrent si `resume=true`.
+ * - resume=false : torrent déjà actif, on met juste à jour la priorité
+ * - resume=true  : torrent ajouté en pause, on le reprend après avoir défini les priorités
+ */
+async function qbApplyFilePriority(
+    config   : Record<string, string | number>,
+    hash     : string,
+    fileIndex: number,
+    resume   : boolean,
+): Promise<void> {
+    for (let attempt = 0; attempt < 30; attempt++) {
+        await new Promise(r => setTimeout(r, 1000))
         try {
             const sid = await qbLogin(config)
             const res = await fetch(`${config.url}/api/v2/torrents/files?hash=${hash}`, {
@@ -45,6 +68,8 @@ async function qbSetFilePriority(config: Record<string, string | number>, hash: 
             if (!res.ok) continue
             const files: any[] = await res.json()
             if (!Array.isArray(files) || files.length === 0) continue
+
+            // Désactiver tous les autres fichiers
             const unwanted = files.map((_, i) => i).filter(i => i !== fileIndex)
             if (unwanted.length > 0) {
                 const form = new FormData()
@@ -53,15 +78,36 @@ async function qbSetFilePriority(config: Record<string, string | number>, hash: 
                 form.append('priority', '0')
                 await fetch(`${config.url}/api/v2/torrents/filePrio`, { method: 'POST', body: form, headers: { Cookie: `SID=${sid}` } })
             }
+
+            // Activer le fichier cible
             const form2 = new FormData()
             form2.append('hash', hash)
             form2.append('id', String(fileIndex))
             form2.append('priority', '1')
             await fetch(`${config.url}/api/v2/torrents/filePrio`, { method: 'POST', body: form2, headers: { Cookie: `SID=${sid}` } })
-            logger.info('qbittorrent', `Priorité fichier ${fileIndex} définie pour ${hash.slice(0, 8)}…`)
+
+            // Reprendre si le torrent était en pause
+            if (resume) {
+                const resumeForm = new FormData()
+                resumeForm.append('hashes', hash)
+                await fetch(`${config.url}/api/v2/torrents/resume`, { method: 'POST', body: resumeForm, headers: { Cookie: `SID=${sid}` } })
+            }
+
+            logger.info('qbittorrent', `Fichier ${fileIndex} sélectionné${resume ? ' + reprise' : ''} pour ${hash.slice(0, 8)}…`)
             return
         } catch {}
     }
+
+    // Timeout : reprendre quand même pour ne pas laisser le torrent bloqué en pause
+    if (resume) {
+        try {
+            const sid = await qbLogin(config)
+            const resumeForm = new FormData()
+            resumeForm.append('hashes', hash)
+            await fetch(`${config.url}/api/v2/torrents/resume`, { method: 'POST', body: resumeForm, headers: { Cookie: `SID=${sid}` } })
+        } catch {}
+    }
+
     throw new Error(`Timeout : métadonnées non disponibles pour ${hash.slice(0, 8)}…`)
 }
 
@@ -135,30 +181,56 @@ const QB: TorrentClientDriver = {
     },
 
     async add(config, url, options?: DownloadOptions) {
-        const sid  = await qbLogin(config)
+        const sid = await qbLogin(config)
+
+        const hashMatch = url.match(/xt=urn:btih:([a-fA-F0-9]{40,})/i)
+        const hash      = hashMatch?.[1]?.toLowerCase() ?? null
+
+        if (options?.file_index != null && hash) {
+            const exists = await qbTorrentExists(config, sid, hash)
+
+            if (exists) {
+                // Torrent déjà présent → mettre à jour la priorité directement (async OK)
+                logger.info('qbittorrent', `Torrent ${hash.slice(0, 8)}… déjà présent, mise à jour priorité fichier ${options.file_index}`)
+                qbApplyFilePriority(config, hash, options.file_index, false).catch(err =>
+                    logger.warn('qbittorrent', `Priorité fichier non appliquée : ${err instanceof Error ? err.message : err}`)
+                )
+                return
+            }
+
+            // Nouveau torrent → ajout en pause pour éviter tout téléchargement avant la sélection
+            const form = new FormData()
+            form.append('urls', url)
+            if (config.category) form.append('category', String(config.category))
+            if (config.savePath)  form.append('savepath', String(config.savePath))
+            form.append('paused',  'true')   // qBit < 5.0
+            form.append('stopped', 'true')   // qBit ≥ 5.0
+
+            const res  = await fetch(`${config.url}/api/v2/torrents/add`, {
+                method: 'POST', body: form, headers: { Cookie: `SID=${sid}` },
+            })
+            const text = await res.text()
+            if (text !== 'Ok.') throw new Error(`Ajout échoué : ${text}`)
+
+            logger.info('qbittorrent', `Torrent ajouté en pause (sélection fichier ${options.file_index} en attente de métadonnées)`)
+            qbApplyFilePriority(config, hash, options.file_index, true).catch(err =>
+                logger.warn('qbittorrent', `Priorité fichier non appliquée : ${err instanceof Error ? err.message : err}`)
+            )
+            return
+        }
+
+        // Pas de sélection de fichier → ajout normal
         const form = new FormData()
         form.append('urls', url)
         if (config.category) form.append('category', String(config.category))
         if (config.savePath)  form.append('savepath', String(config.savePath))
-        const res = await fetch(`${config.url}/api/v2/torrents/add`, {
-            method : 'POST',
-            body   : form,
-            headers: { Cookie: `SID=${sid}` },
+
+        const res  = await fetch(`${config.url}/api/v2/torrents/add`, {
+            method: 'POST', body: form, headers: { Cookie: `SID=${sid}` },
         })
         const text = await res.text()
         if (text !== 'Ok.') throw new Error(`Ajout échoué : ${text}`)
-        logger.info('qbittorrent', `Torrent ajouté avec succès (catégorie: ${config.category ?? 'aucune'}${config.savePath ? `, dossier: ${config.savePath}` : ''})`)
-        if (options?.file_index != null) {
-            const hashMatch = url.match(/xt=urn:btih:([a-fA-F0-9]{40,})/i)
-            const hash = hashMatch?.[1]?.toLowerCase() ?? null
-            if (hash) {
-                qbSetFilePriority(config, hash, options.file_index).catch(err =>
-                    logger.warn('qbittorrent', `Priorité fichier non appliquée : ${err instanceof Error ? err.message : err}`)
-                )
-            } else {
-                logger.warn('qbittorrent', `file_index ignoré : hash non extractible depuis l'URL`)
-            }
-        }
+        logger.info('qbittorrent', `Torrent ajouté (catégorie: ${config.category ?? 'aucune'}${config.savePath ? `, dossier: ${config.savePath}` : ''})`)
     },
 
     async remove(config, hash, deleteFiles = false) {

@@ -125,20 +125,34 @@ const TR: TorrentClientDriver = {
     async add(config, url, options?: DownloadOptions) {
         const args: Record<string, unknown> = { filename: url }
 
-        if (config.savePath) {
-            args['download-dir'] = String(config.savePath)
-        }
+        if (config.savePath) args['download-dir'] = String(config.savePath)
+        if (config.category) args['labels']        = [String(config.category)]
 
-        if (config.category) {
-            args['labels'] = [String(config.category)]
-        }
-
+        // Transmission applique files-wanted après récupération des métadonnées,
+        // sans démarrer les autres fichiers entre-temps — natif et fiable.
         if (options?.file_index != null) {
             args['files-wanted'] = [options.file_index]
         }
 
-        await trRequest(config, 'torrent-add', args)
-        logger.info('transmission', `Torrent ajouté avec succès (catégorie: ${config.category ?? 'aucune'}${config.savePath ? `, dossier: ${config.savePath}` : ''})`)
+        const res = await trRequest(config, 'torrent-add', args)
+
+        // Torrent déjà présent → Transmission renvoie torrent-duplicate
+        // On s'assure quand même que le fichier voulu est activé
+        if (options?.file_index != null && res.arguments?.['torrent-duplicate']) {
+            const dup = res.arguments['torrent-duplicate']
+            try {
+                await trRequest(config, 'torrent-set', {
+                    ids           : [dup.id],
+                    'files-wanted': [options.file_index],
+                })
+                logger.info('transmission', `Torrent ${dup.hashString?.slice(0, 8)}… déjà présent, fichier ${options.file_index} activé`)
+            } catch (err) {
+                logger.warn('transmission', `Activation fichier sur torrent existant échouée : ${err instanceof Error ? err.message : err}`)
+            }
+            return
+        }
+
+        logger.info('transmission', `Torrent ajouté (catégorie: ${config.category ?? 'aucune'}${config.savePath ? `, dossier: ${config.savePath}` : ''})`)
     },
 
     async remove(config, hash, deleteFiles = false) {
