@@ -70,17 +70,24 @@ async function qbApplyFilePriority(
             const files: any[] = await res.json()
             if (!Array.isArray(files) || files.length === 0) continue
 
-            // Désactiver tous les autres fichiers
-            const unwanted = files.map((_, i) => i).filter(i => i !== fileIndex)
-            if (unwanted.length > 0) {
-                const form = new FormData()
-                form.append('hash', hash)
-                form.append('id', unwanted.join('|'))
-                form.append('priority', '0')
-                await fetch(`${config.url}/api/v2/torrents/filePrio`, { method: 'POST', body: form, headers: { Cookie: `SID=${sid}` } })
+            // Si tous les fichiers sont à priorité normale (état initial du torrent),
+            // on applique le filtrage complet : on désactive tout sauf la cible.
+            // Si certains sont déjà à 0 (filtrage déjà effectué pour un épisode précédent),
+            // on se contente d'activer la nouvelle cible sans toucher aux autres.
+            const isInitialState = files.every((f: any) => (f.priority ?? 1) > 0)
+
+            if (isInitialState) {
+                const unwanted = files.map((_, i) => i).filter(i => i !== fileIndex)
+                if (unwanted.length > 0) {
+                    const form = new FormData()
+                    form.append('hash', hash)
+                    form.append('id', unwanted.join('|'))
+                    form.append('priority', '0')
+                    await fetch(`${config.url}/api/v2/torrents/filePrio`, { method: 'POST', body: form, headers: { Cookie: `SID=${sid}` } })
+                }
             }
 
-            // Activer le fichier cible
+            // Activer le fichier cible (dans tous les cas)
             const form2 = new FormData()
             form2.append('hash', hash)
             form2.append('id', String(fileIndex))
