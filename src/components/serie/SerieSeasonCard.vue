@@ -284,26 +284,50 @@ const seasonBtnIcon = computed(() => {
 })
 
 // ── État épisode ───────────────────────────────────────────────
+
+// Vérifie si n'importe quelle clé de téléchargement pour cet épisode est marquée done/downloading
+// (couvre ep-{id} pour torrent unique ET ep-{id}-{i} pour multi-torrent)
+function epAnyDownloaded(ep: any): boolean {
+  if (isDownloaded(`ep-${ep.id}`)) return true
+  const count = ep.torrents?.length ?? 0
+  for (let i = 0; i < count; i++) { if (isDownloaded(`ep-${ep.id}-${i}`)) return true }
+  return false
+}
+function epAnyDownloading(ep: any): boolean {
+  if (isDownloading(`ep-${ep.id}`)) return true
+  const count = ep.torrents?.length ?? 0
+  for (let i = 0; i < count; i++) { if (isDownloading(`ep-${ep.id}-${i}`)) return true }
+  return false
+}
+
 function epProgress(ep: any): ActiveTorrent | null {
-  // Un épisode déjà dans la bibliothèque n'a jamais besoin d'une barre de progression.
   if (ep.organized) return null
 
-  const torrent = torrentProgress(extractHash(ep.torrent))
-  if (!torrent) return null
-
-  if (ep.torrent?.file_index != null) {
-    // Épisode dans un pack : on n'affiche que si téléchargé dans cette session.
-    if (!isDownloaded(`ep-${ep.id}`)) return null
-    // Si le client remonte la progression par fichier, on utilise celle du fichier précis
-    // plutôt que la progression globale du pack.
-    if (torrent.files && torrent.files.length > 0) {
-      const file = torrent.files.find(f => f.index === ep.torrent.file_index)
-      if (file != null) return { ...torrent, progress: file.progress }
-    }
-    return torrent
+  // Chercher parmi toutes les options de torrent, pas seulement ep.torrent (= torrents[0])
+  const candidates: Array<{ torrent: any; key0: string; keyI: string }> = []
+  if (ep.torrents?.length > 0) {
+    ep.torrents.forEach((t: any, i: number) => candidates.push({ torrent: t, key0: `ep-${ep.id}`, keyI: `ep-${ep.id}-${i}` }))
+  } else if (ep.torrent) {
+    candidates.push({ torrent: ep.torrent, key0: `ep-${ep.id}`, keyI: `ep-${ep.id}` })
   }
 
-  return torrent
+  for (const { torrent: t, key0, keyI } of candidates) {
+    const active = torrentProgress(extractHash(t))
+    if (!active) continue
+
+    if (t.file_index != null) {
+      // Pack : n'affiche la progression que si téléchargé dans cette session
+      if (!isDownloaded(key0) && !isDownloaded(keyI)) continue
+      // Progression précise par fichier si disponible
+      if (active.files && active.files.length > 0) {
+        const file = active.files.find(f => f.index === t.file_index)
+        if (file != null) return { ...active, progress: file.progress }
+      }
+    }
+    return active
+  }
+
+  return null
 }
 
 function handleEpBtnClick(ep: any) {
@@ -320,11 +344,11 @@ function handleEpBtnClick(ep: any) {
 }
 
 function epState(ep: any): 'idle' | 'loading' | 'done' | 'unavailable' {
-  if (ep.organized || isDownloaded(`ep-${ep.id}`) || isAlreadyQueued(ep.torrent)) return 'done'
+  if (ep.organized || epAnyDownloaded(ep) || isAlreadyQueued(ep.torrent)) return 'done'
   const prog = epProgress(ep)
   if (prog && prog.progress < 100) return 'loading'
   if (!ep.torrent || !ep.available) return 'unavailable'
-  if (isDownloading(`ep-${ep.id}`)) return 'loading'
+  if (epAnyDownloading(ep)) return 'loading'
   return 'idle'
 }
 function epStateIcon(ep: any) {
