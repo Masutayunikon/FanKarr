@@ -158,7 +158,7 @@
 import { ref, computed, h } from 'vue'
 import { ChevronUp, Download, Loader, Check, X } from 'lucide-vue-next'
 
-interface ActiveTorrent { hash: string; progress: number; state: string }
+interface ActiveTorrent { hash: string; progress: number; state: string; files?: { index: number; progress: number }[] }
 
 const props = defineProps<{
   season            : any
@@ -232,13 +232,25 @@ const seasonBtnIcon = computed(() => {
 
 // ── État épisode ───────────────────────────────────────────────
 function epProgress(ep: any): ActiveTorrent | null {
+  // Un épisode déjà dans la bibliothèque n'a jamais besoin d'une barre de progression.
+  if (ep.organized) return null
+
+  const torrent = torrentProgress(extractHash(ep.torrent))
+  if (!torrent) return null
+
   if (ep.torrent?.file_index != null) {
-    // Épisode dans un pack : le hash est partagé par tous les épisodes du pack.
-    // On affiche la progression du pack UNIQUEMENT pour cet épisode s'il a été
-    // explicitement téléchargé dans cette session (isDownloaded).
-    return isDownloaded(`ep-${ep.id}`) ? torrentProgress(extractHash(ep.torrent)) : null
+    // Épisode dans un pack : on n'affiche que si téléchargé dans cette session.
+    if (!isDownloaded(`ep-${ep.id}`)) return null
+    // Si le client remonte la progression par fichier, on utilise celle du fichier précis
+    // plutôt que la progression globale du pack.
+    if (torrent.files && torrent.files.length > 0) {
+      const file = torrent.files.find(f => f.index === ep.torrent.file_index)
+      if (file != null) return { ...torrent, progress: file.progress }
+    }
+    return torrent
   }
-  return torrentProgress(extractHash(ep.torrent))
+
+  return torrent
 }
 
 function epState(ep: any): 'idle' | 'loading' | 'done' | 'unavailable' {

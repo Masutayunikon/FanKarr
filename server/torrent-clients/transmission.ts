@@ -96,6 +96,7 @@ const TR: TorrentClientDriver = {
             'hashString', 'name', 'status', 'percentDone', 'totalSize',
             'downloadedEver', 'uploadedEver', 'uploadRatio',
             'rateDownload', 'rateUpload', 'eta', 'downloadDir', 'labels',
+            'fileStats',   // progression par fichier (bytesCompleted + length)
         ]
         const data = await trRequest(config, 'torrent-get', { fields })
         const torrents: any[] = data.arguments?.torrents ?? []
@@ -119,6 +120,12 @@ const TR: TorrentClientDriver = {
                 eta       : t.eta ?? -1,
                 save_path : t.downloadDir,
                 category  : t.labels?.[0] ?? '',
+                files     : Array.isArray(t.fileStats) && t.fileStats.length > 0
+                    ? t.fileStats.map((fs: any, i: number) => ({
+                        index   : i,
+                        progress: fs.length > 0 ? Math.round((fs.bytesCompleted / fs.length) * 100) : 0,
+                    }))
+                    : undefined,
             } satisfies TorrentInfo))
     },
 
