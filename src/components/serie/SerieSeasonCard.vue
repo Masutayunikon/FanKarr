@@ -124,26 +124,19 @@
             </div>
           </div>
 
-          <!-- Bouton état épisode -->
-          <button
-              class="shrink-0 w-8 h-8 rounded-lg border flex items-center justify-center transition-colors"
-              :class="epBtnClass(ep)"
-              :disabled="!ep.torrent || ep.organized || isAlreadyQueued(ep.torrent)"
-              @click="ep.torrent && !ep.organized && !isAlreadyQueued(ep.torrent) && emit('download', `ep-${ep.id}`, ep.torrent.torrent_url, ep.torrent.magnet, ep.torrent.file_index ?? null, ep.torrent.file_path ?? null)"
-          >
-            <component :is="epStateIcon(ep)" />
-          </button>
-
-          <!-- Options torrent supplémentaires pour épisodes multi-torrent -->
-          <div v-if="!ep.organized && ep.torrents && ep.torrents.length > 1" class="relative" @click.stop>
+          <!-- Bouton état épisode (dropdown si plusieurs options) -->
+          <div class="relative shrink-0" @click.stop>
             <button
-                @click="epOptionsOpen = epOptionsOpen === ep.id ? null : ep.id"
-                class="w-6 h-6 flex items-center justify-center rounded text-muted hover:text-primary transition-colors"
-                title="Autres options"
+                class="w-8 h-8 rounded-lg border flex items-center justify-center transition-colors"
+                :class="epBtnClass(ep)"
+                :disabled="ep.organized || (!ep.torrents?.length && !ep.torrent)"
+                @click="handleEpBtnClick(ep)"
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+              <component :is="epStateIcon(ep)" />
             </button>
-            <div v-if="epOptionsOpen === ep.id" class="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl p-1 z-20 w-52 shadow-xl flex flex-col gap-0.5">
+            <!-- Dropdown quand plusieurs options de torrent -->
+            <div v-if="epOptionsOpen === ep.id && !ep.organized && ep.torrents && ep.torrents.length > 1"
+                 class="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl p-1 z-20 w-52 shadow-xl flex flex-col gap-0.5">
               <button
                   v-for="(t, i) in ep.torrents"
                   :key="i"
@@ -311,6 +304,19 @@ function epProgress(ep: any): ActiveTorrent | null {
   }
 
   return torrent
+}
+
+function handleEpBtnClick(ep: any) {
+  if (ep.organized) return
+  if (ep.torrents && ep.torrents.length > 1) {
+    // Plusieurs options → toggle dropdown
+    epOptionsOpen.value = epOptionsOpen.value === ep.id ? null : ep.id
+    return
+  }
+  // Option unique → téléchargement direct
+  if (ep.torrent && !isAlreadyQueued(ep.torrent)) {
+    emit('download', `ep-${ep.id}`, ep.torrent.torrent_url, ep.torrent.magnet, ep.torrent.file_index ?? null, ep.torrent.file_path ?? null)
+  }
 }
 
 function epState(ep: any): 'idle' | 'loading' | 'done' | 'unavailable' {
