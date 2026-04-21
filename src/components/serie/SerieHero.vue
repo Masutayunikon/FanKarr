@@ -147,7 +147,7 @@ const emit = defineEmits<{
   openManualImport: []
   unimport        : [deleteFile: boolean]
   downloadAll     : []
-  download        : [key: string, url: string | null, magnet: string | null]
+  download        : [key: string, url: string | null, magnet: string | null, file_index?: number | null, file_path?: string | null]
 }>()
 
 const unimportMenuOpen = ref(false)

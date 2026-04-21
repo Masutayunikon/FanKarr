@@ -50,11 +50,16 @@ export interface TorrentInfo {
     category  : string
 }
 
+export interface DownloadOptions {
+    file_index?: number | null
+    file_path?: string | null
+}
+
 export interface TorrentClientDriver {
     definition  : TorrentClientDefinition
     test        : (config: Record<string, string | number>) => Promise<{ ok: boolean; message: string }>
     healthcheck : (config: Record<string, string | number>) => Promise<{ online: boolean; version?: string }>
-    add         : (config: Record<string, string | number>, url: string) => Promise<void>
+    add         : (config: Record<string, string | number>, url: string, options?: DownloadOptions) => Promise<void>
     list        : (config: Record<string, string | number>, category?: string) => Promise<TorrentInfo[]>
     remove      : (config: Record<string, string | number>, hash: string, deleteFiles?: boolean) => Promise<void>
 }
@@ -208,7 +213,7 @@ function remapSavePath(savePath: string, remotePath: string, localPath: string):
 
 // ─── Dispatch download ─────────────────────────────────────────────────────────
 
-export async function dispatchDownload(url: string): Promise<{ uuid: string; name: string; ok: boolean; error?: string }[]> {
+export async function dispatchDownload(url: string, options?: DownloadOptions): Promise<{ uuid: string; name: string; ok: boolean; error?: string }[]> {
     const clients = loadClients()
 
     if (clients.length === 0) {
@@ -226,7 +231,7 @@ export async function dispatchDownload(url: string): Promise<{ uuid: string; nam
             continue
         }
         try {
-            await driver.add(client.config, url)
+            await driver.add(client.config, url, options)
             logger.info('torrent-clients', `Téléchargement envoyé à "${client.name}"`)
             results.push({ uuid: client.uuid, name: client.name, ok: true })
         } catch (err) {

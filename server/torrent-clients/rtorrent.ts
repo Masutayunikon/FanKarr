@@ -5,7 +5,7 @@
  * Compatible ruTorrent (via /RPC2) et rTorrent standalone (via /RPC2 ou /XMLRPC).
  */
 
-import type { TorrentClientDriver, TorrentInfo } from './index.js'
+import type { TorrentClientDriver, TorrentInfo, DownloadOptions } from './index.js'
 import { logger } from '../logger.js'
 
 // ─── XML-RPC helpers ──────────────────────────────────────────
@@ -220,7 +220,7 @@ const RT: TorrentClientDriver = {
             })
     },
 
-    async add(config, url) {
+    async add(config, url, options?: DownloadOptions) {
         // load_start charge et démarre le torrent
         const method = url.startsWith('magnet:') ? 'load.start' : 'load.start'
         const args: any[] = ['', url]
@@ -234,6 +234,30 @@ const RT: TorrentClientDriver = {
         }
 
         await rpcCall(config, method, args)
+        if (options?.file_index != null) {
+            // Wait for torrent metadata then set file priorities
+            const hashMatch = url.match(/xt=urn:btih:([a-fA-F0-9]{40,})/i)
+            const hash = hashMatch?.[1]?.toUpperCase() ?? null
+            if (hash) {
+                ;(async () => {
+                    for (let attempt = 0; attempt < 15; attempt++) {
+                        await new Promise(r => setTimeout(r, 2000))
+                        try {
+                            const fileCount: number = await rpcCall(config, 'f.multicall', [hash, '', 'f.size_bytes='])
+                                .then((r: any) => Array.isArray(r) ? r.length : 0)
+                            if (fileCount === 0) continue
+                            for (let i = 0; i < fileCount; i++) {
+                                const priority = i === options.file_index ? 1 : 0
+                                await rpcCall(config, 'f.priority.set', [hash, i, priority])
+                            }
+                            logger.info('rtorrent', `Priorité fichier ${options.file_index} définie pour ${hash.slice(0, 8)}…`)
+                            return
+                        } catch {}
+                    }
+                    logger.warn('rtorrent', `Priorité fichier non appliquée : timeout pour ${hash.slice(0, 8)}…`)
+                })()
+            }
+        }
         logger.info('rtorrent', `Torrent ajouté avec succès${config.savePath ? ` (dossier: ${config.savePath})` : ''}`)
     },
 

@@ -27,7 +27,7 @@
           @open-manual-import="openManualImport"
           @unimport="(del) => unimportSerie(del)"
           @download-all="downloadAll"
-          @download="(key, url, magnet) => download(key, url, magnet)"
+          @download="(key, url, magnet, fi, fp) => download(key, url, magnet, fi, fp)"
       />
 
       <!-- Saisons -->
@@ -45,7 +45,7 @@
             :downloading-season="!!downloadingSeason[season.id]"
             :nfo-support="nfoSupport"
             @toggle="toggleSeason"
-            @download="(key, url, magnet) => download(key, url, magnet)"
+            @download="(key, url, magnet, fi, fp) => download(key, url, magnet, fi, fp)"
             @download-season="downloadSeason"
             @rename-episode="(ep, s) => renameEpisode(ep, s)"
             @unimport-episode="(ep, s, del) => unimportEpisode(ep, s, del)"
@@ -146,10 +146,10 @@ async function fetchActiveDownloads() {
 function openManualImport() { fetchOrganized(); manualImportOpen.value = true }
 
 // ── Download ──────────────────────────────────────────────────
-async function download(key: string, torrent_url: string | null, magnet: string | null) {
+async function download(key: string, torrent_url: string | null, magnet: string | null, file_index?: number | null, file_path?: string | null) {
   if (isDownloading(key) || isDownloaded(key)) return
   addDownloading(key)
-  const result = await store.download(torrent_url, magnet)
+  const result = await store.download(torrent_url, magnet, file_index, file_path)
   removeDownloading(key)
   if (result.success) { addDownloaded(key); toast('Téléchargement lancé ✓', 'success'); fetchActiveDownloads() }
   else toast(result.error ?? 'Erreur inconnue', 'error')
@@ -157,7 +157,7 @@ async function download(key: string, torrent_url: string | null, magnet: string 
 
 function collectDownloadables() {
   if (!data.value) return []
-  const result: { key: string; torrent_url: string | null; magnet: string | null }[] = []
+  const result: { key: string; torrent_url: string | null; magnet: string | null; file_index?: number | null; file_path?: string | null }[] = []
   const covered = new Set<number>()
   data.value.torrents_integrale.forEach((t: any, i: number) => {
     if (!isAlreadyQueued(t) && !isDownloaded(`integrale-${i}`)) {
@@ -173,7 +173,7 @@ function collectDownloadables() {
   for (const season of data.value.seasons) {
     for (const ep of season.episodes) {
       if (!ep.torrent || !ep.available || ep.organized || isAlreadyQueued(ep.torrent) || isDownloaded(`ep-${ep.id}`) || covered.has(ep.id)) continue
-      result.push({ key: `ep-${ep.id}`, torrent_url: ep.torrent.torrent_url, magnet: ep.torrent.magnet })
+      result.push({ key: `ep-${ep.id}`, torrent_url: ep.torrent.torrent_url, magnet: ep.torrent.magnet, file_index: ep.torrent.file_index ?? null, file_path: ep.torrent.file_path ?? null })
     }
   }
   return result
@@ -204,7 +204,7 @@ async function downloadAll() {
   const torrents = collectDownloadables()
   let sent = 0
   for (const t of torrents) {
-    try { const r = await store.download(t.torrent_url, t.magnet); if (r.success) { addDownloaded(t.key); sent++ } } catch {}
+    try { const r = await store.download(t.torrent_url, t.magnet, t.file_index, t.file_path); if (r.success) { addDownloaded(t.key); sent++ } } catch {}
   }
   downloadingAll.value = false
   if (sent > 0) { toast(`${sent} torrent(s) envoyé(s) ✓`, 'success'); fetchActiveDownloads() }
@@ -213,18 +213,18 @@ async function downloadAll() {
 
 async function downloadSeason(season: Season) {
   downloadingSeason.value[season.id] = true
-  const torrents: { key: string; torrent_url: string | null; magnet: string | null }[] = []
+  const torrents: { key: string; torrent_url: string | null; magnet: string | null; file_index?: number | null; file_path?: string | null }[] = []
   if (season.torrent && !isAlreadyQueued(season.torrent) && !isDownloaded(`season-${season.id}`) && season.organized_state !== 'complete') {
     torrents.push({ key: `season-${season.id}`, torrent_url: season.torrent.torrent_url, magnet: season.torrent.magnet })
   } else {
     for (const ep of (season as any).episodes ?? []) {
       if (!ep.torrent || !ep.available || ep.organized || isAlreadyQueued(ep.torrent) || isDownloaded(`ep-${ep.id}`)) continue
-      torrents.push({ key: `ep-${ep.id}`, torrent_url: ep.torrent.torrent_url, magnet: ep.torrent.magnet })
+      torrents.push({ key: `ep-${ep.id}`, torrent_url: ep.torrent.torrent_url, magnet: ep.torrent.magnet, file_index: ep.torrent.file_index ?? null, file_path: ep.torrent.file_path ?? null })
     }
   }
   let sent = 0
   for (const t of torrents) {
-    try { const r = await store.download(t.torrent_url, t.magnet); if (r.success) { addDownloaded(t.key); sent++ } } catch {}
+    try { const r = await store.download(t.torrent_url, t.magnet, t.file_index, t.file_path); if (r.success) { addDownloaded(t.key); sent++ } } catch {}
   }
   downloadingSeason.value[season.id] = false
   if (sent > 0) { toast(`${sent} torrent(s) envoyé(s) ✓`, 'success'); fetchActiveDownloads() }

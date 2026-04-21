@@ -2,7 +2,7 @@
  * uTorrent Driver
  */
 
-import type { TorrentClientDriver, TorrentInfo } from './index.js'
+import type { TorrentClientDriver, TorrentInfo, DownloadOptions } from './index.js'
 import { logger } from '../logger.js'
 
 // uTorrent status flags (bitmask) :
@@ -141,7 +141,8 @@ const UT: TorrentClientDriver = {
             })
     },
 
-    async add(config, url) {
+    async add(config, url, options?: DownloadOptions) {
+        if (options?.file_index != null) logger.warn('utorrent', 'Sélection de fichier non supportée — téléchargement complet')
         const session = await utGetSession(config)
         const auth    = btoa(`${config.username ?? ''}:${config.password ?? ''}`)
 
