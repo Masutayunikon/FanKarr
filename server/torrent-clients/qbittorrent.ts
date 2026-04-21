@@ -48,9 +48,9 @@ async function qbTorrentExists(config: Record<string, string | number>, sid: str
 }
 
 /**
- * Attend les métadonnées, applique les priorités de fichiers, puis reprend le torrent si `resume=true`.
- * - resume=false : torrent déjà actif, on met juste à jour la priorité
- * - resume=true  : torrent ajouté en pause, on le reprend après avoir défini les priorités
+ * Attend que les métadonnées soient disponibles, applique les priorités, puis reprend le torrent.
+ * Utilisé après un ajout avec stopCondition=MetadataReceived (qBit actif → auto-pause après metadata)
+ * ou pour un torrent déjà présent (resume=false, juste mise à jour de priorité).
  */
 async function qbApplyFilePriority(
     config   : Record<string, string | number>,
@@ -58,8 +58,9 @@ async function qbApplyFilePriority(
     fileIndex: number,
     resume   : boolean,
 ): Promise<void> {
-    for (let attempt = 0; attempt < 30; attempt++) {
-        await new Promise(r => setTimeout(r, 1000))
+    // 60 tentatives × 500 ms = 30 s max
+    for (let attempt = 0; attempt < 60; attempt++) {
+        await new Promise(r => setTimeout(r, 500))
         try {
             const sid = await qbLogin(config)
             const res = await fetch(`${config.url}/api/v2/torrents/files?hash=${hash}`, {
@@ -86,7 +87,7 @@ async function qbApplyFilePriority(
             form2.append('priority', '1')
             await fetch(`${config.url}/api/v2/torrents/filePrio`, { method: 'POST', body: form2, headers: { Cookie: `SID=${sid}` } })
 
-            // Reprendre si le torrent était en pause
+            // Reprendre (torrent auto-mis en pause par stopCondition=MetadataReceived)
             if (resume) {
                 const resumeForm = new FormData()
                 resumeForm.append('hashes', hash)
@@ -98,7 +99,7 @@ async function qbApplyFilePriority(
         } catch {}
     }
 
-    // Timeout : reprendre quand même pour ne pas laisser le torrent bloqué en pause
+    // Timeout : reprendre quand même pour ne pas laisser le torrent bloqué
     if (resume) {
         try {
             const sid = await qbLogin(config)
@@ -198,13 +199,15 @@ const QB: TorrentClientDriver = {
                 return
             }
 
-            // Nouveau torrent → ajout en pause pour éviter tout téléchargement avant la sélection
+            // Nouveau torrent → ajout actif avec stopCondition=MetadataReceived
+            // qBit fetch les métadonnées normalement via DHT/peers,
+            // puis se met en pause automatiquement dès qu'elles sont disponibles.
+            // On set les priorités sur la pause, puis on reprend. Zéro data indésirable.
             const form = new FormData()
             form.append('urls', url)
             if (config.category) form.append('category', String(config.category))
             if (config.savePath)  form.append('savepath', String(config.savePath))
-            form.append('paused',  'true')   // qBit < 5.0
-            form.append('stopped', 'true')   // qBit ≥ 5.0
+            form.append('stopCondition', 'MetadataReceived')  // qBit ≥ 4.6
 
             const res  = await fetch(`${config.url}/api/v2/torrents/add`, {
                 method: 'POST', body: form, headers: { Cookie: `SID=${sid}` },
@@ -212,7 +215,7 @@ const QB: TorrentClientDriver = {
             const text = await res.text()
             if (text !== 'Ok.') throw new Error(`Ajout échoué : ${text}`)
 
-            logger.info('qbittorrent', `Torrent ajouté en pause (sélection fichier ${options.file_index} en attente de métadonnées)`)
+            logger.info('qbittorrent', `Torrent ajouté (stopCondition=MetadataReceived, sélection fichier ${options.file_index} en attente)`)
             qbApplyFilePriority(config, hash, options.file_index, true).catch(err =>
                 logger.warn('qbittorrent', `Priorité fichier non appliquée : ${err instanceof Error ? err.message : err}`)
             )
