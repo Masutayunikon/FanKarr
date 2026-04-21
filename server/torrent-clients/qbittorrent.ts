@@ -88,10 +88,14 @@ async function qbApplyFilePriority(
             await fetch(`${config.url}/api/v2/torrents/filePrio`, { method: 'POST', body: form2, headers: { Cookie: `SID=${sid}` } })
 
             // Reprendre (torrent auto-mis en pause par stopCondition=MetadataReceived)
+            // On appelle les deux endpoints : resume (qBit ≤ 4.x) et start (qBit ≥ 5.0)
             if (resume) {
                 const resumeForm = new FormData()
                 resumeForm.append('hashes', hash)
-                await fetch(`${config.url}/api/v2/torrents/resume`, { method: 'POST', body: resumeForm, headers: { Cookie: `SID=${sid}` } })
+                await Promise.allSettled([
+                    fetch(`${config.url}/api/v2/torrents/resume`, { method: 'POST', body: resumeForm, headers: { Cookie: `SID=${sid}` } }),
+                    fetch(`${config.url}/api/v2/torrents/start`,  { method: 'POST', body: resumeForm, headers: { Cookie: `SID=${sid}` } }),
+                ])
             }
 
             logger.info('qbittorrent', `Fichier ${fileIndex} sélectionné${resume ? ' + reprise' : ''} pour ${hash.slice(0, 8)}…`)
@@ -105,7 +109,10 @@ async function qbApplyFilePriority(
             const sid = await qbLogin(config)
             const resumeForm = new FormData()
             resumeForm.append('hashes', hash)
-            await fetch(`${config.url}/api/v2/torrents/resume`, { method: 'POST', body: resumeForm, headers: { Cookie: `SID=${sid}` } })
+            await Promise.allSettled([
+                fetch(`${config.url}/api/v2/torrents/resume`, { method: 'POST', body: resumeForm, headers: { Cookie: `SID=${sid}` } }),
+                fetch(`${config.url}/api/v2/torrents/start`,  { method: 'POST', body: resumeForm, headers: { Cookie: `SID=${sid}` } }),
+            ])
         } catch {}
     }
 
