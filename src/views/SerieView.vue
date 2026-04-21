@@ -133,7 +133,7 @@ const epActionLoading    = ref<Record<number, boolean>>({})
 const downloadingAll     = ref(false)
 const downloadingSeason  = ref<Record<number, boolean>>({})
 
-interface ActiveTorrent { hash: string; progress: number; state: string }
+export interface ActiveTorrent { hash: string; progress: number; state: string; files?: { index: number; progress: number }[] }
 const activeTorrents = ref<ActiveTorrent[]>([])
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -192,7 +192,7 @@ async function fetchActiveDownloads() {
     const res = await fetch('/api/downloads', { credentials: 'include' })
     if (!res.ok) return
     const list: any[] = await res.json()
-    activeTorrents.value = list.map(t => ({ hash: t.hash, progress: t.progress ?? 0, state: t.state }))
+    activeTorrents.value = list.map(t => ({ hash: t.hash, progress: t.progress ?? 0, state: t.state, files: t.files }))
   } catch {}
 }
 

@@ -229,17 +229,29 @@ const RT: TorrentClientDriver = {
 
         const rows = await d_multicall(config, 'main', methods)
 
+        // Récupérer la progression par fichier pour chaque torrent (requêtes parallèles)
+        const fileMap = new Map<string, any[]>()
+        await Promise.all(rows.map(async (r: any) => {
+            const hash = String(r[0]).toUpperCase()
+            try {
+                const files = await rpcCall(config, 'f.multicall', [hash, '', 'f.completed_length=', 'f.size_bytes='])
+                if (Array.isArray(files) && files.length > 0) fileMap.set(hash.toLowerCase(), files)
+            } catch {}
+        }))
+
         return rows
             .map(r => {
                 const [hash, name, isOpen, isActive, isChecking, isComplete,
                     size, downloaded, uploadedTotal, ratioRaw,
                     dlSpeed, ulSpeed, leftBytes, directory, label] = r
 
-                const progress = size > 0 ? Math.min(100, Math.round(((size - leftBytes) / size) * 100)) : 0
-                const eta      = Number(dlSpeed) > 0 && Number(leftBytes) > 0 ? Math.round(Number(leftBytes) / Number(dlSpeed)) : -1
+                const progress  = size > 0 ? Math.min(100, Math.round(((size - leftBytes) / size) * 100)) : 0
+                const eta       = Number(dlSpeed) > 0 && Number(leftBytes) > 0 ? Math.round(Number(leftBytes) / Number(dlSpeed)) : -1
+                const hashLower = String(hash).toLowerCase()
+                const fileInfo  = fileMap.get(hashLower) ?? []
 
                 return {
-                    hash      : String(hash).toLowerCase(),
+                    hash      : hashLower,
                     name      : String(name),
                     state     : mapState(Number(isOpen), Number(isActive), Number(isChecking), Number(isComplete)),
                     progress,
@@ -252,6 +264,12 @@ const RT: TorrentClientDriver = {
                     eta,
                     save_path : String(directory),
                     category  : String(label ?? ''),
+                    files     : fileInfo.length > 0
+                        ? fileInfo.map((f: any, i: number) => ({
+                            index   : i,
+                            progress: Number(f[1]) > 0 ? Math.round((Number(f[0]) / Number(f[1])) * 100) : 0,
+                        }))
+                        : undefined,
                 } satisfies TorrentInfo
             })
             .filter(t => {

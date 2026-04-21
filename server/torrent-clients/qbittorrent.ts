@@ -171,21 +171,39 @@ const QB: TorrentClientDriver = {
         })
         if (!res.ok) throw new Error(`qB list échoué : ${res.status}`)
         const data: any[] = await res.json()
-        return data.map(t => ({
-            hash      : t.hash,
-            name      : t.name,
-            state     : mapState(t.state),
-            progress  : Math.round(t.progress * 100),
-            size      : t.size,
-            downloaded: t.downloaded,
-            uploaded  : t.uploaded ?? 0,
-            ratio     : Math.round((t.ratio ?? 0) * 100) / 100,
-            speed     : t.dlspeed,
-            upspeed   : t.upspeed ?? 0,
-            eta       : t.eta ?? -1,
-            save_path : t.save_path,
-            category  : t.category ?? '',
-        } satisfies TorrentInfo))
+
+        // Récupérer la progression par fichier pour chaque torrent (requêtes parallèles)
+        const fileMap = new Map<string, any[]>()
+        await Promise.all(data.map(async (t: any) => {
+            try {
+                const r = await fetch(`${config.url}/api/v2/torrents/files?hash=${t.hash}`, {
+                    headers: { Cookie: `SID=${sid}` },
+                })
+                if (r.ok) fileMap.set(t.hash, await r.json())
+            } catch {}
+        }))
+
+        return data.map(t => {
+            const fileInfo = fileMap.get(t.hash) ?? []
+            return {
+                hash      : t.hash,
+                name      : t.name,
+                state     : mapState(t.state),
+                progress  : Math.round(t.progress * 100),
+                size      : t.size,
+                downloaded: t.downloaded,
+                uploaded  : t.uploaded ?? 0,
+                ratio     : Math.round((t.ratio ?? 0) * 100) / 100,
+                speed     : t.dlspeed,
+                upspeed   : t.upspeed ?? 0,
+                eta       : t.eta ?? -1,
+                save_path : t.save_path,
+                category  : t.category ?? '',
+                files     : fileInfo.length > 0
+                    ? fileInfo.map((f: any, i: number) => ({ index: i, progress: Math.round((f.progress ?? 0) * 100) }))
+                    : undefined,
+            } satisfies TorrentInfo
+        })
     },
 
     async add(config, url, options?: DownloadOptions) {

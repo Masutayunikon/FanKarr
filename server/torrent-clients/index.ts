@@ -34,6 +34,11 @@ export interface SavedClient {
     config: Record<string, string | number>
 }
 
+export interface TorrentFileProgress {
+    index   : number
+    progress: number   // 0–100
+}
+
 export interface TorrentInfo {
     hash      : string
     name      : string
@@ -48,6 +53,7 @@ export interface TorrentInfo {
     eta       : number
     save_path : string
     category  : string
+    files    ?: TorrentFileProgress[]
 }
 
 export interface DownloadOptions {
