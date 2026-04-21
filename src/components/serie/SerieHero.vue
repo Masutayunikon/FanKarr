@@ -78,99 +78,27 @@
           {{ serie.plot }}
         </p>
 
-        <!-- Boutons intégrale / tout télécharger -->
-        <div class="flex flex-wrap gap-2 mt-1">
-          <button
-              v-if="hasDownloadableTorrents"
-              @click="emit('downloadAll')"
-              :disabled="downloadingAll"
-              class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-accent text-white hover:bg-accent-hover transition"
-              :class="downloadingAll ? 'opacity-50 cursor-not-allowed' : ''"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" :class="downloadingAll ? 'animate-spin' : ''">
-              <path v-if="!downloadingAll" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline v-if="!downloadingAll" points="7 10 12 15 17 10"/><line v-if="!downloadingAll" x1="12" y1="15" x2="12" y2="3"/>
-              <path v-else d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.36-2.64M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.36 2.64"/>
-            </svg>
-            {{ downloadingAll ? 'Envoi…' : 'Tout télécharger' }}
-          </button>
-
-          <button
-              v-for="(t, i) in torrentsIntegrale"
-              :key="i"
-              :title="t.raw"
-              class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition"
-              :class="[
-              t.label === 'Intégrale'
-                ? 'bg-accent text-white hover:bg-accent-hover'
-                : 'bg-accent-muted text-accent border border-accent/20 hover:bg-accent/20',
-              (isAlreadyQueued(t) || isDownloaded(`integrale-${i}`))
-                ? 'opacity-50 cursor-not-allowed' : ''
-            ]"
-              :disabled="isAlreadyQueued(t) || isDownloaded(`integrale-${i}`)"
-              @click="emit('download', `integrale-${i}`, t.torrent_url, t.magnet)"
-          >
-            <component :is="btnIcon(`integrale-${i}`, t)" />
-            {{ isAlreadyQueued(t) ? 'Déjà ajouté' : isDownloaded(`integrale-${i}`) ? 'Envoyé ✓' : t.label }}
-          </button>
-        </div>
-
-        <!-- Progression intégrale -->
-        <template v-for="(t, i) in torrentsIntegrale" :key="`prog-${i}`">
-          <div v-if="torrentProgress(extractHash(t)) && torrentProgress(extractHash(t))!.progress < 100" class="h-0.5 bg-border rounded-full overflow-hidden">
-            <div class="h-full bg-accent rounded-full transition-all duration-500" :style="{ width: `${torrentProgress(extractHash(t))!.progress}%` }" />
-          </div>
-        </template>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, h } from 'vue'
+import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { ArrowLeft, Tv, Download, Loader, Check } from 'lucide-vue-next'
-
-interface ActiveTorrent { hash: string; progress: number; state: string }
+import { ArrowLeft, Tv } from 'lucide-vue-next'
 
 const props = defineProps<{
-  serie               : any
-  torrentsIntegrale   : any[]
-  organizedByEpisode  : Record<string, any>
-  hasDownloadableTorrents: boolean
-  downloadingAll      : boolean
-  activeTorrents      : ActiveTorrent[]
-  downloading         : string[]
-  downloaded          : string[]
+  serie              : any
+  organizedByEpisode : Record<string, any>
 }>()
 
 const emit = defineEmits<{
   openManualImport: []
   unimport        : [deleteFile: boolean]
-  downloadAll     : []
-  download        : [key: string, url: string | null, magnet: string | null, file_index?: number | null, file_path?: string | null]
 }>()
 
 const unimportMenuOpen = ref(false)
-
-function isDownloaded(key: string)  { return props.downloaded.includes(key) }
-function isAlreadyQueued(torrent: any): boolean {
-  const hash = extractHash(torrent)
-  if (!hash) return false
-  return props.activeTorrents.some(t => t.hash.toLowerCase() === hash.toLowerCase())
-}
-function extractHash(torrent: any): string | null {
-  if (!torrent?.magnet) return null
-  const m = torrent.magnet.match(/xt=urn:btih:([a-fA-F0-9]{40})/i)
-  return m ? m[1].toLowerCase() : null
-}
-function torrentProgress(hash: string | null | undefined): ActiveTorrent | null {
-  if (!hash) return null
-  return props.activeTorrents.find(t => t.hash.toLowerCase() === hash.toLowerCase()) ?? null
-}
-function btnIcon(key: string, torrent: any) {
-  if (isDownloaded(key) || isAlreadyQueued(torrent)) return h(Check, { size: 14 })
-  return h(Download, { size: 14 })
-}
 
 defineExpose({ closeUnimportMenu: () => { unimportMenuOpen.value = false } })
 </script>
