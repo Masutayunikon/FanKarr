@@ -142,12 +142,22 @@ async function rtApplyFilePriority(
     for (let attempt = 0; attempt < 100; attempt++) {
         await new Promise(r => setTimeout(r, 300))
         try {
-            const files: any[] = await rpcCall(config, 'f.multicall', [hash, '', 'f.size_bytes='])
+            // Récupérer taille ET priorité courante de chaque fichier
+            const files: any[] = await rpcCall(config, 'f.multicall', [hash, '', 'f.size_bytes=', 'f.priority='])
             const fileCount = Array.isArray(files) ? files.length : 0
             if (fileCount === 0) continue
 
+            // Si tous les fichiers sont à priorité normale (état initial),
+            // on filtre tout sauf la cible. Sinon on active juste la cible.
+            const isInitialState = files.every((f: any) => Number(f[1]) > 0)
+
             for (let i = 0; i < fileCount; i++) {
-                await rpcCall(config, 'f.priority.set', [hash, i, i === fileIndex ? 1 : 0])
+                if (i === fileIndex) {
+                    await rpcCall(config, 'f.priority.set', [hash, i, 1])
+                } else if (isInitialState) {
+                    await rpcCall(config, 'f.priority.set', [hash, i, 0])
+                }
+                // Si pas initial state : on ne touche pas aux autres fichiers
             }
 
             logger.info('rtorrent', `Fichier ${fileIndex} sélectionné pour ${hash.slice(0, 8)}…`)
