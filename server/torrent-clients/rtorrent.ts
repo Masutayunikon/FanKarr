@@ -118,6 +118,55 @@ async function d_multicall(
     return Array.isArray(result) ? result : []
 }
 
+async function rtTorrentExists(config: Record<string, string | number>, hash: string): Promise<boolean> {
+    try {
+        const rows = await d_multicall(config, 'main', ['d.hash'])
+        return rows.some(r => String(r[0]).toLowerCase() === hash.toLowerCase())
+    } catch {
+        return false
+    }
+}
+
+/**
+ * Attend les métadonnées, applique les priorités, puis démarre le torrent si `start=true`.
+ * - start=false : torrent déjà actif, on met juste à jour la priorité
+ * - start=true  : torrent chargé sans démarrer (load.normal), on le démarre après les priorités
+ */
+async function rtApplyFilePriority(
+    config   : Record<string, string | number>,
+    hash     : string,
+    fileIndex: number,
+    start    : boolean,
+): Promise<void> {
+    for (let attempt = 0; attempt < 30; attempt++) {
+        await new Promise(r => setTimeout(r, 1000))
+        try {
+            const files: any[] = await rpcCall(config, 'f.multicall', [hash, '', 'f.size_bytes='])
+            const fileCount = Array.isArray(files) ? files.length : 0
+            if (fileCount === 0) continue
+
+            for (let i = 0; i < fileCount; i++) {
+                await rpcCall(config, 'f.priority.set', [hash, i, i === fileIndex ? 1 : 0])
+            }
+
+            if (start) {
+                await rpcCall(config, 'd.start', [hash])
+            }
+
+            logger.info('rtorrent', `Fichier ${fileIndex} sélectionné${start ? ' + démarrage' : ''} pour ${hash.slice(0, 8)}…`)
+            return
+        } catch {}
+    }
+
+    // Timeout : démarrer quand même pour ne pas laisser le torrent bloqué
+    if (start) {
+        try { await rpcCall(config, 'd.start', [hash]) } catch {}
+        logger.warn('rtorrent', `Timeout : démarré sans sélection de fichier pour ${hash.slice(0, 8)}…`)
+    } else {
+        throw new Error(`Timeout : métadonnées non disponibles pour ${hash.slice(0, 8)}…`)
+    }
+}
+
 // ─── State mapping ────────────────────────────────────────────
 // rTorrent state : is_active (0/1) + is_hash_checking (0/1) + get_complete (0/1)
 // + is_open (0/1)
@@ -221,43 +270,40 @@ const RT: TorrentClientDriver = {
     },
 
     async add(config, url, options?: DownloadOptions) {
-        // load_start charge et démarre le torrent
-        const method = url.startsWith('magnet:') ? 'load.start' : 'load.start'
-        const args: any[] = ['', url]
+        const hashMatch = url.match(/xt=urn:btih:([a-fA-F0-9]{40,})/i)
+        const hash      = hashMatch?.[1]?.toUpperCase() ?? null
 
-        if (config.savePath) {
-            args.push(`d.directory.set="${config.savePath}"`)
-        }
+        if (options?.file_index != null && hash) {
+            const exists = await rtTorrentExists(config, hash)
 
-        if (config.category) {
-            args.push(`d.custom1.set=${config.category}`)
-        }
-
-        await rpcCall(config, method, args)
-        if (options?.file_index != null) {
-            // Wait for torrent metadata then set file priorities
-            const hashMatch = url.match(/xt=urn:btih:([a-fA-F0-9]{40,})/i)
-            const hash = hashMatch?.[1]?.toUpperCase() ?? null
-            if (hash) {
-                ;(async () => {
-                    for (let attempt = 0; attempt < 15; attempt++) {
-                        await new Promise(r => setTimeout(r, 2000))
-                        try {
-                            const fileCount: number = await rpcCall(config, 'f.multicall', [hash, '', 'f.size_bytes='])
-                                .then((r: any) => Array.isArray(r) ? r.length : 0)
-                            if (fileCount === 0) continue
-                            for (let i = 0; i < fileCount; i++) {
-                                const priority = i === options.file_index ? 1 : 0
-                                await rpcCall(config, 'f.priority.set', [hash, i, priority])
-                            }
-                            logger.info('rtorrent', `Priorité fichier ${options.file_index} définie pour ${hash.slice(0, 8)}…`)
-                            return
-                        } catch {}
-                    }
-                    logger.warn('rtorrent', `Priorité fichier non appliquée : timeout pour ${hash.slice(0, 8)}…`)
-                })()
+            if (exists) {
+                // Torrent déjà présent → mettre à jour la priorité directement (async OK)
+                logger.info('rtorrent', `Torrent ${hash.slice(0, 8)}… déjà présent, mise à jour priorité fichier ${options.file_index}`)
+                rtApplyFilePriority(config, hash, options.file_index, false).catch(err =>
+                    logger.warn('rtorrent', `Priorité fichier non appliquée : ${err instanceof Error ? err.message : err}`)
+                )
+                return
             }
+
+            // Nouveau torrent → charger sans démarrer pour éviter tout téléchargement avant la sélection
+            const args: any[] = ['', url]
+            if (config.savePath) args.push(`d.directory.set="${config.savePath}"`)
+            if (config.category) args.push(`d.custom1.set=${config.category}`)
+            await rpcCall(config, 'load.normal', args)
+
+            logger.info('rtorrent', `Torrent chargé sans démarrage (sélection fichier ${options.file_index} en attente de métadonnées)`)
+            rtApplyFilePriority(config, hash, options.file_index, true).catch(err =>
+                logger.warn('rtorrent', `Priorité fichier non appliquée : ${err instanceof Error ? err.message : err}`)
+            )
+            return
         }
+
+        // Pas de sélection de fichier → ajout et démarrage normal
+        const args: any[] = ['', url]
+        if (config.savePath) args.push(`d.directory.set="${config.savePath}"`)
+        if (config.category) args.push(`d.custom1.set=${config.category}`)
+        await rpcCall(config, 'load.start', args)
+
         logger.info('rtorrent', `Torrent ajouté avec succès${config.savePath ? ` (dossier: ${config.savePath})` : ''}`)
     },
 
