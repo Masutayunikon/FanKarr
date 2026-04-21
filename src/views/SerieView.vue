@@ -112,6 +112,9 @@ function extractHash(torrent: any): string | null {
   return m ? m[1].toLowerCase() : null
 }
 function isAlreadyQueued(torrent: any): boolean {
+  // Pour un fichier dans un pack (file_index défini), le hash seul ne suffit pas :
+  // le pack peut être actif sans que CE fichier spécifique soit en téléchargement.
+  if (torrent?.file_index != null) return false
   const hash = extractHash(torrent)
   if (!hash) return false
   return activeTorrents.value.some(t => t.hash.toLowerCase() === hash.toLowerCase())

@@ -31,6 +31,7 @@
 
       <!-- Boutons saison -->
       <div class="flex items-center gap-2">
+        <!-- Pas de pack saison : bouton "Saison" qui déclenche les épisodes individuels -->
         <button
             v-if="!season.torrent && hasDownloadable"
             @click="emit('downloadSeason', season)"
@@ -38,10 +39,12 @@
             class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border bg-accent-muted text-accent border-accent/20 hover:bg-accent/20 transition"
         >
           <component :is="downloadingSeason ? loaderIcon : downloadIcon" />
-          {{ downloadingSeason ? 'Envoi…' : 'Tout télécharger' }}
+          {{ downloadingSeason ? 'Envoi…' : 'Saison' }}
         </button>
 
+        <!-- Pack saison disponible -->
         <button
+            v-if="season.torrent"
             class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition"
             :class="canDownloadSeason
             ? 'bg-accent-muted text-accent border-accent/20 hover:bg-accent/20'
@@ -194,6 +197,10 @@ function torrentProgress(hash: string | null | undefined): ActiveTorrent | null 
 function isDownloading(key: string) { return props.downloading.includes(key) }
 function isDownloaded(key: string)  { return props.downloaded.includes(key) }
 function isAlreadyQueued(torrent: any): boolean {
+  // Pour un fichier dans un pack (file_index défini), le hash seul ne suffit pas :
+  // le pack peut être actif sans que CE fichier spécifique soit en téléchargement.
+  // On s'appuie uniquement sur downloading/downloaded pour ces cas.
+  if (torrent?.file_index != null) return false
   const hash = extractHash(torrent)
   if (!hash) return false
   return props.activeTorrents.some(t => t.hash.toLowerCase() === hash.toLowerCase())
