@@ -380,8 +380,10 @@ async function organizeTorrent(hash: string, name: string, savePath: string, ser
         for (const c of candidates) { if (fs.existsSync(c)) { src = c; break } }
 
         if (!src) {
-            error(`Fichier source introuvable : ${filename}`)
-            result.errors.push({ file: filename, error: 'Source introuvable' })
+            // Fichier absent du disque : pas encore téléchargé ou hors sélection (priorité 0).
+            // On skip silencieusement — pas une erreur.
+            debug(`Fichier non disponible (skip) : ${filename}`)
+            result.skipped++
             continue
         }
 

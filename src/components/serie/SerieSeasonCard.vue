@@ -129,7 +129,7 @@
             <button
                 class="w-8 h-8 rounded-lg border flex items-center justify-center transition-colors"
                 :class="epBtnClass(ep)"
-                :disabled="ep.organized || (!ep.torrents?.length && !ep.torrent)"
+                :disabled="epState(ep) !== 'idle'"
                 @click="handleEpBtnClick(ep)"
             >
               <component :is="epStateIcon(ep)" />
@@ -230,6 +230,8 @@ const checkIcon    = h(Check, { size: 12 })
 
 // ── Helpers hash / progress ────────────────────────────────────
 function extractHash(torrent: any): string | null {
+  // Préférer l'infohash direct (présent même si le magnet est absent)
+  if (torrent?.infohash) return torrent.infohash.toLowerCase()
   if (!torrent?.magnet) return null
   const m = torrent.magnet.match(/xt=urn:btih:([a-fA-F0-9]{40})/i)
   return m ? m[1].toLowerCase() : null
@@ -317,15 +319,17 @@ function epProgress(ep: any): ActiveTorrent | null {
 
     if (t.file_index != null) {
       const sessionDl = isDownloaded(key0) || isDownloaded(keyI)
-      // Si le client remonte la progression par fichier, on s'en sert en priorité :
-      // affiche dès que le fichier a commencé (progress > 0) ou téléchargé cette session.
       if (active.files && active.files.length > 0) {
         const file = active.files.find(f => f.index === t.file_index)
-        if (file != null && (sessionDl || file.progress > 0)) return { ...active, progress: file.progress }
+        // Afficher si : téléchargé cette session, fichier en cours (progress > 0), ou torrent terminé
+        if (file != null && (sessionDl || file.progress > 0 || active.state === 'seeding')) {
+          return { ...active, progress: file.progress }
+        }
         if (!sessionDl) continue
-      } else if (!sessionDl) {
-        // Pas de données fichier → afficher uniquement si demandé cette session
-        continue
+      } else {
+        // Pas de données par fichier : session ou torrent terminé
+        if (!sessionDl && active.state !== 'seeding') continue
+        return { ...active, progress: active.state === 'seeding' ? 100 : active.progress }
       }
     }
     return active
@@ -348,11 +352,13 @@ function handleEpBtnClick(ep: any) {
 }
 
 function epState(ep: any): 'idle' | 'loading' | 'done' | 'unavailable' {
-  if (ep.organized || epAnyDownloaded(ep) || isAlreadyQueued(ep.torrent)) return 'done'
+  // Vert uniquement quand importé dans la bibliothèque
+  if (ep.organized) return 'done'
+  // Spinner si : envoyé au client, déjà en cours dans le client, ou fichier en cours/terminé
+  if (epAnyDownloaded(ep) || epAnyDownloading(ep) || isAlreadyQueued(ep.torrent)) return 'loading'
   const prog = epProgress(ep)
-  if (prog && prog.progress < 100) return 'loading'
+  if (prog) return 'loading'
   if (!ep.torrent || !ep.available) return 'unavailable'
-  if (epAnyDownloading(ep)) return 'loading'
   return 'idle'
 }
 function epStateIcon(ep: any) {

@@ -86,7 +86,7 @@ router.get('/series/:id', requireAuth, async (req, res) => {
             for (const season of serieData.seasons ?? []) {
                 for (const t of (season.torrents ?? [])) {
                     if (!seasonTorrentMapBySn[season.season_number]) seasonTorrentMapBySn[season.season_number] = []
-                    seasonTorrentMapBySn[season.season_number].push({ torrent_url: t.torrent_url, magnet: t.magnet, type: 'pack_saison', raw: t.title, manual: t.manual ?? false })
+                    seasonTorrentMapBySn[season.season_number].push({ torrent_url: t.torrent_url, magnet: t.magnet, infohash: t.infohash?.toLowerCase() ?? null, type: 'pack_saison', raw: t.title, manual: t.manual ?? false })
                     const resolved = buildResolvedEpisodes(serieData, t.infohash, season.season_number)
                     for (const ep of resolved) availableEpisodeIds.add(ep.episode_id)
                     const orgFiles = organized[t.infohash?.toLowerCase()] ?? {}
@@ -99,7 +99,7 @@ router.get('/series/:id', requireAuth, async (req, res) => {
                     for (const t of (ep.torrents ?? [])) {
                         if (!episodeTorrentMap[ep.id]) episodeTorrentMap[ep.id] = []
                         const pathEntry = (ep.paths ?? []).find((p: any) => typeof p === 'object' && p.infohash?.toLowerCase() === t.infohash?.toLowerCase())
-                        episodeTorrentMap[ep.id].push({ torrent_url: t.torrent_url, magnet: t.magnet, type: 'episode', raw: t.title, manual: t.manual ?? false, fankai: t.fankai ?? true, file_index: pathEntry?.file_index ?? null, file_path: pathEntry?.path ?? null })
+                        episodeTorrentMap[ep.id].push({ torrent_url: t.torrent_url, magnet: t.magnet, infohash: t.infohash?.toLowerCase() ?? null, type: 'episode', raw: t.title, manual: t.manual ?? false, fankai: t.fankai ?? true, file_index: pathEntry?.file_index ?? null, file_path: pathEntry?.path ?? null })
                         availableEpisodeIds.add(ep.id)
                         const orgFiles = organized[t.infohash?.toLowerCase()] ?? {}
                         const isOrg = orgFiles[String(ep.id)] !== undefined
@@ -124,7 +124,7 @@ router.get('/series/:id', requireAuth, async (req, res) => {
                             if (!pack) continue
                             seenPackHashes.add(hashKey)
                             if (!episodeTorrentMap[ep.id]) episodeTorrentMap[ep.id] = []
-                            episodeTorrentMap[ep.id].push({ torrent_url: pack.torrent_url, magnet: pack.magnet, type: pack.type, raw: pack.raw, manual: false, fankai: pack.fankai, file_index: pathEntry.file_index ?? null, file_path: pathEntry.path ?? null })
+                            episodeTorrentMap[ep.id].push({ torrent_url: pack.torrent_url, magnet: pack.magnet, infohash: hashKey, type: pack.type, raw: pack.raw, manual: false, fankai: pack.fankai, file_index: pathEntry.file_index ?? null, file_path: pathEntry.path ?? null })
                             availableEpisodeIds.add(ep.id)
                         }
                     }
