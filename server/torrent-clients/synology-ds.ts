@@ -2,7 +2,7 @@
  * Synology Download Station Driver
  */
 
-import type { TorrentClientDriver, TorrentInfo } from './index.js'
+import type { TorrentClientDriver, TorrentInfo, DownloadOptions } from './index.js'
 import { logger } from '../logger.js'
 
 // Synology Download Station task status codes
@@ -130,7 +130,8 @@ const DS: TorrentClientDriver = {
             })
     },
 
-    async add(config, url) {
+    async add(config, url, options?: DownloadOptions) {
+        if (options?.file_index != null) logger.warn('synology-ds', 'Sélection de fichier non supportée — téléchargement complet')
         const sid = await dsLogin(config)
 
         const extra: Record<string, string> = { uri: url }

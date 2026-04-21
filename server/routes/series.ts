@@ -88,7 +88,8 @@ router.get('/series/:id', requireAuth, async (req, res) => {
                 }
                 for (const ep of season.episodes ?? []) {
                     for (const t of (ep.torrents ?? [])) {
-                        episodeTorrentMap[ep.id] = { torrent_url: t.torrent_url, magnet: t.magnet, type: 'episode', raw: t.title, manual: t.manual ?? false, fankai: t.fankai ?? true }
+                        const pathEntry = (ep.paths ?? []).find((p: any) => typeof p === 'object' && p.infohash?.toLowerCase() === t.infohash?.toLowerCase())
+                        episodeTorrentMap[ep.id] = { torrent_url: t.torrent_url, magnet: t.magnet, type: 'episode', raw: t.title, manual: t.manual ?? false, fankai: t.fankai ?? true, file_index: pathEntry?.file_index ?? null, file_path: pathEntry?.path ?? null }
                         availableEpisodeIds.add(ep.id)
                         const orgFiles = organized[t.infohash?.toLowerCase()] ?? {}
                         const isOrg = orgFiles[String(ep.id)] !== undefined

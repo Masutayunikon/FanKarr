@@ -15,8 +15,10 @@ const router = Router()
 router.post('/download', requireAuth, async (req, res) => {
     const url = req.body.magnet ?? req.body.torrent_url
     if (!url) { res.status(400).json({ error: 'torrent_url ou magnet requis' }); return }
-    logger.info('api', 'Téléchargement demandé')
-    const results = await dispatchDownload(url)
+    const file_index: number | null = req.body.file_index != null ? Number(req.body.file_index) : null
+    const file_path: string | null = req.body.file_path ?? null
+    logger.info('api', `Téléchargement demandé${file_index != null ? ` (fichier #${file_index})` : ''}`)
+    const results = await dispatchDownload(url, { file_index, file_path })
     res.status(results.every((r: any) => r.ok) ? 200 : 207).json({ results })
 })
 

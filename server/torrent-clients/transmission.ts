@@ -2,7 +2,7 @@
  * Transmission Driver
  */
 
-import type { TorrentClientDriver, TorrentInfo } from './index.js'
+import type { TorrentClientDriver, TorrentInfo, DownloadOptions } from './index.js'
 import { logger } from '../logger.js'
 
 function mapState(status: number): TorrentInfo['state'] {
@@ -122,7 +122,7 @@ const TR: TorrentClientDriver = {
             } satisfies TorrentInfo))
     },
 
-    async add(config, url) {
+    async add(config, url, options?: DownloadOptions) {
         const args: Record<string, unknown> = { filename: url }
 
         if (config.savePath) {
@@ -131,6 +131,10 @@ const TR: TorrentClientDriver = {
 
         if (config.category) {
             args['labels'] = [String(config.category)]
+        }
+
+        if (options?.file_index != null) {
+            args['files-wanted'] = [options.file_index]
         }
 
         await trRequest(config, 'torrent-add', args)

@@ -102,7 +102,7 @@
               class="shrink-0 w-8 h-8 rounded-lg border flex items-center justify-center transition-colors"
               :class="epBtnClass(ep)"
               :disabled="!ep.torrent || ep.organized || isAlreadyQueued(ep.torrent)"
-              @click="ep.torrent && !ep.organized && !isAlreadyQueued(ep.torrent) && emit('download', `ep-${ep.id}`, ep.torrent.torrent_url, ep.torrent.magnet)"
+              @click="ep.torrent && !ep.organized && !isAlreadyQueued(ep.torrent) && emit('download', `ep-${ep.id}`, ep.torrent.torrent_url, ep.torrent.magnet, ep.torrent.file_index ?? null, ep.torrent.file_path ?? null)"
           >
             <component :is="epStateIcon(ep)" />
           </button>
@@ -171,7 +171,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   toggle         : [id: number]
-  download       : [key: string, url: string | null, magnet: string | null]
+  download       : [key: string, url: string | null, magnet: string | null, file_index?: number | null, file_path?: string | null]
   downloadSeason : [season: any]
   renameEpisode  : [ep: any, season: any]
   unimportEpisode: [ep: any, season: any, deleteFile: boolean]
