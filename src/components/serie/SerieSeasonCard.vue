@@ -1,5 +1,5 @@
 <template>
-  <div class="bg-card border border-border rounded-xl overflow-hidden">
+  <div class="bg-card border border-border rounded-xl">
     <!-- Header saison -->
     <div class="flex items-center justify-between px-5 py-3.5 border-b border-border">
       <div class="flex items-center gap-3">
@@ -113,7 +113,7 @@
     </div>
 
     <!-- Épisodes -->
-    <div v-if="!collapsed" class="divide-y divide-border/50">
+    <div v-if="!collapsed" class="divide-y divide-border/50 overflow-hidden rounded-b-xl">
       <div
           v-for="ep in season.episodes"
           :key="ep.id"
