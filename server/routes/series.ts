@@ -181,7 +181,7 @@ router.get('/series/:id', requireAuth, async (req, res) => {
             }
         })
 
-        res.json({ serie, seasons: enrichedSeasons, torrents_integrale: integraleTorrents.map(t => ({ label: 'Intégrale', torrent_url: t.torrent_url, magnet: t.magnet, raw: t.title ?? t.raw })) })
+        res.json({ serie, seasons: enrichedSeasons, torrents_integrale: integraleTorrents.map(t => ({ label: 'Intégrale', torrent_url: t.torrent_url, magnet: t.magnet, infohash: t.infohash?.toLowerCase() ?? null, raw: t.title ?? t.raw })) })
     } catch (err) {
         logger.error('api', `GET /api/series/${id} échoué : ${err instanceof Error ? err.message : err}`)
         res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
