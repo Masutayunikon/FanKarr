@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" width="1200" height="300">
+  <defs>
+    <radialGradient id="iconGlow" cx="477" cy="140" r="100" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#e8a030" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#e8a030" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="bgVignette" cx="50%" cy="50%" r="60%">
+      <stop offset="0%"   stop-color="#111827" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#070a10" stop-opacity="0.6"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="300" fill="#0b0e17" rx="16"/>
+  <rect width="1200" height="300" fill="url(#bgVignette)" rx="16"/>
+  <rect width="1200" height="300" fill="none" stroke="#1c2636" stroke-width="1" rx="16"/>
+
+  <!-- Glow behind kanji box -->
+  <circle cx="477" cy="140" r="100" fill="url(#iconGlow)"/>
+
+  <!-- Kanji icon box -->
+  <rect x="432" y="95" width="90" height="90" rx="14"
+        fill="#0f1520"
+        stroke="#e8a030" stroke-width="1.2" stroke-opacity="0.5"/>
+
+  <!-- Kanji 改 (fankai) -->
+  <text
+    x="477" y="140"
+    font-family="'Yu Mincho', 'MS Mincho', 'Hiragino Mincho Pro', 'Noto Serif CJK JP', 'Source Han Serif', serif"
+    font-size="54"
+    font-weight="700"
+    fill="#e8a030"
+    text-anchor="middle"
+    dominant-baseline="central"
+  >改</text>
+
+  <!-- FanKarr -->
+  <text
+    x="542" y="140"
+    font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, Helvetica, Arial, sans-serif"
+    font-size="68"
+    font-weight="700"
+    fill="#ffffff"
+    dominant-baseline="central"
+    letter-spacing="-1"
+  >FanKarr</text>
+
+  <!-- Thin separator -->
+  <line x1="490" y1="204" x2="710" y2="204"
+        stroke="#e8a030" stroke-width="0.6" stroke-opacity="0.3"/>
+
+  <!-- Subtitle -->
+  <text
+    x="600" y="228"
+    font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, Helvetica, Arial, sans-serif"
+    font-size="14"
+    font-weight="300"
+    font-style="italic"
+    fill="#4a6a84"
+    text-anchor="middle"
+    letter-spacing="2"
+  >par des fans, pour des fans</text>
+
+</svg>
