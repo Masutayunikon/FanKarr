@@ -162,9 +162,9 @@
               >
                 <!-- JP flag -->
                 <svg width="14" height="10" viewBox="0 0 14 10" class="rounded-[1px] shrink-0"><rect width="14" height="10" fill="#fff"/><circle cx="7" cy="5" r="3" fill="#BC002D"/></svg>
-                VOSTFR
                 <!-- FR flag -->
                 <svg width="14" height="10" viewBox="0 0 14 10" class="rounded-[1px] shrink-0"><rect width="14" height="10" fill="#ED2939"/><rect width="9.33" height="10" fill="#fff"/><rect width="4.67" height="10" fill="#002395"/></svg>
+                VOSTFR
               </span>
             </div>
           </div>
