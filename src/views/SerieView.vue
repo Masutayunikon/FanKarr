@@ -59,42 +59,38 @@
 
         <!-- Droite : téléchargements -->
         <div class="flex flex-wrap items-center gap-2">
-          <!-- Tout télécharger -->
-          <button
-              v-if="hasNonIntegraleDownloadables"
-              @click="downloadAll"
-              :disabled="downloadingAll"
-              class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg bg-accent text-white hover:bg-accent-hover transition"
-              :class="downloadingAll ? 'opacity-50 cursor-not-allowed' : ''"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" :class="downloadingAll ? 'animate-spin' : ''">
-              <path v-if="!downloadingAll" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline v-if="!downloadingAll" points="7 10 12 15 17 10"/><line v-if="!downloadingAll" x1="12" y1="15" x2="12" y2="3"/>
-              <path v-else d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.36-2.64M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.36 2.64"/>
-            </svg>
-            {{ downloadingAll ? 'Envoi…' : 'Tout télécharger' }}
-          </button>
+          <!-- Bouton unique "Tout télécharger" — dropdown si plusieurs intégrales -->
+          <div v-if="hasSomethingToDownload" class="relative" @click.stop>
+            <button
+                :disabled="downloadingAll"
+                class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg bg-accent text-white hover:bg-accent-hover transition"
+                :class="downloadingAll ? 'opacity-50 cursor-not-allowed' : ''"
+                @click="data.torrents_integrale.length > 1 ? (downloadMenuOpen = !downloadMenuOpen) : downloadAll()"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" :class="downloadingAll ? 'animate-spin' : ''">
+                <path v-if="!downloadingAll" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline v-if="!downloadingAll" points="7 10 12 15 17 10"/><line v-if="!downloadingAll" x1="12" y1="15" x2="12" y2="3"/>
+                <path v-else d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.36-2.64M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.36 2.64"/>
+              </svg>
+              {{ downloadingAll ? 'Envoi…' : 'Tout télécharger' }}
+              <span v-if="data.torrents_integrale.length > 1" class="opacity-70">▾</span>
+            </button>
 
-          <!-- Boutons intégrale -->
-          <template v-for="(t, i) in data.torrents_integrale" :key="i">
-            <div class="flex flex-col gap-1">
+            <!-- Dropdown choix d'intégrale -->
+            <div v-if="downloadMenuOpen && data.torrents_integrale.length > 1"
+                 class="absolute right-0 bottom-full mb-1 bg-card border border-border rounded-xl p-1 z-20 w-56 shadow-xl flex flex-col gap-0.5">
               <button
-                  :title="t.raw"
-                  class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg transition"
-                  :class="[
-                    'bg-accent text-white hover:bg-accent-hover',
-                    (isAlreadyQueued(t) || isDownloaded(`integrale-${i}`)) ? 'opacity-50 cursor-not-allowed' : ''
-                  ]"
-                  :disabled="isAlreadyQueued(t) || isDownloaded(`integrale-${i}`)"
-                  @click="download(`integrale-${i}`, t.torrent_url, t.magnet)"
+                  v-for="(t, i) in data.torrents_integrale"
+                  :key="i"
+                  :disabled="isAlreadyQueued(t) && !hasUncoveredByIntegrale(i)"
+                  class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-primary hover:bg-hover transition-colors text-left"
+                  :class="(isDownloaded(`integrale-${i}`) && !hasUncoveredByIntegrale(i)) ? 'opacity-40 cursor-not-allowed' : ''"
+                  @click="downloadAll(i); downloadMenuOpen = false"
               >
-                <component :is="integraleIcon(`integrale-${i}`, t)" />
-                {{ isAlreadyQueued(t) ? 'Déjà ajouté' : isDownloaded(`integrale-${i}`) ? 'Envoyé ✓' : t.label }}
+                <svg width="11" height="11" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                {{ integraleLabel(t, i) }}
               </button>
-              <div v-if="isDownloaded(`integrale-${i}`) && integraleProgress(t) && integraleProgress(t)!.progress < 100" class="h-0.5 bg-border rounded-full overflow-hidden">
-                <div class="h-full bg-accent rounded-full transition-all duration-500" :style="{ width: `${integraleProgress(t)!.progress}%` }" />
-              </div>
             </div>
-          </template>
+          </div>
         </div>
       </div>
 
@@ -137,11 +133,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, h } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useSeriesStore } from '@/stores/series'
 import { useToast } from '@/composables/useToast'
-import { Download, Check } from 'lucide-vue-next'
 import ManualImportModal from '@/components/ManualImportModal.vue'
 import SerieHero from '@/components/serie/SerieHero.vue'
 import SerieSeasonCard from '@/components/serie/SerieSeasonCard.vue'
@@ -160,6 +155,7 @@ const mediaPath          = ref('/')
 const nfoSupport         = ref(false)
 const epActionLoading    = ref<Record<number, boolean>>({})
 const unimportMenuOpen   = ref(false)
+const downloadMenuOpen   = ref(false)
 const downloadingAll     = ref(false)
 const downloadingSeason  = ref<Record<number, boolean>>({})
 
@@ -175,14 +171,38 @@ const _recentlyOrganized  = new Set<string>()           // hash:fileIndex ou has
 const data = computed(() => store.currentSerie)
 
 // ── Helpers intégrale ─────────────────────────────────────────
-function integraleIcon(key: string, torrent: any) {
-  if (isDownloaded(key) || isAlreadyQueued(torrent)) return h(Check, { size: 13 })
-  return h(Download, { size: 13 })
+function integraleLabel(t: any, i: number): string {
+  const raw     = t.raw ?? ''
+  const quality = raw.match(/\b(2160p|4K|1080p|720p|480p)\b/i)?.[1]?.toUpperCase()
+  const lang    = raw.match(/\b(VOSTFR|MULTI|VF|VO|FR|EN)\b/i)?.[1]?.toUpperCase()
+  if (quality && lang) return `Intégrale · ${quality} · ${lang}`
+  if (quality)         return `Intégrale · ${quality}`
+  if (lang)            return `Intégrale · ${lang}`
+  return `Intégrale ${i + 1}`
 }
-function integraleProgress(torrent: any) {
-  const hash = extractHash(torrent)
-  if (!hash) return null
-  return activeTorrents.value.find(t => t.hash.toLowerCase() === hash.toLowerCase()) ?? null
+
+// Épisodes couverts par une intégrale donnée (hash commun)
+function integraleEpisodeCoverage(integraleIndex: number): Set<number> {
+  const covered = new Set<number>()
+  const t = data.value?.torrents_integrale[integraleIndex]
+  if (!t || !data.value) return covered
+  const hash = t.infohash?.toLowerCase() ?? extractHash(t)
+  if (!hash) return covered
+  for (const season of data.value.seasons)
+    for (const ep of season.episodes)
+      if (ep.torrents?.some((et: any) => (et.infohash ?? extractHash(et)) === hash))
+        covered.add(ep.id)
+  return covered
+}
+
+// Vrai s'il reste des épisodes/saisons non couverts par cette intégrale
+function hasUncoveredByIntegrale(integraleIndex: number): boolean {
+  if (!data.value) return false
+  const covered = integraleEpisodeCoverage(integraleIndex)
+  for (const season of data.value.seasons)
+    for (const ep of season.episodes)
+      if (ep.available && !ep.organized && !covered.has(ep.id)) return true
+  return false
 }
 
 // ── Helpers d'état ────────────────────────────────────────────
@@ -299,64 +319,74 @@ async function download(key: string, torrent_url: string | null, magnet: string 
   else toast(result.error ?? 'Erreur inconnue', 'error')
 }
 
-function collectDownloadables() {
+type DlItem = { key: string; torrent_url: string | null; magnet: string | null; file_index?: number | null; file_path?: string | null }
+
+// Construit la liste de tout ce qui doit être téléchargé.
+// integraleIndex : si défini, utilise uniquement cette intégrale (+ épisodes non couverts).
+//                 si omis, utilise toutes les intégrales disponibles.
+function collectDownloadables(integraleIndex?: number): DlItem[] {
   if (!data.value) return []
-  const result: { key: string; torrent_url: string | null; magnet: string | null; file_index?: number | null; file_path?: string | null }[] = []
+  const result: DlItem[] = []
   const covered = new Set<number>()
-  data.value.torrents_integrale.forEach((t: any, i: number) => {
-    if (!isAlreadyQueued(t) && !isDownloaded(`integrale-${i}`)) {
+
+  // ── 1. Intégrale(s) ───────────────────────────────────────────
+  const integrales: { t: any; i: number }[] = integraleIndex !== undefined
+    ? [{ t: data.value.torrents_integrale[integraleIndex], i: integraleIndex }]
+    : data.value.torrents_integrale.map((t: any, i: number) => ({ t, i }))
+
+  for (const { t, i } of integrales) {
+    if (!t) continue
+    if (!isAlreadyQueued(t) && !isDownloaded(`integrale-${i}`))
       result.push({ key: `integrale-${i}`, torrent_url: t.torrent_url, magnet: t.magnet })
-      for (const season of data.value!.seasons) for (const ep of season.episodes) covered.add(ep.id)
-    }
-  })
+    // Marquer les épisodes couverts par CETTE intégrale uniquement
+    const hash = t.infohash?.toLowerCase() ?? extractHash(t)
+    if (hash)
+      for (const season of data.value!.seasons)
+        for (const ep of season.episodes)
+          if (ep.torrents?.some((et: any) => (et.infohash ?? extractHash(et)) === hash))
+            covered.add(ep.id)
+  }
+
+  // ── 2. Packs saison non couverts ──────────────────────────────
   for (const season of data.value.seasons) {
-    if (!season.torrents || season.torrents.length === 0 || season.organized_state === 'complete') continue
+    if (!season.torrents?.length || season.organized_state === 'complete') continue
+    // Skiper si tous les épisodes disponibles sont déjà couverts par l'intégrale
+    const hasUncovered = season.episodes.some((ep: any) => ep.available && !ep.organized && !covered.has(ep.id))
+    if (!hasUncovered) continue
     let addedAny = false
     season.torrents.forEach((t: any, i: number) => {
       const key = i === 0 ? `season-${season.id}` : `season-${season.id}-${i}`
-      if (!isAlreadyQueued(t) && !isDownloaded(key)) {
-        result.push({ key, torrent_url: t.torrent_url, magnet: t.magnet })
-        addedAny = true
-      }
+      if (!isAlreadyQueued(t) && !isDownloaded(key)) { result.push({ key, torrent_url: t.torrent_url, magnet: t.magnet }); addedAny = true }
     })
     if (addedAny) for (const ep of season.episodes) covered.add(ep.id)
   }
-  for (const season of data.value.seasons) {
+
+  // ── 3. Épisodes individuels non couverts ─────────────────────
+  for (const season of data.value.seasons)
     for (const ep of season.episodes) {
       if (!ep.torrent || !ep.available || ep.organized || isAlreadyQueued(ep.torrent) || isDownloaded(`ep-${ep.id}`) || covered.has(ep.id)) continue
       result.push({ key: `ep-${ep.id}`, torrent_url: ep.torrent.torrent_url, magnet: ep.torrent.magnet, file_index: ep.torrent.file_index ?? null, file_path: ep.torrent.file_path ?? null })
     }
-  }
+
   return result
 }
 
-// S'affiche uniquement s'il y a des torrents saison/épisode à lancer
-// (les intégrales ont leurs propres boutons dédiés dans la zone d'actions)
-const hasNonIntegraleDownloadables = computed(() => {
+// Le bouton "Tout télécharger" s'affiche s'il y a quoi que ce soit à lancer
+const hasSomethingToDownload = computed(() => {
   if (!data.value) return false
-  const covered = new Set<number>()
-  data.value.torrents_integrale.forEach((t: any, i: number) => {
-    if (!isAlreadyQueued(t) && !isDownloaded(`integrale-${i}`))
-      for (const season of data.value!.seasons) for (const ep of season.episodes) covered.add(ep.id)
-  })
+  if (data.value.torrents_integrale.some((t: any, i: number) => !isAlreadyQueued(t) && !isDownloaded(`integrale-${i}`))) return true
   for (const season of data.value.seasons) {
-    if (season.torrents && season.torrents.length > 0 && season.organized_state !== 'complete') {
-      const hasAvailablePack = season.torrents.some((t: any, i: number) => {
-        const key = i === 0 ? `season-${season.id}` : `season-${season.id}-${i}`
-        return !isAlreadyQueued(t) && !isDownloaded(key)
-      })
-      if (hasAvailablePack) return true
-    }
-    for (const ep of season.episodes) {
-      if (ep.torrent && ep.available && !ep.organized && !isAlreadyQueued(ep.torrent) && !isDownloaded(`ep-${ep.id}`) && !covered.has(ep.id)) return true
-    }
+    if (season.torrents?.length && season.organized_state !== 'complete' &&
+        season.torrents.some((t: any, i: number) => !isAlreadyQueued(t) && !isDownloaded(i === 0 ? `season-${season.id}` : `season-${season.id}-${i}`))) return true
+    for (const ep of season.episodes)
+      if (ep.torrent && ep.available && !ep.organized && !isAlreadyQueued(ep.torrent) && !isDownloaded(`ep-${ep.id}`)) return true
   }
   return false
 })
 
-async function downloadAll() {
+async function downloadAll(integraleIndex?: number) {
   downloadingAll.value = true
-  const torrents = collectDownloadables()
+  const torrents = collectDownloadables(integraleIndex)
   let sent = 0
   for (const t of torrents) {
     try { const r = await store.download(t.torrent_url, t.magnet, t.file_index, t.file_path); if (r.success) { addDownloaded(t.key); sent++ } } catch {}
@@ -435,7 +465,7 @@ async function unimportEpisode(ep: any, _season: any, deleteFile: boolean) {
   finally { epActionLoading.value[ep.id] = false }
 }
 
-const closeMenus = () => { unimportMenuOpen.value = false }
+const closeMenus = () => { unimportMenuOpen.value = false; downloadMenuOpen.value = false }
 
 onMounted(() => {
   load(); fetchSettings(); fetchOrganized(); fetchActiveDownloads()

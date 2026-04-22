@@ -196,7 +196,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, h } from 'vue'
+import { ref, computed, h, onMounted, onUnmounted } from 'vue'
 import { ChevronUp, Download, Loader, Check, X } from 'lucide-vue-next'
 
 interface ActiveTorrent { hash: string; progress: number; state: string; files?: { index: number; progress: number }[] }
@@ -417,5 +417,14 @@ function formatDuration(seconds: number): string {
   return `${m} min`
 }
 
-defineExpose({ closeEpMenu: () => { epMenuOpen.value = null; epOptionsOpen.value = null; seasonMenuOpen.value = false } })
+function closeAllMenus() {
+  epMenuOpen.value    = null
+  epOptionsOpen.value = null
+  seasonMenuOpen.value = false
+}
+
+onMounted(()   => document.addEventListener('click', closeAllMenus))
+onUnmounted(() => document.removeEventListener('click', closeAllMenus))
+
+defineExpose({ closeEpMenu: closeAllMenus })
 </script>
