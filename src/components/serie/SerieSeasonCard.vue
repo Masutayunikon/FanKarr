@@ -31,16 +31,38 @@
 
       <!-- Boutons saison -->
       <div class="flex items-center gap-2">
-        <!-- Pas de pack saison : bouton "Saison" qui déclenche les épisodes individuels -->
-        <button
-            v-if="season.torrents.length === 0 && hasDownloadable"
-            @click="emit('downloadSeason', season)"
-            :disabled="downloadingSeason"
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border bg-accent-muted text-accent border-accent/20 hover:bg-accent/20 transition"
-        >
-          <component :is="downloadingSeason ? loaderIcon : downloadIcon" />
-          {{ downloadingSeason ? 'Envoi…' : 'Saison' }}
-        </button>
+        <!-- Pas de pack saison : bouton "Saison" (dropdown si plusieurs packs via intégrales) -->
+        <template v-if="season.torrents.length === 0 && hasDownloadable">
+          <div v-if="uniquePackOptions.length > 1" class="relative" @click.stop>
+            <button
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition bg-accent-muted text-accent border-accent/20 hover:bg-accent/20"
+                @click="seasonMenuOpen = !seasonMenuOpen"
+            >
+              <component :is="downloadIcon" />
+              Saison ▾
+            </button>
+            <div v-if="seasonMenuOpen" class="absolute right-0 bottom-full mb-1 bg-card border border-border rounded-xl p-1 z-20 w-56 shadow-xl flex flex-col gap-0.5">
+              <button
+                  v-for="opt in uniquePackOptions"
+                  :key="opt.infohash"
+                  class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-primary hover:bg-hover transition-colors text-left"
+                  @click="emit('downloadSeason', season, opt.infohash); seasonMenuOpen = false"
+              >
+                <component :is="downloadIcon" />
+                {{ opt.label }}
+              </button>
+            </div>
+          </div>
+          <button
+              v-else
+              @click="emit('downloadSeason', season)"
+              :disabled="downloadingSeason"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border bg-accent-muted text-accent border-accent/20 hover:bg-accent/20 transition"
+          >
+            <component :is="downloadingSeason ? loaderIcon : downloadIcon" />
+            {{ downloadingSeason ? 'Envoi…' : 'Saison' }}
+          </button>
+        </template>
 
         <!-- Pack saison unique -->
         <button
@@ -216,7 +238,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   toggle         : [id: number]
   download       : [key: string, url: string | null, magnet: string | null, file_index?: number | null, file_path?: string | null]
-  downloadSeason : [season: any]
+  downloadSeason : [season: any, packHash?: string]
   renameEpisode  : [ep: any, season: any]
   unimportEpisode: [ep: any, season: any, deleteFile: boolean]
 }>()
@@ -396,14 +418,33 @@ function epNeedsRename(ep: any): boolean {
 }
 
 function torrentLabel(torrent: any, index: number): string {
-  const raw = torrent.raw ?? ''
+  if (torrent.torrent_name) return torrent.torrent_name
+  const raw     = torrent.raw ?? ''
   const quality = raw.match(/\b(2160p|4K|1080p|720p|480p)\b/i)?.[1]?.toUpperCase()
-  const lang = raw.match(/\b(VOSTFR|MULTI|VF|VO|FR|EN)\b/i)?.[1]?.toUpperCase()
+  const lang    = raw.match(/\b(VOSTFR|MULTI|VF|VO|FR|EN)\b/i)?.[1]?.toUpperCase()
   if (quality && lang) return `${quality} · ${lang}`
   if (quality) return quality
   if (lang) return lang
   return raw.length > 40 ? raw.slice(0, 40) + '…' : (raw || `Option ${index + 1}`)
 }
+
+// Packs parents distincts couvrant cette saison (quand pas de pack saison explicite)
+// Permet le dropdown "Saison ▾" quand une saison est couverte par plusieurs intégrales
+const uniquePackOptions = computed(() => {
+  if (props.season.torrents?.length) return []
+  const seen = new Set<string>()
+  const opts: { infohash: string; label: string }[] = []
+  for (const ep of props.season.episodes) {
+    if (!ep.available) continue
+    for (const t of (ep.torrents ?? [])) {
+      const hash = t.infohash ?? extractHash(t)
+      if (!hash || seen.has(hash)) continue
+      seen.add(hash)
+      opts.push({ infohash: hash, label: torrentLabel(t, opts.length) })
+    }
+  }
+  return opts.length > 1 ? opts : []
+})
 
 function formatDate(d: string): string {
   if (!d) return ''

@@ -110,7 +110,7 @@
             :nfo-support="nfoSupport"
             @toggle="toggleSeason"
             @download="(key, url, magnet, fi, fp) => download(key, url, magnet, fi, fp)"
-            @download-season="downloadSeason"
+            @download-season="(s, h) => downloadSeason(s, h)"
             @rename-episode="(ep, s) => renameEpisode(ep, s)"
             @unimport-episode="(ep, s, del) => unimportEpisode(ep, s, del)"
         />
@@ -172,6 +172,7 @@ const data = computed(() => store.currentSerie)
 
 // ── Helpers intégrale ─────────────────────────────────────────
 function integraleLabel(t: any, i: number): string {
+  if (t.torrent_name) return t.torrent_name
   const raw     = t.raw ?? ''
   const quality = raw.match(/\b(2160p|4K|1080p|720p|480p)\b/i)?.[1]?.toUpperCase()
   const lang    = raw.match(/\b(VOSTFR|MULTI|VF|VO|FR|EN)\b/i)?.[1]?.toUpperCase()
@@ -396,7 +397,7 @@ async function downloadAll(integraleIndex?: number) {
   else toast('Aucun nouveau torrent à télécharger', 'success')
 }
 
-async function downloadSeason(season: Season) {
+async function downloadSeason(season: Season, packHash?: string) {
   downloadingSeason.value[season.id] = true
   const torrents: { key: string; torrent_url: string | null; magnet: string | null; file_index?: number | null; file_path?: string | null }[] = []
   const seasonAny = season as any
@@ -409,8 +410,12 @@ async function downloadSeason(season: Season) {
     })
   } else {
     for (const ep of seasonAny.episodes ?? []) {
-      if (!ep.torrent || !ep.available || ep.organized || isAlreadyQueued(ep.torrent) || isDownloaded(`ep-${ep.id}`)) continue
-      torrents.push({ key: `ep-${ep.id}`, torrent_url: ep.torrent.torrent_url, magnet: ep.torrent.magnet, file_index: ep.torrent.file_index ?? null, file_path: ep.torrent.file_path ?? null })
+      // Si un hash de pack est précisé (choix depuis dropdown), utiliser le torrent correspondant
+      const epTorrent = packHash
+        ? (ep.torrents?.find((t: any) => (t.infohash ?? extractHash(t)) === packHash) ?? ep.torrent)
+        : ep.torrent
+      if (!epTorrent || !ep.available || ep.organized || isAlreadyQueued(epTorrent) || isDownloaded(`ep-${ep.id}`)) continue
+      torrents.push({ key: `ep-${ep.id}`, torrent_url: epTorrent.torrent_url, magnet: epTorrent.magnet, file_index: epTorrent.file_index ?? null, file_path: epTorrent.file_path ?? null })
     }
   }
   let sent = 0
