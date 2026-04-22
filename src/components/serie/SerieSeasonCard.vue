@@ -143,6 +143,21 @@
             <div class="flex items-center gap-2 mt-0.5">
               <span v-if="ep.aired" class="text-xs text-muted">{{ formatDate(ep.aired) }}</span>
               <span v-if="ep.duration" class="text-xs text-muted">{{ formatDuration(ep.duration) }}</span>
+              <!-- Badge langue -->
+              <span
+                  v-if="epLang(ep) === 'MULTI'"
+                  title="Audio japonais + français"
+                  class="shrink-0 inline-flex items-center gap-1 text-[11px] leading-none px-1.5 py-0.5 rounded border bg-blue-500/10 border-blue-500/20 select-none"
+              >
+                <span>🇯🇵</span><span class="text-blue-400 font-medium text-[9px]">+</span><span>🇫🇷</span>
+              </span>
+              <span
+                  v-else-if="epLang(ep) === 'VOSTFR'"
+                  title="Audio japonais · Sous-titres français"
+                  class="shrink-0 inline-flex items-center gap-1 text-[11px] leading-none px-1.5 py-0.5 rounded border bg-amber-500/10 border-amber-500/20 select-none"
+              >
+                <span>🇯🇵</span><span class="text-amber-400 font-medium text-[9px]">ST</span><span>🇫🇷</span>
+              </span>
             </div>
           </div>
 
@@ -415,6 +430,22 @@ function epNeedsRename(ep: any): boolean {
   if (!entry) return false
   const expected = epExpectedName(ep)
   return !!expected && expected !== entry.dest_filename
+}
+
+// ── Détection langue ───────────────────────────────────────────
+function epLang(ep: any): 'MULTI' | 'VOSTFR' | null {
+  const sources: string[] = [
+    ep.formatted_name ?? '',
+    ep.torrent?.torrent_name ?? '',
+    ep.torrent?.raw ?? '',
+    ...((ep.torrents ?? []) as any[]).map((t: any) => `${t.torrent_name ?? ''} ${t.raw ?? ''}`),
+  ]
+  for (const s of sources) {
+    if (!s) continue
+    if (/\bMULTI\b/i.test(s)) return 'MULTI'
+    if (/\bVOSTFR\b/i.test(s)) return 'VOSTFR'
+  }
+  return null
 }
 
 function torrentLabel(torrent: any, index: number): string {
