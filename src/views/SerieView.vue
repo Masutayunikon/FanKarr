@@ -87,7 +87,7 @@
                   @click="downloadAll(i); downloadMenuOpen = false"
               >
                 <svg width="11" height="11" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                {{ integraleLabel(t, i) }}
+                {{ integraleGroupLabels()[i] }}
               </button>
             </div>
           </div>
@@ -171,15 +171,18 @@ const _recentlyOrganized  = new Set<string>()           // hash:fileIndex ou has
 const data = computed(() => store.currentSerie)
 
 // ── Helpers intégrale ─────────────────────────────────────────
-function integraleLabel(t: any, i: number): string {
-  if (t.torrent_name) return t.torrent_name
-  const raw     = t.raw ?? ''
-  const quality = raw.match(/\b(2160p|4K|1080p|720p|480p)\b/i)?.[1]?.toUpperCase()
-  const lang    = raw.match(/\b(VOSTFR|MULTI|VF|VO|FR|EN)\b/i)?.[1]?.toUpperCase()
-  if (quality && lang) return `Intégrale · ${quality} · ${lang}`
-  if (quality)         return `Intégrale · ${quality}`
-  if (lang)            return `Intégrale · ${lang}`
-  return `Intégrale ${i + 1}`
+function integraleGroupLabels(): string[] {
+  const torrents = data.value?.torrents_integrale ?? []
+  const names = torrents.map((t: any) => t.torrent_name ?? null)
+  const allPresent = names.every((n: any) => n !== null && String(n).trim() !== '')
+  const allUnique  = allPresent && new Set(names).size === names.length
+  if (allUnique) return names as string[]
+  // Fallback : titre Nyaa brut
+  return torrents.map((t: any, i: number) => {
+    const raw = t.raw ?? ''
+    if (raw) return raw.length > 65 ? raw.slice(0, 65) + '…' : raw
+    return `Intégrale ${i + 1}`
+  })
 }
 
 // Épisodes couverts par une intégrale donnée (hash commun)
