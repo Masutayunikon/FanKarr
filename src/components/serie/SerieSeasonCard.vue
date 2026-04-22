@@ -97,7 +97,7 @@
                 @click="!isDownloaded(`season-${season.id}-${i}`) && !isAlreadyQueued(t) && (emit('download', `season-${season.id}-${i}`, t.torrent_url, t.magnet), seasonMenuOpen = false)"
             >
               <component :is="(isDownloaded(`season-${season.id}-${i}`) || isAlreadyQueued(t)) ? checkIcon : downloadIcon" />
-              {{ torrentLabel(t, i) }}
+              {{ groupLabels(season.torrents)[i] }}
             </button>
           </div>
         </div>
@@ -191,7 +191,7 @@
                   @click="!isDownloaded(`ep-${ep.id}-${i}`) && !isAlreadyQueued(t) && (emit('download', `ep-${ep.id}-${i}`, t.torrent_url, t.magnet, t.file_index ?? null, t.file_path ?? null), epOptionsOpen = null)"
               >
                 <component :is="(isDownloaded(`ep-${ep.id}-${i}`) || isAlreadyQueued(t)) ? checkIcon : downloadIcon" />
-                {{ torrentLabel(t, i) }}
+                {{ groupLabels(ep.torrents)[i] }}
               </button>
             </div>
           </div>
@@ -456,15 +456,21 @@ function epLang(ep: any): 'MULTI' | 'VOSTFR' | null {
   return null
 }
 
-function torrentLabel(torrent: any, index: number): string {
-  if (torrent.torrent_name) return torrent.torrent_name
-  const raw     = torrent.raw ?? ''
-  const quality = raw.match(/\b(2160p|4K|1080p|720p|480p)\b/i)?.[1]?.toUpperCase()
-  const lang    = raw.match(/\b(VOSTFR|MULTI|VF|VO|FR|EN)\b/i)?.[1]?.toUpperCase()
-  if (quality && lang) return `${quality} · ${lang}`
-  if (quality) return quality
-  if (lang) return lang
-  return raw.length > 40 ? raw.slice(0, 40) + '…' : (raw || `Option ${index + 1}`)
+// ── Labels de groupe ───────────────────────────────────────────
+// Si tous les torrent_name sont présents ET distincts → on les utilise.
+// Sinon → titre Nyaa brut (raw), plus informatif quand les noms se ressemblent.
+function labelFromRaw(raw: string, index: number): string {
+  if (!raw) return `Option ${index + 1}`
+  return raw.length > 65 ? raw.slice(0, 65) + '…' : raw
+}
+
+function groupLabels(torrents: any[]): string[] {
+  const names = torrents.map((t: any) => t.torrent_name ?? null)
+  const allPresent = names.every(n => n !== null && String(n).trim() !== '')
+  const allUnique  = allPresent && new Set(names).size === names.length
+  if (allUnique) return names as string[]
+  // Fallback : titre Nyaa brut
+  return torrents.map((t: any, i: number) => labelFromRaw(t.raw ?? '', i))
 }
 
 // Packs parents distincts couvrant cette saison (quand pas de pack saison explicite)
@@ -472,17 +478,19 @@ function torrentLabel(torrent: any, index: number): string {
 const uniquePackOptions = computed(() => {
   if (props.season.torrents?.length) return []
   const seen = new Set<string>()
-  const opts: { infohash: string; label: string }[] = []
+  const raw: { infohash: string; torrent: any }[] = []
   for (const ep of props.season.episodes) {
     if (!ep.available) continue
     for (const t of (ep.torrents ?? [])) {
       const hash = t.infohash ?? extractHash(t)
       if (!hash || seen.has(hash)) continue
       seen.add(hash)
-      opts.push({ infohash: hash, label: torrentLabel(t, opts.length) })
+      raw.push({ infohash: hash, torrent: t })
     }
   }
-  return opts.length > 1 ? opts : []
+  if (raw.length <= 1) return []
+  const labels = groupLabels(raw.map(r => r.torrent))
+  return raw.map((r, i) => ({ infohash: r.infohash, label: labels[i] }))
 })
 
 function formatDate(d: string): string {
