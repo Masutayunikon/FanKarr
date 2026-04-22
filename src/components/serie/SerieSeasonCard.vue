@@ -113,11 +113,11 @@
     </div>
 
     <!-- Épisodes -->
-    <div v-if="!collapsed" class="divide-y divide-border/50 overflow-hidden rounded-b-xl">
+    <div v-if="!collapsed" class="divide-y divide-border/50">
       <div
           v-for="ep in season.episodes"
           :key="ep.id"
-          class="px-5 py-3 hover:bg-hover/50 transition-colors"
+          class="px-5 py-3 hover:bg-hover/50 transition-colors last:rounded-b-xl"
           :class="{ 'opacity-40': !ep.available && !ep.organized }"
       >
         <div class="flex items-center gap-3">
