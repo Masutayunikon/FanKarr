@@ -149,14 +149,22 @@
                   title="Audio japonais + français"
                   class="shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold leading-none px-1.5 py-0.5 rounded border bg-blue-500/10 border-blue-500/20 text-blue-300 select-none tracking-wide"
               >
-                <span class="text-[12px] leading-none">🇯🇵🇫🇷</span> MULTI
+                <!-- JP flag -->
+                <svg width="14" height="10" viewBox="0 0 14 10" class="rounded-[1px] shrink-0"><rect width="14" height="10" fill="#fff"/><circle cx="7" cy="5" r="3" fill="#BC002D"/></svg>
+                <!-- FR flag -->
+                <svg width="14" height="10" viewBox="0 0 14 10" class="rounded-[1px] shrink-0"><rect width="14" height="10" fill="#ED2939"/><rect width="9.33" height="10" fill="#fff"/><rect width="4.67" height="10" fill="#002395"/></svg>
+                MULTI
               </span>
               <span
                   v-else-if="epLang(ep) === 'VOSTFR'"
                   title="Audio japonais · Sous-titres français"
                   class="shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold leading-none px-1.5 py-0.5 rounded border bg-amber-500/10 border-amber-500/20 text-amber-300 select-none tracking-wide"
               >
-                <span class="text-[12px] leading-none">🇯🇵</span> VOSTFR <span class="text-[12px] leading-none">🇫🇷</span>
+                <!-- JP flag -->
+                <svg width="14" height="10" viewBox="0 0 14 10" class="rounded-[1px] shrink-0"><rect width="14" height="10" fill="#fff"/><circle cx="7" cy="5" r="3" fill="#BC002D"/></svg>
+                VOSTFR
+                <!-- FR flag -->
+                <svg width="14" height="10" viewBox="0 0 14 10" class="rounded-[1px] shrink-0"><rect width="14" height="10" fill="#ED2939"/><rect width="9.33" height="10" fill="#fff"/><rect width="4.67" height="10" fill="#002395"/></svg>
               </span>
             </div>
           </div>
