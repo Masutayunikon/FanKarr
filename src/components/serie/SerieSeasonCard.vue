@@ -147,16 +147,16 @@
               <span
                   v-if="epLang(ep) === 'MULTI'"
                   title="Audio japonais + français"
-                  class="shrink-0 inline-flex items-center gap-1 text-[11px] leading-none px-1.5 py-0.5 rounded border bg-blue-500/10 border-blue-500/20 select-none"
+                  class="shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold leading-none px-1.5 py-0.5 rounded border bg-blue-500/10 border-blue-500/20 text-blue-300 select-none tracking-wide"
               >
-                <span>🇯🇵</span><span class="text-blue-400 font-medium text-[9px]">+</span><span>🇫🇷</span>
+                <span class="text-[12px] leading-none">🇯🇵🇫🇷</span> MULTI
               </span>
               <span
                   v-else-if="epLang(ep) === 'VOSTFR'"
                   title="Audio japonais · Sous-titres français"
-                  class="shrink-0 inline-flex items-center gap-1 text-[11px] leading-none px-1.5 py-0.5 rounded border bg-amber-500/10 border-amber-500/20 select-none"
+                  class="shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold leading-none px-1.5 py-0.5 rounded border bg-amber-500/10 border-amber-500/20 text-amber-300 select-none tracking-wide"
               >
-                <span>🇯🇵</span><span class="text-amber-400 font-medium text-[9px]">ST</span><span>🇫🇷</span>
+                <span class="text-[12px] leading-none">🇯🇵</span> VOSTFR <span class="text-[12px] leading-none">🇫🇷</span>
               </span>
             </div>
           </div>
