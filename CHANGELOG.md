@@ -1,5 +1,45 @@
 # Changelog
 
+## [3.10.0](https://github.com/Masutayunikon/FanKarr/compare/v3.9.2...v3.10.0) (2026-04-22)
+
+
+### Features
+
+* ajout d'une variable d'environment pour augmenter la durée du token ou le desactiver avec "never" ou 0 ([dc5387c](https://github.com/Masutayunikon/FanKarr/commit/dc5387c69a308bdf99f0b77f9769462ffda13db5))
+* ajout des telechargments par episodes / saisons ([d6e3c99](https://github.com/Masutayunikon/FanKarr/commit/d6e3c9963c9db5fedc579377cbad485f25ab0537))
+* ajout du .env dans les dossiers du binaires pour pouvoir changer leur valeurs ([dc5387c](https://github.com/Masutayunikon/FanKarr/commit/dc5387c69a308bdf99f0b77f9769462ffda13db5))
+* ajout du langage ([94e7b66](https://github.com/Masutayunikon/FanKarr/commit/94e7b668e13c8406768a84e7a821e2fd7fdc96fc))
+* update readme ([01e70ed](https://github.com/Masutayunikon/FanKarr/commit/01e70ed9c00f8c614a6a9947466e17a5128f52db))
+* utilisation des bar de telechargement par fichier dans le torrent plutot que celui du torrent ([d03f0ac](https://github.com/Masutayunikon/FanKarr/commit/d03f0ac397acd117b75a92b6763441a667f4e6cb))
+
+
+### Bug Fixes
+
+* affichage de la bar de progression et confirmation sur le bouton pour les episodes en doublons ([23be797](https://github.com/Masutayunikon/FanKarr/commit/23be797f97b1e49723140cdd34d0d217a0e819a3))
+* affichage de la bar de progression et confirmation sur le bouton pour les episodes en doublons et dropdown ([95d4b01](https://github.com/Masutayunikon/FanKarr/commit/95d4b015eeb0298f77cfe5828f7a14d15fb77dd5))
+* ajout des boutons pour les episodes sans torrent ([94048e4](https://github.com/Masutayunikon/FanKarr/commit/94048e458248a43e50c566e01d985105ee850ec3))
+* bouton global de serie ([93a3505](https://github.com/Masutayunikon/FanKarr/commit/93a35055467cfab2503f6b0dfefcce8cd3f53559))
+* bouton tous telecharger a la place de integral, multi torrents sur le bouton saisons et tous telecharger ([02dd4c8](https://github.com/Masutayunikon/FanKarr/commit/02dd4c866ad4c396b324c5185e2b9458d8864b58))
+* changer les badge de language pour un truc plus explicite ([94a1ed1](https://github.com/Masutayunikon/FanKarr/commit/94a1ed1fe3cb9e49f90c8fbc200aaac969895dff))
+* coherence des badges ([5d84737](https://github.com/Masutayunikon/FanKarr/commit/5d84737a28c2d0c49e8acce6ccd7a7bf915e1309))
+* dropdown overflow ([5baf707](https://github.com/Masutayunikon/FanKarr/commit/5baf7072207eca1f62a42c13602c2fdc85d6e54f))
+* dropdown overflow ([f820ea0](https://github.com/Masutayunikon/FanKarr/commit/f820ea0cf252cbc11c527f1393e332b9acd274fe))
+* fallback de noms si les noms de torrents se ressemble il fallback sur les noms dans nyaa ([59fb769](https://github.com/Masutayunikon/FanKarr/commit/59fb7693a4726fc31223373559404f63b6963340))
+* improve container detection to support Podman and other runtimes ([7d6c86f](https://github.com/Masutayunikon/FanKarr/commit/7d6c86f888b4b7c5696a5de21bce12d1864035a2))
+* le dropdown apparait sur le bouton de telechargement et pas les 3 petit points pour les multiples ([eaf733f](https://github.com/Masutayunikon/FanKarr/commit/eaf733f2e5caccf10a2f30a0e10db00831d6d635))
+* les fichiers non selectionner sur un torrent ne produise plus d'erreurs d'import ([2a08d7d](https://github.com/Masutayunikon/FanKarr/commit/2a08d7dbf5a8a91323801e9fa3722dfb02a7cd5e))
+* les fichiers non selectionner sur un torrent ne sont plus en "attente d'import" sur l'affichage de la serie ([7799f7d](https://github.com/Masutayunikon/FanKarr/commit/7799f7de86d0a207c960f72fa8e8db84de86d2a8))
+* les torrents sont stopé lors de la selection de fichier pour eviter qu'il commence le telechargement des autres fichiers avant de set les indexs ([45d340d](https://github.com/Masutayunikon/FanKarr/commit/45d340d01ab8507423b187447d0f0e36a75d21d4))
+* les torrents sont stopé lors de la selection de fichier pour eviter qu'il commence le telechargement des autres fichiers avant de set les indexs ([cdfb330](https://github.com/Masutayunikon/FanKarr/commit/cdfb330dd6ac20d2bfe02d196a8d94f0996c763c))
+* n'affiche plus tous les épisodes en train de se telecharger si seulement un fichier est selectionner ([c4bfa2b](https://github.com/Masutayunikon/FanKarr/commit/c4bfa2ba87167bf20c066b3f682bd70aa9b18467))
+* n'affiche plus tous les épisodes en train de se telecharger si seulement un fichier est selectionner ([1e4f735](https://github.com/Masutayunikon/FanKarr/commit/1e4f73522dd216d80c57839bd35c15dcc906bf90))
+* ne retire pas les fichiers quand on en ajoute sur le torrent ([5c1ae3e](https://github.com/Masutayunikon/FanKarr/commit/5c1ae3e7beb59dcc2769bddb0fa63266e10bcbab))
+* prise en charge de multiple torrent sur les telechargement d'episodes ([dc5387c](https://github.com/Masutayunikon/FanKarr/commit/dc5387c69a308bdf99f0b77f9769462ffda13db5))
+* qbit utilisation de /start au lieu de /resume pour la v5 ([98a3d81](https://github.com/Masutayunikon/FanKarr/commit/98a3d81c4882ed4e8db1047b2b8c5edddbe037b2))
+* utilisation de svg pour les drapeau ([c11287b](https://github.com/Masutayunikon/FanKarr/commit/c11287bd3fd88badc91d35b5ec825b09ff5237a1))
+* utilisation des noms de dossier du torrent pour l'affichage plutot que le nom sur nyaa (notament pour gto kai qui a plusieurs integral et qui est plus explicite qque le nom nyaa) ([4069035](https://github.com/Masutayunikon/FanKarr/commit/4069035956472bf179a3a9bb8bd317d6cce8dc13))
+* utilisation du fichier torrent avec le magnet pour les bug de metadonnées ([dc5387c](https://github.com/Masutayunikon/FanKarr/commit/dc5387c69a308bdf99f0b77f9769462ffda13db5))
+
 ## [3.9.2](https://github.com/Masutayunikon/FanKarr/compare/v3.9.1...v3.9.2) (2026-04-16)
 
 
