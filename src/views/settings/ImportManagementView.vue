@@ -23,6 +23,14 @@
           Actualiser
         </button>
         <button
+            @click="purgeNfo"
+            :disabled="purgingNfo"
+            class="btn-secondary text-red-400 hover:text-red-300"
+            title="Supprime tous les .nfo, .png, .jpg, .tbn dans les dossiers séries"
+        >
+          {{ purgingNfo ? 'Suppression…' : 'Purger NFO / images' }}
+        </button>
+        <button
             v-if="totalNeedsRename > 0"
             @click="renameAll()"
             :disabled="renamingAll"
@@ -129,7 +137,7 @@
               <span v-else-if="!ep.needs_rename" class="text-[10px] text-green-400">✓</span>
               <button
                   v-else
-                  @click="renameSingle(ep)"
+                  @click="renameSingle(ep, serie)"
                   :disabled="renamingEp[ep.episode_id]"
                   class="text-xs px-2 py-1 rounded-lg border border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10 transition-colors"
               >
@@ -168,6 +176,7 @@ const { add: toast } = useToast()
 // ─── State ────────────────────────────────────────────────────
 const loading     = ref(true)
 const renamingAll = ref(false)
+const purgingNfo  = ref(false)
 const series      = ref<any[]>([])
 const nfoSupport  = ref(false)
 const collapsed   = ref<Set<number>>(new Set())
@@ -225,14 +234,14 @@ async function renameAll(serieId?: number) {
   }
 }
 
-async function renameSingle(ep: any) {
+async function renameSingle(ep: any, serie: any) {
   renamingEp.value[ep.episode_id] = true
   try {
     const res = await fetch('/api/rename-episode', {
       method     : 'POST',
       headers    : { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body       : JSON.stringify({ episode_id: ep.episode_id, torrent_hash: ep.torrent_hash }),
+      body       : JSON.stringify({ serie_id: serie.serie_id, episode_id: ep.episode_id, torrent_hash: ep.torrent_hash }),
     })
     const data = await res.json()
     if (!res.ok) { toast(data.error ?? 'Erreur', 'error'); return }
@@ -242,6 +251,21 @@ async function renameSingle(ep: any) {
     toast('Impossible de contacter le serveur', 'error')
   } finally {
     renamingEp.value[ep.episode_id] = false
+  }
+}
+
+async function purgeNfo() {
+  if (!confirm('Supprimer tous les fichiers .nfo, .png, .jpg, .tbn dans les dossiers de la médiathèque ?')) return
+  purgingNfo.value = true
+  try {
+    const res = await fetch('/api/purge-nfo', { method: 'POST', credentials: 'include' })
+    const data = await res.json()
+    if (!res.ok) { toast(data.error ?? 'Erreur', 'error'); return }
+    toast(`${data.deleted} fichier${data.deleted > 1 ? 's' : ''} supprimé${data.deleted > 1 ? 's' : ''}${data.errors.length > 0 ? ` (${data.errors.length} erreur${data.errors.length > 1 ? 's' : ''})` : ''}`, data.errors.length > 0 ? 'error' : 'success')
+  } catch {
+    toast('Impossible de contacter le serveur', 'error')
+  } finally {
+    purgingNfo.value = false
   }
 }
 

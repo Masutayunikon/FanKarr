@@ -327,6 +327,83 @@ export async function autoOrganizeAll(
     worker.postMessage({ type: 'run', torrents, seriesData })
 }
 
+// ── Sync des noms de fichiers après mise à jour du scraper ────
+
+export async function syncFilenameChanges(
+    seriesData   : any[],
+    organizedPath: string,
+): Promise<{ renamed: number; errors: number }> {
+    const { nfoSupport } = readSettings()
+    let organized: Organized = {}
+    try {
+        if (fs.existsSync(organizedPath))
+            organized = JSON.parse(fs.readFileSync(organizedPath, 'utf-8'))
+    } catch { return { renamed: 0, errors: 0 } }
+
+    let renamed = 0
+    let errors  = 0
+    let changed = false
+
+    for (const sd of seriesData) {
+        for (const season of sd.seasons ?? []) {
+            for (const ep of season.episodes ?? []) {
+                let orgEntry: any   = null
+                let orgHash: string | null = null
+                for (const [hash, eps] of Object.entries(organized)) {
+                    if ((eps as any)[String(ep.id)]) {
+                        orgEntry = (eps as any)[String(ep.id)]
+                        orgHash  = hash
+                        break
+                    }
+                }
+                if (!orgEntry || !orgHash) continue
+
+                const currentName = orgEntry.dest_path
+                    ? path.basename(orgEntry.dest_path)
+                    : orgEntry.dest_filename
+                const srcExt = path.extname(currentName)
+                const expectedName: string = nfoSupport
+                    ? (ep.nfo_filename ? ep.nfo_filename.replace(/\.[^.]+$/, '') + srcExt : currentName)
+                    : (ep.formatted_name?.trim() ? ep.formatted_name.replace(/[<>:"/\\|?*]/g, '').trim() + srcExt : currentName)
+
+                if (expectedName === currentName) continue
+
+                const oldPath = orgEntry.dest_path
+                if (!oldPath || !fs.existsSync(oldPath)) continue
+
+                const newPath = path.join(path.dirname(oldPath), expectedName)
+                try {
+                    if (fs.existsSync(newPath)) {
+                        logger.warn('organize', `Sync rename : "${expectedName}" existe déjà — skip`)
+                        continue
+                    }
+                    fs.renameSync(oldPath, newPath)
+                    ;(organized[orgHash] as any)[String(ep.id)] = {
+                        ...orgEntry,
+                        dest_filename: expectedName,
+                        dest_path    : newPath,
+                        at           : new Date().toISOString(),
+                    }
+                    renamed++
+                    changed = true
+                    logger.info('organize', `Sync rename : "${currentName}" → "${expectedName}"`)
+                } catch (err) {
+                    errors++
+                    logger.error('organize', `Sync rename échoué pour ep ${ep.id} : ${err instanceof Error ? err.message : err}`)
+                }
+            }
+        }
+    }
+
+    if (changed)
+        fs.writeFileSync(organizedPath, JSON.stringify(organized, null, 2), 'utf-8')
+
+    if (renamed > 0 || errors > 0)
+        logger.info('organize', `Sync noms scraper — ${renamed} renommé(s)${errors > 0 ? `, ${errors} erreur(s)` : ''}`)
+
+    return { renamed, errors }
+}
+
 // ── Import manuel ─────────────────────────────────────────────
 
 export async function organizeTorrent(

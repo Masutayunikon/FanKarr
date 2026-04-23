@@ -21,6 +21,56 @@ function mapState(status: number): TorrentInfo['state'] {
 // uTorrent nécessite un token CSRF + cookie à chaque session
 interface UTSession { token: string; cookie: string }
 
+async function utTorrentExists(config: Record<string, string | number>, hash: string): Promise<boolean> {
+    try {
+        const session = await utGetSession(config)
+        const data    = await utRequest(config, { action: 'getfiles', hash: hash.toUpperCase() }, session)
+        const files   = data?.files?.[1]
+        return Array.isArray(files) && files.length > 0
+    } catch { return false }
+}
+
+/**
+ * Attend que les métadonnées soient disponibles (polling), puis applique les priorités :
+ * tous les fichiers à 0 (skip), sauf le fichier cible à 2 (normal).
+ */
+async function utApplyFilePriority(
+    config   : Record<string, string | number>,
+    hash     : string,
+    fileIndex: number,
+): Promise<void> {
+    const auth = btoa(`${config.username ?? ''}:${config.password ?? ''}`)
+    const HASH = hash.toUpperCase()
+
+    // 100 tentatives × 500 ms = 50 s max
+    for (let attempt = 0; attempt < 100; attempt++) {
+        await new Promise(r => setTimeout(r, 500))
+        try {
+            const session = await utGetSession(config)
+            const data    = await utRequest(config, { action: 'getfiles', hash: HASH }, session)
+            const files   = data?.files?.[1] as any[][] | undefined
+            if (!Array.isArray(files) || files.length === 0) continue
+
+            // Passer tous les fichiers à priorité 0 (skip)
+            const skipQs = new URLSearchParams({ token: session.token, action: 'setprio', hash: HASH, p: '0' })
+            for (let i = 0; i < files.length; i++) skipQs.append('f', String(i))
+            await fetch(`${config.url}/gui/?${skipQs}`, {
+                headers: { Authorization: `Basic ${auth}`, Cookie: session.cookie },
+            })
+
+            // Activer le fichier cible (priorité 2 = normal)
+            const selectQs = new URLSearchParams({ token: session.token, action: 'setprio', hash: HASH, p: '2', f: String(fileIndex) })
+            await fetch(`${config.url}/gui/?${selectQs}`, {
+                headers: { Authorization: `Basic ${auth}`, Cookie: session.cookie },
+            })
+
+            logger.info('utorrent', `Fichier ${fileIndex} sélectionné pour ${HASH.slice(0, 8)}…`)
+            return
+        } catch {}
+    }
+    throw new Error(`Timeout : fichiers non disponibles pour ${hash.slice(0, 8)}…`)
+}
+
 async function utGetSession(config: Record<string, string | number>): Promise<UTSession> {
     const auth    = btoa(`${config.username ?? ''}:${config.password ?? ''}`)
     const headers : Record<string, string> = {
@@ -142,43 +192,49 @@ const UT: TorrentClientDriver = {
     },
 
     async add(config, url, options?: DownloadOptions) {
-        if (options?.file_index != null) logger.warn('utorrent', 'Sélection de fichier non supportée — téléchargement complet')
+        const hashMatch = url.match(/xt=urn:btih:([a-fA-F0-9]{40,})/i)
+                       ?? options?.magnet?.match(/xt=urn:btih:([a-fA-F0-9]{40,})/i)
+        const hash      = hashMatch?.[1]?.toLowerCase() ?? null
+
+        if (options?.file_index != null && hash) {
+            const exists = await utTorrentExists(config, hash)
+            if (exists) {
+                logger.info('utorrent', `Torrent ${hash.slice(0, 8)}… déjà présent, mise à jour priorité fichier ${options.file_index}`)
+                utApplyFilePriority(config, hash, options.file_index).catch(err =>
+                    logger.warn('utorrent', `Priorité fichier non appliquée : ${err instanceof Error ? err.message : err}`)
+                )
+                return
+            }
+        }
+
         const session = await utGetSession(config)
         const auth    = btoa(`${config.username ?? ''}:${config.password ?? ''}`)
 
-        const form = new FormData()
-        form.append('torrent_url', url)
-
-        const qs = new URLSearchParams({
-            token : session.token,
-            action: 'add-url',
-            s     : url,
-        })
-
-        if (config.savePath) {
-            qs.set('path', String(config.savePath))
-        }
+        const qs = new URLSearchParams({ token: session.token, action: 'add-url', s: url })
+        if (config.savePath) qs.set('path', String(config.savePath))
 
         const res = await fetch(`${config.url}/gui/?${qs}`, {
             method : 'GET',
-            headers: {
-                'Authorization': `Basic ${auth}`,
-                'Cookie'       : session.cookie,
-            },
+            headers: { Authorization: `Basic ${auth}`, Cookie: session.cookie },
         })
-
         if (!res.ok) throw new Error(`Ajout échoué : HTTP ${res.status}`)
+
+        if (options?.file_index != null && hash) {
+            logger.info('utorrent', `Torrent ajouté (sélection fichier ${options.file_index} en attente de métadonnées)`)
+            utApplyFilePriority(config, hash, options.file_index).catch(err =>
+                logger.warn('utorrent', `Priorité fichier non appliquée : ${err instanceof Error ? err.message : err}`)
+            )
+        } else {
+            logger.info('utorrent', `Torrent ajouté avec succès (catégorie: ${config.category ?? 'aucune'}${config.savePath ? `, dossier: ${config.savePath}` : ''})`)
+        }
 
         // Appliquer le label/catégorie si défini
         if (config.category) {
-            // On ne peut pas set le label au moment de l'ajout, il faut attendre
-            // que le torrent soit chargé — on le fait via setprops après un délai
             setTimeout(async () => {
                 try {
                     const s2   = await utGetSession(config)
                     const data = await utRequest(config, { list: '1' }, s2)
                     const torrents: any[][] = data?.torrents ?? []
-                    // Trouver le torrent le plus récemment ajouté sans label
                     const target = torrents.find(t => !t[11])
                     if (target) {
                         await utRequest(config, {
@@ -191,8 +247,6 @@ const UT: TorrentClientDriver = {
                 } catch {}
             }, 3000)
         }
-
-        logger.info('utorrent', `Torrent ajouté avec succès (catégorie: ${config.category ?? 'aucune'}${config.savePath ? `, dossier: ${config.savePath}` : ''})`)
     },
 
     async remove(config, hash, deleteFiles = false) {

@@ -175,7 +175,13 @@ router.post('/rename-episode', requireAuth, async (req, res) => {
     if (!foundEp) { res.status(404).json({ error: 'Épisode introuvable' }); return }
     const { ep, season } = foundEp
     const hash = torrent_hash?.toLowerCase() ?? 'manual'
-    const orgEntry = organized[hash]?.[String(episode_id)] ?? organized['manual']?.[String(episode_id)]
+    let orgEntry = organized[hash]?.[String(episode_id)] ?? organized['manual']?.[String(episode_id)]
+    let entryHash = organized[hash]?.[String(episode_id)] ? hash : 'manual'
+    if (!orgEntry) {
+        for (const [h, eps] of Object.entries(organized)) {
+            if (eps[String(episode_id)]) { orgEntry = eps[String(episode_id)]; entryHash = h; break }
+        }
+    }
     if (!orgEntry) { res.status(404).json({ error: 'Épisode non importé' }); return }
     const currentName = orgEntry.dest_path ? path.basename(orgEntry.dest_path) : orgEntry.dest_filename
     const srcExt = path.extname(currentName)
@@ -192,7 +198,6 @@ router.post('/rename-episode', requireAuth, async (req, res) => {
         if (!fs.existsSync(oldPath)) throw new Error('Fichier source introuvable sur le disque')
         if (fs.existsSync(newPath)) throw new Error(`Un fichier avec ce nom existe déjà : ${newName}`)
         fs.renameSync(oldPath, newPath)
-        const entryHash = organized[hash]?.[String(episode_id)] ? hash : 'manual'
         organized[entryHash][String(episode_id)] = { ...orgEntry, dest_filename: newName, dest_path: newPath, at: new Date().toISOString() }
         saveOrganizedJson(organized)
         logger.info('api', `Rename : "${orgEntry.dest_filename}" → "${newName}"`)
@@ -335,20 +340,67 @@ router.post('/rename-all', requireAuth, async (req, res) => {
                 const oldPath = orgEntry.dest_path
                 const newPath = path.join(path.dirname(oldPath), expectedName)
                 try {
-                    if (!fs.existsSync(oldPath)) { errors.push({ episode_id: ep.id, error: 'Fichier introuvable' }); continue }
-                    if (fs.existsSync(newPath)) { errors.push({ episode_id: ep.id, error: `Fichier existant : ${expectedName}` }); continue }
+                    if (!fs.existsSync(oldPath)) {
+                        const msg = `Fichier introuvable : "${oldPath}"`
+                        logger.error('api', `Rename masse ep ${ep.id} — ${msg}`)
+                        errors.push({ episode_id: ep.id, error: msg }); continue
+                    }
+                    if (fs.existsSync(newPath)) {
+                        const msg = `Fichier existant : "${expectedName}"`
+                        logger.warn('api', `Rename masse ep ${ep.id} — ${msg}`)
+                        errors.push({ episode_id: ep.id, error: msg }); continue
+                    }
                     fs.renameSync(oldPath, newPath)
                     organized[orgHash][String(ep.id)] = { ...orgEntry, dest_filename: expectedName, dest_path: newPath, at: new Date().toISOString() }
                     done.push(ep.id)
                     logger.info('api', `Rename masse : "${currentName}" → "${expectedName}"`)
                 } catch (err) {
-                    errors.push({ episode_id: ep.id, error: err instanceof Error ? err.message : 'Erreur' })
+                    const msg = err instanceof Error ? err.message : 'Erreur inconnue'
+                    logger.error('api', `Rename masse ep ${ep.id} — exception : ${msg}`)
+                    errors.push({ episode_id: ep.id, error: msg })
                 }
             }
         }
     }
     saveOrganizedJson(organized)
     res.json({ ok: true, done: done.length, errors })
+})
+
+// ── Purge NFO / images des dossiers série ─────────────────────
+router.post('/purge-nfo', requireAuth, (req, res) => {
+    const { mediaPath } = readSettings()
+    if (!mediaPath || !fs.existsSync(mediaPath)) {
+        res.status(400).json({ error: 'Chemin médiathèque non configuré ou introuvable' }); return
+    }
+
+    const NFO_EXTS = new Set(['.nfo', '.png', '.jpg', '.jpeg', '.tbn', '.xml'])
+    let deleted = 0
+    const errors: string[] = []
+
+    function walk(dir: string) {
+        let entries: fs.Dirent[]
+        try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
+        for (const entry of entries) {
+            const full = path.join(dir, entry.name)
+            if (entry.isDirectory()) {
+                walk(full)
+            } else if (entry.isFile() && NFO_EXTS.has(path.extname(entry.name).toLowerCase())) {
+                try {
+                    fs.unlinkSync(full)
+                    deleted++
+                    logger.debug('api', `Purge NFO : supprimé "${full}"`)
+                } catch (err) {
+                    const msg = err instanceof Error ? err.message : 'Erreur inconnue'
+                    logger.error('api', `Purge NFO : impossible de supprimer "${full}" : ${msg}`)
+                    errors.push(full)
+                }
+            }
+        }
+    }
+
+    walk(mediaPath)
+    logger.info('api', `Purge NFO — ${deleted} fichier(s) supprimé(s)${errors.length > 0 ? `, ${errors.length} erreur(s)` : ''}`)
+    res.json({ ok: true, deleted, errors })
 })
 
 export default router

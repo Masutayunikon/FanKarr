@@ -6,7 +6,7 @@ import { logger, readLogs, clearLogs, logsFileSize } from '../logger.js'
 import { DATA_DIR, BASE_DIR } from '../config.js'
 import { readSettings } from '../settings.js'
 import { systemInfo } from '../system.js'
-import { scanMediaPath } from '../organize.js'
+import { scanMediaPath, syncFilenameChanges } from '../organize.js'
 import { readAvailable, loadEnrichedSeriesData, cacheClear } from '../lib/github-cache.js'
 import { cacheSize } from '../lib/github-cache.js'
 import { recentOrganized } from '../lib/notifs.js'
@@ -109,6 +109,16 @@ router.post('/update', requireAuth, async (_req, res) => {
         if (!Array.isArray(availableIds)) throw new Error('available.json invalide')
         logger.info('api', `Catalogue rechargé — ${availableIds.length} séries disponibles`)
         res.json({ ok: true, count: availableIds.length })
+        ;(async () => {
+            try {
+                const seriesData = await loadEnrichedSeriesData()
+                const { renamed } = await syncFilenameChanges(seriesData, path.join(DATA_DIR, 'organized.json'))
+                if (renamed > 0)
+                    logger.info('api', `Sync noms scraper après mise à jour — ${renamed} fichier(s) renommé(s)`)
+            } catch (err) {
+                logger.warn('api', `Sync noms après mise à jour échoué : ${err instanceof Error ? err.message : err}`)
+            }
+        })()
     } catch (err) {
         logger.error('api', `Mise à jour catalogue échouée : ${err instanceof Error ? err.message : err}`)
         res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
