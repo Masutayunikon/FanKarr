@@ -1,5 +1,19 @@
 # Changelog
 
+## [3.11.0](https://github.com/Masutayunikon/FanKarr/compare/v3.10.0...v3.11.0) (2026-04-23)
+
+
+### Features
+
+* ajout d'un bouton pour supprimer les nfo / png ([bf0989d](https://github.com/Masutayunikon/FanKarr/commit/bf0989db17ebb83045ed8d2d1f3f8b11fbd3f2f5))
+* ajout de log pour le bouton tout renommer ([bf0989d](https://github.com/Masutayunikon/FanKarr/commit/bf0989db17ebb83045ed8d2d1f3f8b11fbd3f2f5))
+* ajout du support multifile sur utorrent ([bf0989d](https://github.com/Masutayunikon/FanKarr/commit/bf0989db17ebb83045ed8d2d1f3f8b11fbd3f2f5))
+
+
+### Bug Fixes
+
+* renommage d'episodes qui ne fonctionne pas en 1 par 1 ([bf0989d](https://github.com/Masutayunikon/FanKarr/commit/bf0989db17ebb83045ed8d2d1f3f8b11fbd3f2f5))
+
 ## [3.10.0](https://github.com/Masutayunikon/FanKarr/compare/v3.9.2...v3.10.0) (2026-04-22)
 
 
