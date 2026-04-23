@@ -166,7 +166,7 @@ const clientMatrix = [
   { id: 'qbittorrent',  label: 'qBittorrent',              fileSelect: 'Async ✓',  categories: true  },
   { id: 'transmission', label: 'Transmission',             fileSelect: '✓ Natif',  categories: true  },
   { id: 'rtorrent',     label: 'rTorrent / ruTorrent',     fileSelect: 'Async ✓',  categories: true  },
-  { id: 'utorrent',     label: 'uTorrent',                 fileSelect: '✗',        categories: true  },
+  { id: 'utorrent',     label: 'uTorrent',                 fileSelect: 'Async ✓',  categories: true  },
   { id: 'synology-ds',  label: 'Synology Download Station', fileSelect: '✗',       categories: false },
 ]
 

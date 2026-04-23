@@ -5,7 +5,7 @@ import fs from 'fs'
 const GITHUB_BASE = process.env.GITHUB_BASE
     ?? 'https://raw.githubusercontent.com/masutayunikon/fankarr-scraper/main'
 
-const CACHE_TTL_MS = 6 * 60 * 60 * 1000
+const CACHE_TTL_MS = 1 * 60 * 60 * 1000
 
 interface CacheEntry<T> { data: T; expiresAt: number }
 const _cache = new Map<string, CacheEntry<any>>()
