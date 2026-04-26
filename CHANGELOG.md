@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.11.5](https://github.com/Masutayunikon/FanKarr/compare/v3.11.4...v3.11.5) (2026-04-26)
+
+
+### Bug Fixes
+
+* le folder picker affiche tous les disques depuis le bouton homes sous windows ([7149022](https://github.com/Masutayunikon/FanKarr/commit/7149022c8701f79d194c675da87c6cb2d5793a35))
+
 ## [3.11.4](https://github.com/Masutayunikon/FanKarr/compare/v3.11.3...v3.11.4) (2026-04-26)
 
 
