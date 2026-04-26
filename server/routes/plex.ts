@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { Agent, fetch as undiciFetch } from 'undici'
 import { requireAuth } from '../auth.js'
 import { logger } from '../logger.js'
 
@@ -6,6 +7,16 @@ const router = Router()
 
 const PLEX_TV_API = 'https://plex.tv/api/v2'
 
+// ── Fetch avec bypass SSL pour les serveurs locaux ────────────────────────────
+function getServerFetch(serverUrl: string) {
+    return (url: string, opts: any = {}) =>
+        undiciFetch(url, {
+            ...opts,
+            dispatcher: new Agent({ connect: { rejectUnauthorized: false } }),
+        })
+}
+
+// ── Fetch vers plex.tv (certificat valide, pas besoin de bypass) ──────────────
 async function plexFetch(url: string, options: RequestInit = {}): Promise<any> {
     const res = await fetch(url, {
         ...options,
@@ -105,6 +116,10 @@ router.post('/plex/setup', requireAuth, async (req, res) => {
     if (!token || !serverUrl || !libraryName || !libraryPath) {
         res.status(400).json({ error: 'token, serverUrl, libraryName, libraryPath requis' }); return
     }
+
+    // Fetch avec SSL bypass pour les appels vers le serveur Plex local
+    const serverFetch = getServerFetch(serverUrl)
+
     const headers: Record<string, string> = { 'X-Plex-Token': token, 'Accept': 'application/json' }
     const TARGET_AGENT_URI = 'https://metadata.fankai.fr/plex'
     const steps: { step: string; ok: boolean; message: string }[] = []
@@ -114,27 +129,30 @@ router.post('/plex/setup', requireAuth, async (req, res) => {
 
     // ── Étape 1 : Enregistrer le provider Fankai ─────────────
     try {
-        const providersRes = await fetch(`${serverUrl}/media/providers/metadata`, { headers })
+        const providersRes = await serverFetch(`${serverUrl}/media/providers/metadata`, { headers })
         if (providersRes.ok) {
-            const data = await providersRes.json()
+            const data = await providersRes.json() as any
             const providers: any[] = data?.MediaContainer?.MetadataAgentProvider ?? []
             let provider = providers.find((p: any) => p.uri === TARGET_AGENT_URI)
             if (!provider) {
-                const r = await fetch(`${serverUrl}/media/providers/metadata?uri=${encodeURIComponent(TARGET_AGENT_URI)}`, { method: 'POST', headers })
-                if (r.ok) provider = (await r.json())?.MediaContainer?.MetadataAgentProvider?.[0]
+                const r = await serverFetch(`${serverUrl}/media/providers/metadata?uri=${encodeURIComponent(TARGET_AGENT_URI)}`, { method: 'POST', headers })
+                if (r.ok) provider = ((await r.json()) as any)?.MediaContainer?.MetadataAgentProvider?.[0]
             }
             if (provider) {
                 agentIdentifier = provider.identifier ?? agentIdentifier
                 steps.push({ step: 'provider', ok: true, message: `Provider enregistré (${agentIdentifier})` })
             }
-            const groupsRes = await fetch(`${serverUrl}/media/providers/metadata/group`, { headers })
+            const groupsRes = await serverFetch(`${serverUrl}/media/providers/metadata/group`, { headers })
             if (groupsRes.ok) {
-                const gdata = await groupsRes.json()
+                const gdata = await groupsRes.json() as any
                 const groups: any[] = gdata?.MediaContainer?.MetadataAgentProviderGroup ?? []
                 let group = groups.find((g: any) => g.primaryIdentifier === agentIdentifier)
                 if (!group) {
-                    const r = await fetch(`${serverUrl}/media/providers/metadata/group?title=Fankai&primaryIdentifier=${encodeURIComponent(agentIdentifier)}`, { method: 'POST', headers })
-                    if (r.ok) group = (await r.json())?.MediaContainer?.MetadataAgentProviderGroup?.[0]
+                    const r = await serverFetch(
+                        `${serverUrl}/media/providers/metadata/group?title=Fankai&primaryIdentifier=${encodeURIComponent(agentIdentifier)}`,
+                        { method: 'POST', headers },
+                    )
+                    if (r.ok) group = ((await r.json()) as any)?.MediaContainer?.MetadataAgentProviderGroup?.[0]
                 }
                 if (group) {
                     groupId = String(group.id ?? '')
@@ -142,18 +160,29 @@ router.post('/plex/setup', requireAuth, async (req, res) => {
                     agentSetupOk = true
                 }
             }
+        } else {
+            const status = providersRes.status
+            steps.push({ step: 'agent', ok: false, message: `Agent non configuré (HTTP ${status} — Plex < 1.43 ?) — setup manuel requis` })
+            logger.warn('plex', `Setup agent Fankai — HTTP ${status} depuis ${serverUrl}`)
         }
     } catch (err) {
         const msg = err instanceof Error ? err.message : 'Erreur'
-        steps.push({ step: 'agent', ok: false, message: `Agent non configuré (Plex < 1.43 ?) — setup manuel requis` })
+        steps.push({ step: 'agent', ok: false, message: `Agent non configuré — setup manuel requis` })
         logger.warn('plex', `Setup agent Fankai échoué : ${msg}`)
     }
 
     // ── Étape 2 : Créer la bibliothèque ──────────────────────
     try {
-        const params = new URLSearchParams({ type: 'show', name: libraryName, agent: agentIdentifier, scanner: 'Plex TV Series', language: 'fr-FR', location: libraryPath })
+        const params = new URLSearchParams({
+            type    : 'show',
+            name    : libraryName,
+            agent   : agentIdentifier,
+            scanner : 'Plex TV Series',
+            language: 'fr-FR',
+            location: libraryPath,
+        })
         if (groupId) params.set('metadataAgentProviderGroupId', groupId)
-        const libRes = await fetch(`${serverUrl}/library/sections?${params}`, { method: 'POST', headers })
+        const libRes = await serverFetch(`${serverUrl}/library/sections?${params}`, { method: 'POST', headers })
         if (!libRes.ok) throw new Error(`HTTP ${libRes.status}: ${await libRes.text()}`)
         steps.push({ step: 'library', ok: true, message: `Bibliothèque "${libraryName}" créée` })
         logger.info('plex', `Bibliothèque "${libraryName}" créée sur ${serverUrl}`)
