@@ -1,4 +1,4 @@
-FROM node:20-slim AS base
+FROM node:22-slim AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable
@@ -15,7 +15,7 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 RUN pnpm run build
 
 # ── Production ─────────────────────────────────────────────────
-FROM node:20-slim
+FROM node:22-slim
 RUN apt-get update && apt-get install -y gosu && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
