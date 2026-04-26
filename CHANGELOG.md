@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.11.4](https://github.com/Masutayunikon/FanKarr/compare/v3.11.3...v3.11.4) (2026-04-26)
+
+
+### Bug Fixes
+
+* ajout de la mise a jour des noms toutes les 1h ([0fe5c8c](https://github.com/Masutayunikon/FanKarr/commit/0fe5c8ccb7ecdc1643b5e69de3957c39dfd8085e))
+
 ## [3.11.3](https://github.com/Masutayunikon/FanKarr/compare/v3.11.2...v3.11.3) (2026-04-26)
 
 
