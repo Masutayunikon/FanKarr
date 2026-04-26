@@ -47,11 +47,36 @@ router.get('/version', (_req, res) => {
 
 // ── Parcours fichiers ──────────────────────────────────────────
 router.get('/browse', requireAuth, (req, res) => {
-    const dirPath = (req.query.path as string) || '/'
+    const isWindows = process.platform === 'win32'
+    const dirPath   = (req.query.path as string) || '/'
+
+    // ── Racine virtuelle Windows : liste les lecteurs disponibles ──
+    if (isWindows && dirPath === '/') {
+        const drives: string[] = []
+        for (const letter of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') {
+            const d = `${letter}:\\`
+            try { fs.readdirSync(d); drives.push(d) } catch {}
+        }
+        res.json({ path: '/', parent: null, dirs: drives, drivesRoot: true })
+        return
+    }
+
     try {
         const entries = fs.readdirSync(dirPath, { withFileTypes: true })
         const dirs    = entries.filter(e => e.isDirectory()).map(e => e.name).filter(n => !n.startsWith('.')).sort((a, b) => a.localeCompare(b))
-        res.json({ path: dirPath, parent: dirPath === '/' ? null : path.dirname(dirPath), dirs })
+
+        // Sur Windows, remonter à '/' quand on est à la racine d'un lecteur (ex: C:\)
+        let parent: string | null
+        if (dirPath === '/') {
+            parent = null
+        } else if (isWindows && /^[A-Za-z]:\\?$/.test(dirPath)) {
+            parent = '/'
+        } else {
+            const up = path.dirname(dirPath)
+            parent   = up === dirPath ? null : up   // dirname de C:\ retourne C:\ → null
+        }
+
+        res.json({ path: dirPath, parent, dirs })
     } catch (err) {
         logger.warn('api', `Lecture dossier "${dirPath}" impossible : ${err instanceof Error ? err.message : err}`)
         res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur lecture dossier' })
