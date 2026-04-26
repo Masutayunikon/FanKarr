@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.11.1](https://github.com/Masutayunikon/FanKarr/compare/v3.11.0...v3.11.1) (2026-04-26)
+
+
+### Bug Fixes
+
+* le setup plex peux maintenant etre utilisé sur un serveur local (probleme de certificat) ([6907584](https://github.com/Masutayunikon/FanKarr/commit/69075842be396b149949b158922a9dc84dbc7ccf))
+
 ## [3.11.0](https://github.com/Masutayunikon/FanKarr/compare/v3.10.0...v3.11.0) (2026-04-23)
 
 
