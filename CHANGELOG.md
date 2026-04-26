@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.11.3](https://github.com/Masutayunikon/FanKarr/compare/v3.11.2...v3.11.3) (2026-04-26)
+
+
+### Bug Fixes
+
+* dockerfile node version to 22 ([5983494](https://github.com/Masutayunikon/FanKarr/commit/598349407750c729579bd639680ebc6a8ebcc12f))
+
 ## [3.11.2](https://github.com/Masutayunikon/FanKarr/compare/v3.11.1...v3.11.2) (2026-04-26)
 
 
