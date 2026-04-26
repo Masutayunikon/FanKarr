@@ -14,7 +14,7 @@
 
         <!-- Chemin éditable -->
         <div class="px-5 py-3 border-b border-border shrink-0 flex gap-2">
-          <button @click="navigateTo('/')" class="btn-secondary px-2 text-muted hover:text-primary" title="Retour à la racine">
+          <button @click="navigateTo('/')" class="btn-secondary px-2 text-muted hover:text-primary" :title="drivesRoot ? 'Lecteurs' : 'Retour à la racine'">
             <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
               <polyline points="9 22 9 12 15 12 15 22"/>
@@ -85,12 +85,13 @@ import { ref, watch } from 'vue'
 const props = defineProps<{ initialPath?: string }>()
 const emit  = defineEmits<{ select: [path: string]; cancel: [] }>()
 
-const current   = ref(props.initialPath || '/')
-const inputPath = ref(current.value)
-const dirs      = ref<string[]>([])
-const parent    = ref<string | null>(null)
-const loading   = ref(false)
-const error     = ref('')
+const current    = ref(props.initialPath || '/')
+const inputPath  = ref(current.value)
+const dirs       = ref<string[]>([])
+const parent     = ref<string | null>(null)
+const loading    = ref(false)
+const error      = ref('')
+const drivesRoot = ref(false)   // true quand la liste affiche les lecteurs Windows
 
 // FIX : la regex /\/+$/ dans un @click inline fait planter le parser Vue
 function selectCurrent() {
@@ -98,8 +99,10 @@ function selectCurrent() {
 }
 
 function joinPath(base: string, name: string): string {
+  // Lecteur Windows complet (ex: "C:\") → chemin absolu, pas de jointure
+  if (/^[A-Za-z]:\\$/.test(name)) return name
   if (base === '/') return `/${name}`
-  const cleanBase = base.endsWith('/') ? base.slice(0, -1) : base
+  const cleanBase = base.replace(/[\\/]+$/, '')
   return `${cleanBase}/${name}`
 }
 
@@ -114,10 +117,11 @@ async function navigateTo(p: string) {
       return
     }
     const data  = await res.json()
-    current.value   = data.path
-    inputPath.value = data.path
-    parent.value    = data.parent
-    dirs.value      = data.dirs
+    current.value    = data.path
+    inputPath.value  = data.path
+    parent.value     = data.parent
+    dirs.value       = data.dirs
+    drivesRoot.value = data.drivesRoot ?? false
   } catch {
     error.value = 'Impossible de lire ce dossier'
   } finally {
