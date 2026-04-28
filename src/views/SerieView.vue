@@ -35,26 +35,17 @@
             Import manuel
           </button>
 
-          <!-- Désimporter -->
-          <div v-if="Object.keys(organizedByEpisode).length > 0" class="relative" @click.stop>
-            <button
-                @click="unimportMenuOpen = !unimportMenuOpen"
-                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
-                <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>
-              </svg>
-              Désimporter
-            </button>
-            <div v-if="unimportMenuOpen" class="absolute top-full left-0 mt-1 bg-card border border-border rounded-xl p-1 z-20 w-48 shadow-xl flex flex-col gap-0.5">
-              <button @click="unimportSerie(false); unimportMenuOpen = false" class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-muted hover:bg-hover transition-colors">
-                Retirer de la bibliothèque
-              </button>
-              <button @click="unimportSerie(true); unimportMenuOpen = false" class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-red-400 hover:bg-red-500/10 transition-colors">
-                Supprimer les fichiers
-              </button>
-            </div>
-          </div>
+          <!-- Désimporter série -->
+          <button
+              v-if="Object.keys(organizedByEpisode).length > 0"
+              @click="openUnimportSerieModal"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
+              <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>
+            </svg>
+            Désimporter
+          </button>
         </div>
 
         <!-- Droite : téléchargements -->
@@ -113,9 +104,32 @@
             @download-season="(s, h) => downloadSeason(s, h)"
             @rename-episode="(ep, s) => renameEpisode(ep, s)"
             @unimport-episode="(ep, s, del) => unimportEpisode(ep, s, del)"
+            @unimport-season="(s, del) => unimportSeason(s, del)"
         />
       </div>
     </template>
+
+    <!-- Modal désimport série -->
+    <Teleport to="body">
+      <div v-if="unimportSerieModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4" @click.self="unimportSerieModal = false">
+        <div class="bg-card border border-border rounded-xl w-full max-w-sm p-6 flex flex-col gap-5">
+          <div>
+            <p class="text-sm font-semibold text-primary">Désimporter la série</p>
+            <p class="text-xs text-muted mt-1 truncate">{{ data?.serie?.title }}</p>
+          </div>
+          <label class="flex items-center gap-3 cursor-pointer select-none">
+            <input type="checkbox" v-model="deleteSerieFiles" class="w-4 h-4 rounded border-border accent-accent" />
+            <span class="text-xs text-muted">Supprimer également les fichiers physiques du disque</span>
+          </label>
+          <div class="flex items-center justify-end gap-2">
+            <button @click="unimportSerieModal = false" class="btn-secondary text-xs">Annuler</button>
+            <button @click="confirmUnimportSerie" class="px-4 py-2 rounded-lg border border-red-500/30 text-red-400 bg-red-500/10 hover:bg-red-500/20 transition-colors text-xs font-medium">
+              {{ deleteSerieFiles ? 'Désimporter et supprimer' : 'Désimporter' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- Modal import manuel -->
     <ManualImportModal
@@ -154,7 +168,8 @@ const organizedByEpisode = ref<Record<string, any>>({})
 const mediaPath          = ref('/')
 const nfoSupport         = ref(false)
 const epActionLoading    = ref<Record<number, boolean>>({})
-const unimportMenuOpen   = ref(false)
+const unimportSerieModal = ref(false)
+const deleteSerieFiles   = ref(false)
 const downloadMenuOpen   = ref(false)
 const downloadingAll     = ref(false)
 const downloadingSeason  = ref<Record<number, boolean>>({})
@@ -436,6 +451,19 @@ function toggleSeason(id: number) {
   else collapsedSeasons.value.add(id)
 }
 
+function openUnimportSerieModal() { deleteSerieFiles.value = false; unimportSerieModal.value = true }
+async function confirmUnimportSerie() { unimportSerieModal.value = false; await unimportSerie(deleteSerieFiles.value) }
+
+async function unimportSeason(season: any, deleteFile: boolean) {
+  try {
+    const res = await fetch(`/api/organized/${route.params.id}/seasons/${season.id}?deleteFile=${deleteFile}`, { method: 'DELETE', credentials: 'include' })
+    if (!res.ok) { const d = await res.json(); toast(d.error ?? 'Erreur désimport saison', 'error'); return }
+    const d = await res.json()
+    toast(`${d.removed} épisode(s) désimporté(s) ✓`, 'success')
+    await fetchOrganized(); load()
+  } catch { toast('Impossible de contacter le serveur', 'error') }
+}
+
 async function unimportSerie(deleteFile: boolean) {
   try {
     const res = await fetch(`/api/organized/${route.params.id}?deleteFile=${deleteFile}`, { method: 'DELETE', credentials: 'include' })
@@ -473,7 +501,7 @@ async function unimportEpisode(ep: any, _season: any, deleteFile: boolean) {
   finally { epActionLoading.value[ep.id] = false }
 }
 
-const closeMenus = () => { unimportMenuOpen.value = false; downloadMenuOpen.value = false }
+const closeMenus = () => { downloadMenuOpen.value = false }
 
 onMounted(() => {
   load(); fetchSettings(); fetchOrganized(); fetchActiveDownloads()

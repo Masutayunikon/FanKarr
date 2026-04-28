@@ -31,6 +31,15 @@
 
       <!-- Boutons saison -->
       <div class="flex items-center gap-2">
+        <!-- Corbeille saison -->
+        <button
+            v-if="season.organized_count > 0"
+            @click.stop="openUnimportSeasonModal"
+            class="w-8 h-8 rounded-lg border flex items-center justify-center transition-colors border-red-500/30 text-red-400 bg-red-500/10 hover:bg-red-500/20"
+            title="Désimporter la saison"
+        >
+          <Trash2 :size="14" />
+        </button>
         <!-- Pas de pack saison : bouton "Saison" (dropdown si plusieurs packs via intégrales) -->
         <template v-if="season.torrents.length === 0 && hasDownloadable">
           <div v-if="uniquePackOptions.length > 1" class="relative" @click.stop>
@@ -169,8 +178,8 @@
             </div>
           </div>
 
-          <!-- Bouton état épisode (dropdown si plusieurs options) -->
-          <div class="relative shrink-0" @click.stop>
+          <!-- Bouton téléchargement épisode (uniquement si non organisé) -->
+          <div v-if="!ep.organized" class="relative shrink-0" @click.stop>
             <button
                 class="w-8 h-8 rounded-lg border flex items-center justify-center transition-colors"
                 :class="epBtnClass(ep)"
@@ -180,7 +189,7 @@
               <component :is="epStateIcon(ep)" />
             </button>
             <!-- Dropdown quand plusieurs options de torrent -->
-            <div v-if="epOptionsOpen === ep.id && !ep.organized && ep.torrents && ep.torrents.length > 1"
+            <div v-if="epOptionsOpen === ep.id && ep.torrents && ep.torrents.length > 1"
                  class="absolute right-0 bottom-full mb-1 bg-card border border-border rounded-xl p-1 z-20 w-52 shadow-xl flex flex-col gap-0.5">
               <button
                   v-for="(t, i) in ep.torrents"
@@ -198,34 +207,33 @@
 
           <!-- Actions épisode importé -->
           <template v-if="ep.organized && organizedByEpisode[String(ep.id)]">
-            <span
+            <!-- Bouton synopsis -->
+            <button
+                v-if="ep.plot"
+                @click.stop="togglePlot(ep.id)"
+                class="w-6 h-6 flex items-center justify-center rounded transition-colors"
+                :class="plotOpen === ep.id ? 'text-accent' : 'text-muted hover:text-primary'"
+                title="Voir le synopsis"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+            </button>
+            <!-- Badge rename cliquable -->
+            <button
                 v-if="epNeedsRename(ep)"
-                class="shrink-0 text-[10px] px-1.5 py-0.5 rounded border bg-yellow-500/10 text-yellow-400 border-yellow-500/20 cursor-default"
+                @click.stop="emit('renameEpisode', ep, season)"
+                :disabled="epActionLoading[ep.id]"
+                class="shrink-0 text-[10px] px-1.5 py-0.5 rounded border bg-yellow-500/10 text-yellow-400 border-yellow-500/20 hover:bg-yellow-500/20 transition-colors"
                 :title="`Actuel : ${organizedByEpisode[String(ep.id)]?.dest_filename}\nAttendu : ${epExpectedName(ep)}`"
-            >Rename</span>
-
-            <div class="relative" @click.stop>
-              <button
-                  @click="epMenuOpen = epMenuOpen === ep.id ? null : ep.id"
-                  class="w-6 h-6 flex items-center justify-center rounded text-muted hover:text-primary transition-colors"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
-              </button>
-              <div v-if="epMenuOpen === ep.id" class="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl p-1 z-20 w-44 shadow-xl flex flex-col gap-0.5">
-                <button v-if="epNeedsRename(ep)" @click="emit('renameEpisode', ep, season); epMenuOpen = null" :disabled="epActionLoading[ep.id]" class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-primary hover:bg-hover transition-colors">
-                  <svg width="11" height="11" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                  Renommer
-                </button>
-                <button @click="emit('unimportEpisode', ep, season, false); epMenuOpen = null" :disabled="epActionLoading[ep.id]" class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-muted hover:bg-hover transition-colors">
-                  <svg width="11" height="11" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
-                  Désimporter
-                </button>
-                <button @click="emit('unimportEpisode', ep, season, true); epMenuOpen = null" :disabled="epActionLoading[ep.id]" class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-red-400 hover:bg-red-500/10 transition-colors">
-                  <svg width="11" height="11" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
-                  Supprimer le fichier
-                </button>
-              </div>
-            </div>
+            >Rename</button>
+            <!-- Corbeille épisode -->
+            <button
+                @click.stop="openUnimportModal(ep, season)"
+                :disabled="epActionLoading[ep.id]"
+                class="w-6 h-6 flex items-center justify-center rounded text-red-400 hover:bg-red-500/10 transition-colors"
+                title="Désimporter l'épisode"
+            >
+              <Trash2 :size="12" />
+            </button>
           </template>
         </div>
 
@@ -235,14 +243,59 @@
             <div class="h-full bg-accent rounded-full transition-all duration-500" :style="{ width: `${epProgress(ep)!.progress}%` }" />
           </div>
         </div>
+
+        <!-- Synopsis -->
+        <div v-if="plotOpen === ep.id && ep.plot" class="mt-2 sm:pl-[92px]">
+          <p class="text-xs text-muted leading-relaxed" style="white-space: pre-line">{{ ep.plot }}</p>
+        </div>
       </div>
     </div>
   </div>
+
+  <!-- Modal désimport épisode -->
+  <Teleport to="body">
+    <div v-if="unimportModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" @click.self="unimportModal = false">
+      <div class="bg-card border border-border rounded-2xl p-6 w-full max-w-sm shadow-2xl mx-4">
+        <h3 class="text-sm font-semibold text-primary mb-1">Désimporter l'épisode</h3>
+        <p class="text-xs text-muted mb-4">L'épisode sera retiré de la bibliothèque.</p>
+        <label class="flex items-center gap-2 mb-5 cursor-pointer select-none">
+          <input type="checkbox" v-model="deleteFileOnUnimport" class="accent-red-500" />
+          <span class="text-xs text-muted">Supprimer le fichier du disque</span>
+        </label>
+        <div class="flex gap-2 justify-end">
+          <button @click="unimportModal = false" class="px-4 py-2 text-xs rounded-lg border border-border text-muted hover:bg-hover transition-colors">Annuler</button>
+          <button @click="confirmUnimport" class="px-4 py-2 text-xs rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 hover:bg-red-500/30 transition-colors">
+            {{ deleteFileOnUnimport ? 'Supprimer' : 'Désimporter' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- Modal désimport saison -->
+  <Teleport to="body">
+    <div v-if="unimportSeasonModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" @click.self="unimportSeasonModal = false">
+      <div class="bg-card border border-border rounded-2xl p-6 w-full max-w-sm shadow-2xl mx-4">
+        <h3 class="text-sm font-semibold text-primary mb-1">Désimporter la saison</h3>
+        <p class="text-xs text-muted mb-4">Tous les épisodes importés de cette saison seront retirés de la bibliothèque.</p>
+        <label class="flex items-center gap-2 mb-5 cursor-pointer select-none">
+          <input type="checkbox" v-model="deleteSeasonFiles" class="accent-red-500" />
+          <span class="text-xs text-muted">Supprimer les fichiers du disque</span>
+        </label>
+        <div class="flex gap-2 justify-end">
+          <button @click="unimportSeasonModal = false" class="px-4 py-2 text-xs rounded-lg border border-border text-muted hover:bg-hover transition-colors">Annuler</button>
+          <button @click="confirmUnimportSeason" class="px-4 py-2 text-xs rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 hover:bg-red-500/30 transition-colors">
+            {{ deleteSeasonFiles ? 'Supprimer' : 'Désimporter' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, h, onMounted, onUnmounted } from 'vue'
-import { ChevronUp, Download, Loader, Check, X } from 'lucide-vue-next'
+import { ChevronUp, Download, Loader, Check, X, Trash2 } from 'lucide-vue-next'
 
 interface ActiveTorrent { hash: string; progress: number; state: string; files?: { index: number; progress: number }[] }
 
@@ -264,11 +317,17 @@ const emit = defineEmits<{
   downloadSeason : [season: any, packHash?: string]
   renameEpisode  : [ep: any, season: any]
   unimportEpisode: [ep: any, season: any, deleteFile: boolean]
+  unimportSeason : [season: any, deleteFiles: boolean]
 }>()
 
-const epMenuOpen    = ref<number | null>(null)
-const epOptionsOpen = ref<number | null>(null)
-const seasonMenuOpen = ref(false)
+const epOptionsOpen      = ref<number | null>(null)
+const plotOpen           = ref<number | null>(null)
+const seasonMenuOpen     = ref(false)
+const unimportModal      = ref(false)
+const deleteFileOnUnimport = ref(false)
+const unimportEpTarget   = ref<{ ep: any; season: any } | null>(null)
+const unimportSeasonModal = ref(false)
+const deleteSeasonFiles  = ref(false)
 const downloadIcon = h(Download, { size: 12 })
 const loaderIcon   = h(Loader, { size: 12, class: 'animate-spin' })
 const checkIcon    = h(Check, { size: 12 })
@@ -505,9 +564,35 @@ function formatDuration(seconds: number): string {
   return `${m} min`
 }
 
+function togglePlot(epId: number) {
+  plotOpen.value = plotOpen.value === epId ? null : epId
+}
+
+function openUnimportModal(ep: any, season: any) {
+  unimportEpTarget.value   = { ep, season }
+  deleteFileOnUnimport.value = false
+  unimportModal.value      = true
+}
+
+function confirmUnimport() {
+  if (!unimportEpTarget.value) return
+  emit('unimportEpisode', unimportEpTarget.value.ep, unimportEpTarget.value.season, deleteFileOnUnimport.value)
+  unimportModal.value = false
+  unimportEpTarget.value = null
+}
+
+function openUnimportSeasonModal() {
+  deleteSeasonFiles.value   = false
+  unimportSeasonModal.value = true
+}
+
+function confirmUnimportSeason() {
+  emit('unimportSeason', props.season, deleteSeasonFiles.value)
+  unimportSeasonModal.value = false
+}
+
 function closeAllMenus() {
-  epMenuOpen.value    = null
-  epOptionsOpen.value = null
+  epOptionsOpen.value  = null
   seasonMenuOpen.value = false
 }
 

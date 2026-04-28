@@ -239,6 +239,36 @@ router.delete('/organized/:serieId', requireAuth, async (req, res) => {
     res.json({ ok: true, removed, errors })
 })
 
+// ── Désimport saison ───────────────────────────────────────────
+router.delete('/organized/:serieId/seasons/:seasonId', requireAuth, async (req, res) => {
+    const serieId    = String(req.params.serieId)
+    const seasonId   = Number(req.params.seasonId)
+    const deleteFile = req.query.deleteFile === 'true'
+    const organized  = loadOrganizedJson()
+    const sd = await readSerieData(Number(serieId))
+    if (!sd) { res.status(404).json({ error: 'Série introuvable' }); return }
+    const season = sd.seasons?.find((s: any) => s.id === seasonId)
+    if (!season) { res.status(404).json({ error: 'Saison introuvable' }); return }
+    const episodeIds = new Set<string>(season.episodes?.map((e: any) => String(e.id)) ?? [])
+    let removed = 0
+    const errors: string[] = []
+    for (const [hash, episodes] of Object.entries(organized)) {
+        for (const epId of Object.keys(episodes)) {
+            if (!episodeIds.has(epId)) continue
+            const entry = episodes[epId]
+            if (deleteFile && entry?.dest_path && fs.existsSync(entry.dest_path)) {
+                try { fs.unlinkSync(entry.dest_path) } catch { errors.push(entry.dest_path) }
+            }
+            delete organized[hash][epId]
+            removed++
+        }
+        if (Object.keys(organized[hash]).length === 0) delete organized[hash]
+    }
+    saveOrganizedJson(organized)
+    logger.info('api', `Désimport saison ${seasonId} (série ${serieId}) — ${removed} épisode(s) retirés`)
+    res.json({ ok: true, removed, errors })
+})
+
 // ── Désimport épisode ──────────────────────────────────────────
 router.delete('/organized/:serieId/:episodeId', requireAuth, async (req, res) => {
     const episodeId  = String(req.params.episodeId)

@@ -221,27 +221,33 @@ const QB: TorrentClientDriver = {
                        ?? options?.magnet?.match(/xt=urn:btih:([a-fA-F0-9]{40,})/i)
         const hash      = hashMatch?.[1]?.toLowerCase() ?? null
 
-        if (options?.file_index != null && hash) {
-            const exists = await qbTorrentExists(config, sid, hash)
-
-            if (exists) {
-                // Torrent déjà présent → mettre à jour la priorité directement (async OK)
-                logger.info('qbittorrent', `Torrent ${hash.slice(0, 8)}… déjà présent, mise à jour priorité fichier ${options.file_index}`)
-                qbApplyFilePriority(config, hash, options.file_index, false).catch(err =>
-                    logger.warn('qbittorrent', `Priorité fichier non appliquée : ${err instanceof Error ? err.message : err}`)
-                )
-                return
+        if (options?.file_index != null) {
+            if (hash) {
+                const exists = await qbTorrentExists(config, sid, hash)
+                if (exists) {
+                    logger.info('qbittorrent', `Torrent ${hash.slice(0, 8)}… déjà présent, mise à jour priorité fichier ${options.file_index}`)
+                    qbApplyFilePriority(config, hash, options.file_index, false).catch(err =>
+                        logger.warn('qbittorrent', `Priorité fichier non appliquée : ${err instanceof Error ? err.message : err}`)
+                    )
+                    return
+                }
             }
 
-            // Nouveau torrent → ajout actif avec stopCondition=MetadataReceived
-            // qBit fetch les métadonnées normalement via DHT/peers,
-            // puis se met en pause automatiquement dès qu'elles sont disponibles.
-            // On set les priorités sur la pause, puis on reprend. Zéro data indésirable.
+            // Snapshot des hashes avant ajout (pour retrouver le nouveau si hash inconnu)
+            let knownHashes: Set<string> = new Set()
+            if (!hash) {
+                try {
+                    const lr = await fetch(`${config.url}/api/v2/torrents/info`, { headers: { Cookie: `SID=${sid}` } })
+                    if (lr.ok) knownHashes = new Set((await lr.json()).map((t: any) => String(t.hash).toLowerCase()))
+                } catch {}
+            }
+
+            // Ajout du torrent (stopCondition=MetadataReceived si hash connu, qBit ≥ 4.6)
             const form = new FormData()
             form.append('urls', url)
             if (config.category) form.append('category', String(config.category))
             if (config.savePath)  form.append('savepath', String(config.savePath))
-            form.append('stopCondition', 'MetadataReceived')  // qBit ≥ 4.6
+            if (hash) form.append('stopCondition', 'MetadataReceived')
 
             const res  = await fetch(`${config.url}/api/v2/torrents/add`, {
                 method: 'POST', body: form, headers: { Cookie: `SID=${sid}` },
@@ -249,10 +255,33 @@ const QB: TorrentClientDriver = {
             const text = await res.text()
             if (text !== 'Ok.') throw new Error(`Ajout échoué : ${text}`)
 
-            logger.info('qbittorrent', `Torrent ajouté (stopCondition=MetadataReceived, sélection fichier ${options.file_index} en attente)`)
-            qbApplyFilePriority(config, hash, options.file_index, true).catch(err =>
-                logger.warn('qbittorrent', `Priorité fichier non appliquée : ${err instanceof Error ? err.message : err}`)
-            )
+            if (hash) {
+                logger.info('qbittorrent', `Torrent ajouté (stopCondition=MetadataReceived, sélection fichier ${options.file_index} en attente)`)
+                qbApplyFilePriority(config, hash, options.file_index, true).catch(err =>
+                    logger.warn('qbittorrent', `Priorité fichier non appliquée : ${err instanceof Error ? err.message : err}`)
+                )
+            } else {
+                // Hash inconnu (.torrent sans magnet) → retrouve le nouveau torrent par diff de liste
+                logger.info('qbittorrent', `Torrent ajouté sans hash connu — recherche dans la liste (sélection fichier ${options.file_index})`)
+                const fileIndex = options.file_index
+                ;(async () => {
+                    for (let attempt = 0; attempt < 20; attempt++) {
+                        await new Promise(r => setTimeout(r, 500))
+                        try {
+                            const s  = await qbLogin(config)
+                            const lr = await fetch(`${config.url}/api/v2/torrents/info`, { headers: { Cookie: `SID=${s}` } })
+                            if (!lr.ok) continue
+                            const newT = (await lr.json()).find((t: any) => !knownHashes.has(String(t.hash).toLowerCase()))
+                            if (!newT) continue
+                            const resolvedHash = String(newT.hash).toLowerCase()
+                            logger.info('qbittorrent', `Hash résolu : ${resolvedHash.slice(0, 8)}… — application priorité fichier ${fileIndex}`)
+                            await qbApplyFilePriority(config, resolvedHash, fileIndex, false)
+                            return
+                        } catch {}
+                    }
+                    logger.warn('qbittorrent', `Impossible de résoudre le hash pour appliquer la priorité fichier ${fileIndex}`)
+                })().catch(() => {})
+            }
             return
         }
 

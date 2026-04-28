@@ -52,6 +52,44 @@ async function trRequest(
     return { ...data, sessionId }
 }
 
+async function trGetIdByHash(config: Record<string, string | number>, hash: string): Promise<number | null> {
+    const data     = await trRequest(config, 'torrent-get', { fields: ['hashString', 'id'] })
+    const torrents = data.arguments?.torrents ?? []
+    return torrents.find((t: any) => t.hashString?.toLowerCase() === hash.toLowerCase())?.id ?? null
+}
+
+/**
+ * Attend que les métadonnées soient disponibles (polling 500 ms),
+ * puis applique les priorités : fichier cible voulu, tous les autres ignorés.
+ */
+async function trApplyFilePriority(
+    config   : Record<string, string | number>,
+    hash     : string,
+    fileIndex: number,
+): Promise<void> {
+    for (let attempt = 0; attempt < 100; attempt++) {
+        await new Promise(r => setTimeout(r, 500))
+        try {
+            const id = await trGetIdByHash(config, hash)
+            if (id == null) continue
+
+            const data  = await trRequest(config, 'torrent-get', { ids: [id], fields: ['files'] })
+            const files = data.arguments?.torrents?.[0]?.files
+            if (!Array.isArray(files) || files.length === 0) continue
+
+            const unwanted = files.map((_: any, i: number) => i).filter((i: number) => i !== fileIndex)
+            await trRequest(config, 'torrent-set', {
+                ids              : [id],
+                'files-wanted'   : [fileIndex],
+                'files-unwanted' : unwanted,
+            })
+            logger.info('transmission', `Fichier ${fileIndex} sélectionné pour ${hash.slice(0, 8)}…`)
+            return
+        } catch {}
+    }
+    throw new Error(`Timeout : métadonnées non disponibles pour ${hash.slice(0, 8)}…`)
+}
+
 const TR: TorrentClientDriver = {
     definition: {
         id    : 'transmission',
@@ -96,7 +134,7 @@ const TR: TorrentClientDriver = {
             'hashString', 'name', 'status', 'percentDone', 'totalSize',
             'downloadedEver', 'uploadedEver', 'uploadRatio',
             'rateDownload', 'rateUpload', 'eta', 'downloadDir', 'labels',
-            'fileStats',   // progression par fichier (bytesCompleted + length)
+            'files',  // bytesCompleted + length par fichier (fileStats n'a pas 'length')
         ]
         const data = await trRequest(config, 'torrent-get', { fields })
         const torrents: any[] = data.arguments?.torrents ?? []
@@ -120,42 +158,36 @@ const TR: TorrentClientDriver = {
                 eta       : t.eta ?? -1,
                 save_path : t.downloadDir,
                 category  : t.labels?.[0] ?? '',
-                files     : Array.isArray(t.fileStats) && t.fileStats.length > 0
-                    ? t.fileStats.map((fs: any, i: number) => ({
+                files     : Array.isArray(t.files) && t.files.length > 0
+                    ? t.files.map((f: any, i: number) => ({
                         index   : i,
-                        progress: fs.length > 0 ? Math.round((fs.bytesCompleted / fs.length) * 100) : 0,
+                        progress: f.length > 0 ? Math.round((f.bytesCompleted / f.length) * 100) : 0,
                     }))
                     : undefined,
             } satisfies TorrentInfo))
     },
 
     async add(config, url, options?: DownloadOptions) {
-        const args: Record<string, unknown> = { filename: url }
+        const hashMatch = url.match(/xt=urn:btih:([a-fA-F0-9]{40,})/i)
+                       ?? options?.magnet?.match(/xt=urn:btih:([a-fA-F0-9]{40,})/i)
+        const hash      = hashMatch?.[1]?.toLowerCase() ?? null
 
+        const args: Record<string, unknown> = { filename: url }
         if (config.savePath) args['download-dir'] = String(config.savePath)
         if (config.category) args['labels']        = [String(config.category)]
 
-        // Transmission applique files-wanted après récupération des métadonnées,
-        // sans démarrer les autres fichiers entre-temps — natif et fiable.
-        if (options?.file_index != null) {
-            args['files-wanted'] = [options.file_index]
-        }
-
         const res = await trRequest(config, 'torrent-add', args)
 
-        // Torrent déjà présent → Transmission renvoie torrent-duplicate
-        // On s'assure quand même que le fichier voulu est activé
-        if (options?.file_index != null && res.arguments?.['torrent-duplicate']) {
-            const dup = res.arguments['torrent-duplicate']
-            try {
-                await trRequest(config, 'torrent-set', {
-                    ids           : [dup.id],
-                    'files-wanted': [options.file_index],
-                })
-                logger.info('transmission', `Torrent ${dup.hashString?.slice(0, 8)}… déjà présent, fichier ${options.file_index} activé`)
-            } catch (err) {
-                logger.warn('transmission', `Activation fichier sur torrent existant échouée : ${err instanceof Error ? err.message : err}`)
+        if (options?.file_index != null && hash) {
+            const isDuplicate = !!res.arguments?.['torrent-duplicate']
+            if (isDuplicate) {
+                logger.info('transmission', `Torrent ${hash.slice(0, 8)}… déjà présent, mise à jour priorité fichier ${options.file_index}`)
+            } else {
+                logger.info('transmission', `Torrent ajouté (sélection fichier ${options.file_index} en attente de métadonnées)`)
             }
+            trApplyFilePriority(config, hash, options.file_index).catch(err =>
+                logger.warn('transmission', `Priorité fichier non appliquée : ${err instanceof Error ? err.message : err}`)
+            )
             return
         }
 
