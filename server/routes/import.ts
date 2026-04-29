@@ -8,6 +8,7 @@ import { readSettings } from '../settings.js'
 import { getGitlabTitle } from '../gitlab-map.js'
 import { readSerieData, loadEnrichedSeriesData } from '../lib/github-cache.js'
 import { GITLAB_API_NFO, GITLAB_RAW_NFO } from '../lib/nfo.js'
+import { dispatchRemove } from '../torrent-clients/index.js'
 
 const router = Router()
 
@@ -222,6 +223,7 @@ router.delete('/organized/:serieId', requireAuth, async (req, res) => {
     }
     let removed = 0
     const errors: string[] = []
+    const emptyHashes: string[] = []
     for (const [hash, episodes] of Object.entries(organized)) {
         for (const epId of Object.keys(episodes)) {
             if (!episodeIds.has(epId)) continue
@@ -232,10 +234,16 @@ router.delete('/organized/:serieId', requireAuth, async (req, res) => {
             delete organized[hash][epId]
             removed++
         }
-        if (Object.keys(organized[hash]).length === 0) delete organized[hash]
+        if (Object.keys(organized[hash]).length === 0) { delete organized[hash]; emptyHashes.push(hash) }
     }
     saveOrganizedJson(organized)
-    logger.info('api', `Désimport série ${serieId} — ${removed} épisode(s) retirés`)
+    if (deleteFile) {
+        for (const hash of emptyHashes) {
+            if (hash === 'manual') continue
+            dispatchRemove(hash, false).catch(err => logger.warn('api', `Impossible de retirer le torrent ${hash.slice(0, 8)}… du client : ${err instanceof Error ? err.message : err}`))
+        }
+    }
+    logger.info('api', `Désimport série ${serieId} — ${removed} épisode(s) retirés${deleteFile && emptyHashes.length ? `, ${emptyHashes.length} torrent(s) retirés du client` : ''}`)
     res.json({ ok: true, removed, errors })
 })
 
@@ -252,6 +260,7 @@ router.delete('/organized/:serieId/seasons/:seasonId', requireAuth, async (req, 
     const episodeIds = new Set<string>(season.episodes?.map((e: any) => String(e.id)) ?? [])
     let removed = 0
     const errors: string[] = []
+    const emptyHashes: string[] = []
     for (const [hash, episodes] of Object.entries(organized)) {
         for (const epId of Object.keys(episodes)) {
             if (!episodeIds.has(epId)) continue
@@ -262,10 +271,16 @@ router.delete('/organized/:serieId/seasons/:seasonId', requireAuth, async (req, 
             delete organized[hash][epId]
             removed++
         }
-        if (Object.keys(organized[hash]).length === 0) delete organized[hash]
+        if (Object.keys(organized[hash]).length === 0) { delete organized[hash]; emptyHashes.push(hash) }
     }
     saveOrganizedJson(organized)
-    logger.info('api', `Désimport saison ${seasonId} (série ${serieId}) — ${removed} épisode(s) retirés`)
+    if (deleteFile) {
+        for (const hash of emptyHashes) {
+            if (hash === 'manual') continue
+            dispatchRemove(hash, false).catch(err => logger.warn('api', `Impossible de retirer le torrent ${hash.slice(0, 8)}… du client : ${err instanceof Error ? err.message : err}`))
+        }
+    }
+    logger.info('api', `Désimport saison ${seasonId} (série ${serieId}) — ${removed} épisode(s) retirés${deleteFile && emptyHashes.length ? `, ${emptyHashes.length} torrent(s) retirés du client` : ''}`)
     res.json({ ok: true, removed, errors })
 })
 
@@ -286,9 +301,14 @@ router.delete('/organized/:serieId/:episodeId', requireAuth, async (req, res) =>
             logger.info('api', `Désimport + suppression fichier : "${foundEntry.dest_path}"`)
         }
         delete organized[foundHash][episodeId]
-        if (Object.keys(organized[foundHash]).length === 0) delete organized[foundHash]
+        const torrentEmpty = Object.keys(organized[foundHash]).length === 0
+        if (torrentEmpty) delete organized[foundHash]
         saveOrganizedJson(organized)
-        logger.info('api', `Désimport ep ${episodeId}`)
+        // Si plus aucun épisode de ce torrent n'est importé → retirer le torrent du client
+        if (deleteFile && torrentEmpty && foundHash !== 'manual') {
+            dispatchRemove(foundHash, false).catch(err => logger.warn('api', `Impossible de retirer le torrent ${foundHash.slice(0, 8)}… du client : ${err instanceof Error ? err.message : err}`))
+        }
+        logger.info('api', `Désimport ep ${episodeId}${deleteFile && torrentEmpty ? ` + torrent ${foundHash.slice(0, 8)}… retiré du client` : ''}`)
         res.json({ ok: true })
     } catch (err) {
         const msg = err instanceof Error ? err.message : 'Erreur inconnue'

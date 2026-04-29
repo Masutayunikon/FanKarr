@@ -426,15 +426,16 @@ function epProgress(ep: any): ActiveTorrent | null {
       const sessionDl = isDownloaded(key0) || isDownloaded(keyI)
       if (active.files && active.files.length > 0) {
         const file = active.files.find(f => f.index === t.file_index)
-        // Avec données par fichier on se fie à la progression réelle du fichier précis,
-        // pas à l'état global du torrent — évite d'afficher les fichiers non sélectionnés (progress 0).
-        if (file != null && (sessionDl || file.progress > 0)) {
+        // Avec données par fichier on se fie à la progression réelle du fichier précis.
+        // Si le fichier est à 100% sans session active → déjà téléchargé hors session
+        // (ex : désimporté puis re-consulté) → ne pas afficher le spinner.
+        if (file != null && (sessionDl || (file.progress > 0 && file.progress < 100))) {
           return { ...active, progress: file.progress }
         }
         if (!sessionDl) continue
       } else {
-        // Pas de données par fichier : session ou torrent terminé
-        if (!sessionDl && active.state !== 'seeding') continue
+        // Pas de données par fichier : ignorer si pas de session active
+        if (!sessionDl) continue
         return { ...active, progress: active.state === 'seeding' ? 100 : active.progress }
       }
     }
