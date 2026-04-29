@@ -35,7 +35,7 @@
             Import manuel
           </button>
 
-          <!-- Désimporter série -->
+          <!-- Supprimer série -->
           <button
               v-if="Object.keys(organizedByEpisode).length > 0"
               @click="openUnimportSerieModal"
@@ -44,7 +44,7 @@
             <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
               <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>
             </svg>
-            Désimporter
+            Supprimer
           </button>
         </div>
 
@@ -114,7 +114,7 @@
       <div v-if="unimportSerieModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4" @click.self="unimportSerieModal = false">
         <div class="bg-card border border-border rounded-xl w-full max-w-sm p-6 flex flex-col gap-5">
           <div>
-            <p class="text-sm font-semibold text-primary">Désimporter la série</p>
+            <p class="text-sm font-semibold text-primary">Supprimer la série</p>
             <p class="text-xs text-muted mt-1 truncate">{{ data?.serie?.title }}</p>
           </div>
           <label class="flex items-center gap-3 cursor-pointer select-none">
@@ -124,7 +124,7 @@
           <div class="flex items-center justify-end gap-2">
             <button @click="unimportSerieModal = false" class="btn-secondary text-xs">Annuler</button>
             <button @click="confirmUnimportSerie" class="px-4 py-2 rounded-lg border border-red-500/30 text-red-400 bg-red-500/10 hover:bg-red-500/20 transition-colors text-xs font-medium">
-              {{ deleteSerieFiles ? 'Désimporter et supprimer' : 'Désimporter' }}
+              {{ deleteSerieFiles ? 'Supprimer les fichiers' : 'Supprimer' }}
             </button>
           </div>
         </div>

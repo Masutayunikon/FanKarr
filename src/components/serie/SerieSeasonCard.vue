@@ -207,16 +207,6 @@
 
           <!-- Actions épisode importé -->
           <template v-if="ep.organized && organizedByEpisode[String(ep.id)]">
-            <!-- Bouton synopsis -->
-            <button
-                v-if="ep.plot"
-                @click.stop="togglePlot(ep.id)"
-                class="w-6 h-6 flex items-center justify-center rounded transition-colors"
-                :class="plotOpen === ep.id ? 'text-accent' : 'text-muted hover:text-primary'"
-                title="Voir le synopsis"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-            </button>
             <!-- Badge rename cliquable -->
             <button
                 v-if="epNeedsRename(ep)"
@@ -235,6 +225,17 @@
               <Trash2 :size="12" />
             </button>
           </template>
+
+          <!-- Chevron synopsis (à droite, visible si l'épisode a un plot) -->
+          <button
+              v-if="ep.plot"
+              @click.stop="togglePlot(ep.id)"
+              class="w-6 h-6 flex items-center justify-center rounded transition-colors shrink-0"
+              :class="plotOpen === ep.id ? 'text-accent' : 'text-muted hover:text-primary'"
+              title="Voir le synopsis"
+          >
+            <ChevronUp :size="14" class="transition-transform duration-200" :class="plotOpen === ep.id ? '' : 'rotate-180'" />
+          </button>
         </div>
 
         <!-- Barre progression épisode -->

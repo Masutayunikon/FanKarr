@@ -39,7 +39,12 @@
           >{{ serie.status }}</span>
         </div>
 
-        <p v-if="serie.plot" class="text-sm text-secondary leading-relaxed max-w-2xl line-clamp-3">
+        <p
+            v-if="serie.plot"
+            @click="expanded = !expanded"
+            class="text-sm text-secondary leading-relaxed max-w-2xl cursor-pointer select-none transition-all"
+            :class="expanded ? '' : 'line-clamp-3'"
+        >
           {{ serie.plot }}
         </p>
       </div>
@@ -48,8 +53,10 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { ArrowLeft, Tv } from 'lucide-vue-next'
 
 defineProps<{ serie: any }>()
+const expanded = ref(false)
 </script>
