@@ -229,7 +229,13 @@ function isDownloading(key: string) { return downloading.value.includes(key) }
 function isDownloaded(key: string)  { return downloaded.value.includes(key) }
 function addDownloading(key: string) { if (!downloading.value.includes(key)) downloading.value.push(key) }
 function removeDownloading(key: string) { downloading.value = downloading.value.filter(k => k !== key) }
-function addDownloaded(key: string) { if (!downloaded.value.includes(key)) downloaded.value.push(key) }
+function addDownloaded(key: string)    { if (!downloaded.value.includes(key)) downloaded.value.push(key) }
+function removeDownloaded(key: string) { downloaded.value = downloaded.value.filter(k => k !== key) }
+function clearEpDownloaded(ep: any) {
+  removeDownloaded(`ep-${ep.id}`)
+  const count = ep.torrents?.length ?? 0
+  for (let i = 0; i < count; i++) removeDownloaded(`ep-${ep.id}-${i}`)
+}
 function extractHash(torrent: any): string | null {
   if (torrent?.infohash) return torrent.infohash.toLowerCase()
   if (!torrent?.magnet) return null
@@ -460,6 +466,8 @@ async function unimportSeason(season: any, deleteFile: boolean) {
     if (!res.ok) { const d = await res.json(); toast(d.error ?? 'Erreur désimport saison', 'error'); return }
     const d = await res.json()
     toast(`${d.removed} épisode(s) désimporté(s) ✓`, 'success')
+    for (const ep of season.episodes ?? []) clearEpDownloaded(ep)
+    removeDownloaded(`season-${season.id}`)
     await fetchOrganized(); load()
   } catch { toast('Impossible de contacter le serveur', 'error') }
 }
@@ -470,6 +478,7 @@ async function unimportSerie(deleteFile: boolean) {
     if (!res.ok) { const d = await res.json(); toast(d.error ?? 'Erreur désimport', 'error'); return }
     const d = await res.json()
     toast(`${d.removed} épisode(s) désimporté(s) ✓`, 'success')
+    downloaded.value = []
     await fetchOrganized(); load()
   } catch { toast('Impossible de contacter le serveur', 'error') }
 }
@@ -496,6 +505,7 @@ async function unimportEpisode(ep: any, _season: any, deleteFile: boolean) {
     const res = await fetch(`/api/organized/${route.params.id}/${ep.id}?deleteFile=${deleteFile}`, { method: 'DELETE', credentials: 'include' })
     if (!res.ok) { const d = await res.json(); toast(d.error ?? 'Erreur désimport', 'error'); return }
     toast(deleteFile ? 'Fichier supprimé ✓' : 'Désimporté ✓', 'success')
+    clearEpDownloaded(ep)
     await fetchOrganized(); load()
   } catch { toast('Impossible de contacter le serveur', 'error') }
   finally { epActionLoading.value[ep.id] = false }
