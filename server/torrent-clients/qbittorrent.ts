@@ -79,24 +79,23 @@ async function qbApplyFilePriority(
             // on se contente d'activer la nouvelle cible sans toucher aux autres.
             const isInitialState = files.every((f: any) => (f.priority ?? 1) > 0)
 
+            const headers = { Cookie: `SID=${sid}`, 'Content-Type': 'application/x-www-form-urlencoded' }
+
             if (isInitialState) {
                 const unwanted = files.map((_, i) => i).filter(i => i !== fileIndex)
                 if (unwanted.length > 0) {
-                    const form = new FormData()
-                    form.append('hash', hash)
-                    form.append('id', unwanted.join('|'))
-                    form.append('priority', '0')
-                    const r = await fetch(`${config.url}/api/v2/torrents/filePrio`, { method: 'POST', body: form, headers: { Cookie: `SID=${sid}` } })
+                    const body = new URLSearchParams({ hash, id: unwanted.join('|'), priority: '0' })
+                    const r = await fetch(`${config.url}/api/v2/torrents/filePrio`, { method: 'POST', body, headers })
                     if (!r.ok) { logger.warn('qbittorrent', `filePrio désactivation échouée (${r.status}) — retry`); continue }
                 }
             }
 
             // Activer le fichier cible (dans tous les cas)
-            const form2 = new FormData()
-            form2.append('hash', hash)
-            form2.append('id', String(fileIndex))
-            form2.append('priority', '1')
-            const r2 = await fetch(`${config.url}/api/v2/torrents/filePrio`, { method: 'POST', body: form2, headers: { Cookie: `SID=${sid}` } })
+            const r2 = await fetch(`${config.url}/api/v2/torrents/filePrio`, {
+                method: 'POST',
+                body   : new URLSearchParams({ hash, id: String(fileIndex), priority: '1' }),
+                headers,
+            })
             if (!r2.ok) { logger.warn('qbittorrent', `filePrio activation échouée (${r2.status}) — retry`); continue }
 
             // Vérification : le fichier cible est bien à priorité > 0
@@ -113,11 +112,10 @@ async function qbApplyFilePriority(
             // Reprendre (torrent mis en pause via paused/stopped à l'ajout)
             // On appelle les deux endpoints : resume (qBit ≤ 4.x) et start (qBit ≥ 5.0)
             if (resume) {
-                const resumeForm = new FormData()
-                resumeForm.append('hashes', hash)
+                const resumeBody = new URLSearchParams({ hashes: hash })
                 await Promise.allSettled([
-                    fetch(`${config.url}/api/v2/torrents/resume`, { method: 'POST', body: resumeForm, headers: { Cookie: `SID=${sid}` } }),
-                    fetch(`${config.url}/api/v2/torrents/start`,  { method: 'POST', body: resumeForm, headers: { Cookie: `SID=${sid}` } }),
+                    fetch(`${config.url}/api/v2/torrents/resume`, { method: 'POST', body: resumeBody, headers }),
+                    fetch(`${config.url}/api/v2/torrents/start`,  { method: 'POST', body: resumeBody, headers }),
                 ])
             }
 
@@ -131,12 +129,12 @@ async function qbApplyFilePriority(
     // Timeout : reprendre quand même pour ne pas laisser le torrent bloqué
     if (resume) {
         try {
-            const sid = await qbLogin(config)
-            const resumeForm = new FormData()
-            resumeForm.append('hashes', hash)
+            const sid     = await qbLogin(config)
+            const headers = { Cookie: `SID=${sid}`, 'Content-Type': 'application/x-www-form-urlencoded' }
+            const body    = new URLSearchParams({ hashes: hash })
             await Promise.allSettled([
-                fetch(`${config.url}/api/v2/torrents/resume`, { method: 'POST', body: resumeForm, headers: { Cookie: `SID=${sid}` } }),
-                fetch(`${config.url}/api/v2/torrents/start`,  { method: 'POST', body: resumeForm, headers: { Cookie: `SID=${sid}` } }),
+                fetch(`${config.url}/api/v2/torrents/resume`, { method: 'POST', body, headers }),
+                fetch(`${config.url}/api/v2/torrents/start`,  { method: 'POST', body, headers }),
             ])
         } catch {}
     }
