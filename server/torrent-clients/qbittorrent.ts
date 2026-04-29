@@ -48,9 +48,8 @@ async function qbTorrentExists(config: Record<string, string | number>, sid: str
 }
 
 /**
- * Attend que les métadonnées soient disponibles, applique les priorités, puis reprend le torrent.
- * Utilisé après un ajout avec stopCondition=MetadataReceived (qBit actif → auto-pause après metadata)
- * ou pour un torrent déjà présent (resume=false, juste mise à jour de priorité).
+ * Attend que les fichiers soient disponibles, résout l'index par chemin si possible,
+ * applique les priorités, puis reprend le torrent.
  */
 async function qbApplyFilePriority(
     config   : Record<string, string | number>,
@@ -70,6 +69,10 @@ async function qbApplyFilePriority(
             const files: any[] = await res.json()
             if (!Array.isArray(files) || files.length === 0) continue
 
+            if (fileIndex >= files.length) {
+                throw new Error(`Index fichier ${fileIndex} hors limites (torrent a ${files.length} fichiers)`)
+            }
+
             // Si tous les fichiers sont à priorité normale (état initial du torrent),
             // on applique le filtrage complet : on désactive tout sauf la cible.
             // Si certains sont déjà à 0 (filtrage déjà effectué pour un épisode précédent),
@@ -83,7 +86,8 @@ async function qbApplyFilePriority(
                     form.append('hash', hash)
                     form.append('id', unwanted.join('|'))
                     form.append('priority', '0')
-                    await fetch(`${config.url}/api/v2/torrents/filePrio`, { method: 'POST', body: form, headers: { Cookie: `SID=${sid}` } })
+                    const r = await fetch(`${config.url}/api/v2/torrents/filePrio`, { method: 'POST', body: form, headers: { Cookie: `SID=${sid}` } })
+                    if (!r.ok) { logger.warn('qbittorrent', `filePrio désactivation échouée (${r.status}) — retry`); continue }
                 }
             }
 
@@ -92,9 +96,21 @@ async function qbApplyFilePriority(
             form2.append('hash', hash)
             form2.append('id', String(fileIndex))
             form2.append('priority', '1')
-            await fetch(`${config.url}/api/v2/torrents/filePrio`, { method: 'POST', body: form2, headers: { Cookie: `SID=${sid}` } })
+            const r2 = await fetch(`${config.url}/api/v2/torrents/filePrio`, { method: 'POST', body: form2, headers: { Cookie: `SID=${sid}` } })
+            if (!r2.ok) { logger.warn('qbittorrent', `filePrio activation échouée (${r2.status}) — retry`); continue }
 
-            // Reprendre (torrent auto-mis en pause par stopCondition=MetadataReceived)
+            // Vérification : le fichier cible est bien à priorité > 0
+            const verif = await fetch(`${config.url}/api/v2/torrents/files?hash=${hash}`, { headers: { Cookie: `SID=${sid}` } })
+            if (verif.ok) {
+                const verifiedFiles: any[] = await verif.json()
+                const target = verifiedFiles[fileIndex]
+                if (!target || (target.priority ?? 0) === 0) {
+                    logger.warn('qbittorrent', `Fichier ${fileIndex} toujours à priorité 0 après application — retry`)
+                    continue
+                }
+            }
+
+            // Reprendre (torrent mis en pause via paused/stopped à l'ajout)
             // On appelle les deux endpoints : resume (qBit ≤ 4.x) et start (qBit ≥ 5.0)
             if (resume) {
                 const resumeForm = new FormData()
@@ -107,7 +123,9 @@ async function qbApplyFilePriority(
 
             logger.info('qbittorrent', `Fichier ${fileIndex} sélectionné${resume ? ' + reprise' : ''} pour ${hash.slice(0, 8)}…`)
             return
-        } catch {}
+        } catch (err) {
+            if (err instanceof Error && err.message.includes('hors limites')) throw err
+        }
     }
 
     // Timeout : reprendre quand même pour ne pas laisser le torrent bloqué
@@ -216,10 +234,11 @@ const QB: TorrentClientDriver = {
     async add(config, url, options?: DownloadOptions) {
         const sid = await qbLogin(config)
 
-        // Extraire le hash depuis l'URL (si magnet) ou depuis options.magnet (si .torrent URL)
-        const hashMatch = url.match(/xt=urn:btih:([a-fA-F0-9]{40,})/i)
-                       ?? options?.magnet?.match(/xt=urn:btih:([a-fA-F0-9]{40,})/i)
-        const hash      = hashMatch?.[1]?.toLowerCase() ?? null
+        // Priorité : infohash direct (depuis les données API) > parsing du magnet/URL
+        const hash = (options?.infohash?.toLowerCase() ?? null)
+                  || url.match(/xt=urn:btih:([a-fA-F0-9]{40,})/i)?.[1]?.toLowerCase()
+                  || options?.magnet?.match(/xt=urn:btih:([a-fA-F0-9]{40,})/i)?.[1]?.toLowerCase()
+                  || null
 
         if (options?.file_index != null) {
             if (hash) {
@@ -242,12 +261,15 @@ const QB: TorrentClientDriver = {
                 } catch {}
             }
 
-            // Ajout du torrent (stopCondition=MetadataReceived si hash connu, qBit ≥ 4.6)
+            // Ajout du torrent en pause immédiate (toutes versions qBit)
+            // paused=true  → qBit < 5.0
+            // stopped=true → qBit ≥ 5.0
             const form = new FormData()
             form.append('urls', url)
             if (config.category) form.append('category', String(config.category))
             if (config.savePath)  form.append('savepath', String(config.savePath))
-            if (hash) form.append('stopCondition', 'MetadataReceived')
+            form.append('paused',  'true')
+            form.append('stopped', 'true')
 
             const res  = await fetch(`${config.url}/api/v2/torrents/add`, {
                 method: 'POST', body: form, headers: { Cookie: `SID=${sid}` },
@@ -256,12 +278,12 @@ const QB: TorrentClientDriver = {
             if (text !== 'Ok.') throw new Error(`Ajout échoué : ${text}`)
 
             if (hash) {
-                logger.info('qbittorrent', `Torrent ajouté (stopCondition=MetadataReceived, sélection fichier ${options.file_index} en attente)`)
+                logger.info('qbittorrent', `Torrent ajouté (en pause, sélection fichier ${options.file_index} en attente)`)
                 qbApplyFilePriority(config, hash, options.file_index, true).catch(err =>
                     logger.warn('qbittorrent', `Priorité fichier non appliquée : ${err instanceof Error ? err.message : err}`)
                 )
             } else {
-                // Hash inconnu (.torrent sans magnet) → retrouve le nouveau torrent par diff de liste
+                // Hash inconnu (pas d'infohash, pas de magnet) → retrouve le nouveau torrent par diff de liste
                 logger.info('qbittorrent', `Torrent ajouté sans hash connu — recherche dans la liste (sélection fichier ${options.file_index})`)
                 const fileIndex = options.file_index
                 ;(async () => {
@@ -275,7 +297,7 @@ const QB: TorrentClientDriver = {
                             if (!newT) continue
                             const resolvedHash = String(newT.hash).toLowerCase()
                             logger.info('qbittorrent', `Hash résolu : ${resolvedHash.slice(0, 8)}… — application priorité fichier ${fileIndex}`)
-                            await qbApplyFilePriority(config, resolvedHash, fileIndex, false)
+                            await qbApplyFilePriority(config, resolvedHash, fileIndex, true)
                             return
                         } catch {}
                     }

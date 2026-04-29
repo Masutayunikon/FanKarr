@@ -197,7 +197,7 @@
                   class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-primary hover:bg-hover transition-colors"
                   :class="(isDownloaded(`ep-${ep.id}-${i}`) || isAlreadyQueued(t)) ? 'opacity-50 cursor-not-allowed' : ''"
                   :disabled="isDownloaded(`ep-${ep.id}-${i}`) || isAlreadyQueued(t)"
-                  @click="!isDownloaded(`ep-${ep.id}-${i}`) && !isAlreadyQueued(t) && (emit('download', `ep-${ep.id}-${i}`, t.torrent_url, t.magnet, t.file_index ?? null, t.file_path ?? null), epOptionsOpen = null)"
+                  @click="!isDownloaded(`ep-${ep.id}-${i}`) && !isAlreadyQueued(t) && (emit('download', `ep-${ep.id}-${i}`, t.torrent_url, t.magnet, t.file_index ?? null, t.file_path ?? null, t.infohash ?? null), epOptionsOpen = null)"
               >
                 <component :is="(isDownloaded(`ep-${ep.id}-${i}`) || isAlreadyQueued(t)) ? checkIcon : downloadIcon" />
                 {{ groupLabels(ep.torrents)[i] }}
@@ -313,7 +313,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   toggle         : [id: number]
-  download       : [key: string, url: string | null, magnet: string | null, file_index?: number | null, file_path?: string | null]
+  download       : [key: string, url: string | null, magnet: string | null, file_index?: number | null, file_path?: string | null, infohash?: string | null]
   downloadSeason : [season: any, packHash?: string]
   renameEpisode  : [ep: any, season: any]
   unimportEpisode: [ep: any, season: any, deleteFile: boolean]
@@ -452,7 +452,7 @@ function handleEpBtnClick(ep: any) {
   }
   // Option unique → téléchargement direct
   if (ep.torrent && !isAlreadyQueued(ep.torrent)) {
-    emit('download', `ep-${ep.id}`, ep.torrent.torrent_url, ep.torrent.magnet, ep.torrent.file_index ?? null, ep.torrent.file_path ?? null)
+    emit('download', `ep-${ep.id}`, ep.torrent.torrent_url, ep.torrent.magnet, ep.torrent.file_index ?? null, ep.torrent.file_path ?? null, ep.torrent.infohash ?? null)
   }
 }
 

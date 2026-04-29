@@ -59,7 +59,8 @@ export interface TorrentInfo {
 export interface DownloadOptions {
     file_index?: number | null
     file_path ?: string | null
-    magnet    ?: string | null   // conservé pour extraire le hash même quand on envoie le .torrent
+    infohash  ?: string | null   // hash direct depuis les données API (plus fiable que parser le magnet)
+    magnet    ?: string | null   // fallback pour extraire le hash si infohash absent
 }
 
 export interface TorrentClientDriver {
