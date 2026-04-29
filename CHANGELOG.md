@@ -1,5 +1,24 @@
 # Changelog
 
+## [3.12.0](https://github.com/Masutayunikon/FanKarr/compare/v3.11.5...v3.12.0) (2026-04-29)
+
+
+### Features
+
+* désimport saison/série avec modal, refonte UX épisodes, fix sélection fichier qBit/Transmission ([2446622](https://github.com/Masutayunikon/FanKarr/commit/24466228ef5305c36574f58fb2590aee8ee86e13))
+* désimport saison/série avec modal, refonte UX épisodes, fix sélection fichier qBit/Transmission ([fcb1b88](https://github.com/Masutayunikon/FanKarr/commit/fcb1b88870bebb1bf0b4e484b2462e56ab3975fc))
+* désimport saison/série avec modal, refonte UX épisodes, fix sélection fichier qBit/Transmission ([3fb4119](https://github.com/Masutayunikon/FanKarr/commit/3fb4119c79908c1023f3cbf9999b524eb1bc267e))
+
+
+### Bug Fixes
+
+* qbitorrent ([9834023](https://github.com/Masutayunikon/FanKarr/commit/98340235226394c4583159f36cce74e316eedf26))
+* qbitorrent header ([f5094c6](https://github.com/Masutayunikon/FanKarr/commit/f5094c68c6834f816b0b6d019e5d5637400e16ab))
+* spinner infinie apres supression ([39d2f99](https://github.com/Masutayunikon/FanKarr/commit/39d2f996aecb9f07dcd8c1ec7911090276908a2f))
+* spinner infinie apres supression ([97c573c](https://github.com/Masutayunikon/FanKarr/commit/97c573cc1d4fb76787ba5d1df4fda30faec5fbf2))
+* **UI/UX:** chevron pour ouvrir la description, bouton desimporter de la serie passer à supprimer et affichage de toute la description de la serie lors d'un clique ([f6ef818](https://github.com/Masutayunikon/FanKarr/commit/f6ef818e60875a1ac5d859480c1e0e53082c0858))
+* **UI/UX:** meilleur comprehension des parametres avancés des clients ([040a8d7](https://github.com/Masutayunikon/FanKarr/commit/040a8d7b339090d819c6e3dc049f1ab9d8b221f5))
+
 ## [3.11.5](https://github.com/Masutayunikon/FanKarr/compare/v3.11.4...v3.11.5) (2026-04-26)
 
 
