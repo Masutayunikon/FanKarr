@@ -87,7 +87,8 @@
             description="Importer automatiquement dès qu'un téléchargement est terminé. Vérifie toutes les 5 minutes."
         />
         <SettingsToggle
-            v-model="form.nfoSupport"
+            :model-value="form.nfoSupport"
+            @update:model-value="onNfoToggle"
             label="NFO / Métadonnées"
             description="Télécharge les NFO et images depuis GitLab lors de l'import (Kodi, Infuse, etc.)."
         />
@@ -146,6 +147,34 @@
       :media-path="form.mediaPath"
       @close="plexOpen = false"
   />
+
+  <!-- Confirmation NFO -->
+  <Teleport to="body">
+    <div
+        v-if="nfoConfirmOpen"
+        class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4"
+        @click.self="nfoConfirmOpen = false"
+    >
+      <div class="bg-card border border-border rounded-xl w-full max-w-sm p-6 flex flex-col gap-4">
+        <div class="flex flex-col gap-1.5">
+          <h3 class="text-sm font-semibold text-primary">Activer les NFO / Métadonnées ?</h3>
+          <p class="text-xs text-muted leading-relaxed">
+            Si vous utilisez l'agent Fankai sur <span class="text-primary">Jellyfin, Plex ou Emby</span>,
+            les métadonnées sont déjà gérées directement par l'agent — activer les NFO est inutile
+            et peut créer des conflits.
+          </p>
+          <p class="text-xs text-muted leading-relaxed">
+            Activez cette option uniquement si vous utilisez <span class="text-primary">Kodi, Infuse</span>
+            ou un lecteur qui lit les fichiers NFO locaux.
+          </p>
+        </div>
+        <div class="flex gap-2 pt-1">
+          <button @click="confirmNfo" class="btn-primary text-xs">Oui, activer quand même</button>
+          <button @click="nfoConfirmOpen = false" class="btn-secondary text-xs">Annuler</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -157,12 +186,26 @@ import PlexWizard from '@/components/settings/PlexWizard.vue'
 
 const { add: toast } = useToast()
 
-const saving     = ref(false)
-const scanning   = ref(false)
-const isDocker   = ref(false)
-const loaded     = ref(false)
-const plexOpen   = ref(false)
-const scanResult = ref<{ found: number; added: number } | null>(null)
+const saving         = ref(false)
+const scanning       = ref(false)
+const isDocker       = ref(false)
+const loaded         = ref(false)
+const plexOpen       = ref(false)
+const nfoConfirmOpen = ref(false)
+const scanResult     = ref<{ found: number; added: number } | null>(null)
+
+function onNfoToggle(val: boolean) {
+  if (val && !form.value.nfoSupport) {
+    nfoConfirmOpen.value = true
+  } else {
+    form.value.nfoSupport = val
+  }
+}
+
+function confirmNfo() {
+  form.value.nfoSupport = true
+  nfoConfirmOpen.value  = false
+}
 
 const form = ref({
   mediaPath           : '',
