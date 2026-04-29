@@ -110,18 +110,61 @@
                 <option v-for="def in availableClients" :key="def.id" :value="def.id">{{ def.label }}</option>
               </select>
             </div>
-            <div v-if="currentDefinition" v-for="field in currentDefinition.fields" :key="field.key">
-              <label class="settings-label">
-                {{ field.label }}
-                <span v-if="field.required" class="text-red-400 ml-0.5">*</span>
-              </label>
-              <input
-                  v-model="modal.config[field.key]"
-                  :type="field.type === 'password' ? 'password' : 'text'"
-                  :placeholder="field.placeholder ?? ''"
-                  class="settings-input"
-              />
-            </div>
+
+            <!-- Champs principaux -->
+            <template v-if="currentDefinition">
+              <div v-for="field in basicFields" :key="field.key">
+                <label class="settings-label">
+                  {{ field.label }}
+                  <span v-if="field.required" class="text-red-400 ml-0.5">*</span>
+                </label>
+                <input
+                    v-model="modal.config[field.key]"
+                    :type="field.type === 'password' ? 'password' : 'text'"
+                    :placeholder="field.placeholder ?? ''"
+                    class="settings-input"
+                />
+              </div>
+
+              <!-- Paramètres avancés -->
+              <div v-if="advancedFields.length > 0">
+                <button
+                    type="button"
+                    @click="advancedOpen = !advancedOpen"
+                    class="flex items-center gap-1.5 text-xs text-muted hover:text-primary transition-colors w-full py-1"
+                >
+                  <ChevronDown
+                      :size="13"
+                      class="transition-transform duration-200 shrink-0"
+                      :class="advancedOpen ? 'rotate-180' : ''"
+                  />
+                  Paramètres avancés
+                </button>
+
+                <div v-if="advancedOpen" class="flex flex-col gap-3 mt-2 pl-3 border-l border-border">
+                  <div v-for="field in advancedFields" :key="field.key">
+                    <label class="settings-label flex items-center gap-1.5">
+                      {{ field.label }}
+                      <span
+                          class="inline-flex items-center justify-center w-4 h-4 rounded-full border border-border text-[10px] text-muted cursor-default leading-none shrink-0 relative group"
+                          tabindex="-1"
+                      >
+                        i
+                        <span class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-56 text-[11px] text-secondary bg-card border border-border rounded-lg px-2.5 py-1.5 shadow-lg pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-10 leading-relaxed">
+                          {{ fieldTooltip(field.key) }}
+                        </span>
+                      </span>
+                    </label>
+                    <input
+                        v-model="modal.config[field.key]"
+                        :type="field.type === 'password' ? 'password' : 'text'"
+                        placeholder=""
+                        class="settings-input"
+                    />
+                  </div>
+                </div>
+              </div>
+            </template>
           </div>
 
           <p v-if="!modal.tested && modal.type" class="text-xs text-muted">
@@ -154,6 +197,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
+import { ChevronDown } from 'lucide-vue-next'
 import { useToast } from '@/composables/useToast'
 
 const { add: toast } = useToast()
@@ -181,8 +225,30 @@ const modal = ref({
   tested : false,
 })
 
+const ADVANCED_KEYS = ['savePath', 'remotePath', 'localPath']
+
+const FIELD_TOOLTIPS: Record<string, string> = {
+  savePath   : 'Optionnel. Permet de placer les téléchargements dans un sous-dossier spécifique à l\'intérieur du dossier déjà configuré dans la gestion des médias.',
+  remotePath : 'Si le client tourne sur une autre machine, indiquez ici le chemin qu\'il utilise (ex: /downloads). À associer avec le chemin local ci-dessous.',
+  localPath  : 'Chemin équivalent au chemin distant, mais vu par FanKarr sur sa machine (ex: /mnt/nas/downloads). Les deux champs fonctionnent en binôme pour faire la correspondance.',
+}
+
+function fieldTooltip(key: string): string {
+  return FIELD_TOOLTIPS[key] ?? ''
+}
+
+const advancedOpen = ref(false)
+
 const currentDefinition = computed(() =>
     availableClients.value.find(d => d.id === modal.value.type) ?? null
+)
+
+const basicFields = computed(() =>
+    currentDefinition.value?.fields.filter((f: any) => !ADVANCED_KEYS.includes(f.key)) ?? []
+)
+
+const advancedFields = computed(() =>
+    currentDefinition.value?.fields.filter((f: any) => ADVANCED_KEYS.includes(f.key)) ?? []
 )
 
 function clientLabel(type: string) {
@@ -229,6 +295,7 @@ async function deleteClient(uuid: string) {
 
 function openAddModal() {
   modal.value = { open: true, uuid: null, name: '', type: '', config: {}, testing: false, saving: false, tested: false }
+  advancedOpen.value = false
 }
 
 function editClient(client: any) {
@@ -249,6 +316,7 @@ function closeModal() { modal.value.open = false }
 function onTypeChange() {
   modal.value.config = {}
   modal.value.tested = false
+  advancedOpen.value = false
   const def = currentDefinition.value
   if (def) {
     for (const field of def.fields) {
