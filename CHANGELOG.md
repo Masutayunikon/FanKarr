@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.12.1](https://github.com/Masutayunikon/FanKarr/compare/v3.12.0...v3.12.1) (2026-04-29)
+
+
+### Bug Fixes
+
+* **UI/UX:** ajout d'un modal de confirmation lors de l'activation des nfo ([8b98b0e](https://github.com/Masutayunikon/FanKarr/commit/8b98b0edf926ba6b542501afdf524050d72f043b))
+
 ## [3.12.0](https://github.com/Masutayunikon/FanKarr/compare/v3.11.5...v3.12.0) (2026-04-29)
 
 
