@@ -491,7 +491,17 @@ function epExpectedName(ep: any): string {
   if (props.nfoSupport) {
     return ep.nfo_filename ? ep.nfo_filename.replace(/\.[^.]+$/, '') + srcExt : entry.dest_filename
   } else {
-    return ep.formatted_name?.trim() ? ep.formatted_name.replace(/[<>:"/\\|?*]/g, '').trim() + srcExt : entry.dest_filename
+    // Préférer le formatted_name du torrent qui correspond au fichier importé.
+    // On essaie de matcher par hash (si l'entrée organized l'expose), sinon on
+    // cherche le premier torrent qui a un formatted_name.
+    const usedHash = entry.hash?.toLowerCase() ?? null
+    const matchedName = usedHash
+      ? (ep.torrents ?? []).find((t: any) => t.infohash === usedHash)?.formatted_name
+      : null
+    const name = matchedName
+      ?? (ep.torrents ?? []).find((t: any) => t.formatted_name)?.formatted_name
+      ?? ep.formatted_name
+    return name?.trim() ? name.replace(/[<>:"/\\|?*]/g, '').trim() + srcExt : entry.dest_filename
   }
 }
 function epNeedsRename(ep: any): boolean {

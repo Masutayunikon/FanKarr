@@ -101,9 +101,14 @@ export async function scanMediaPath(
                     if (!srcFilename) continue
                     idx(srcFilename, hash)
                     if (ep.nfo_filename) idx(ep.nfo_filename, hash, ep.nfo_filename)
+                    // formatted_name spécifique à ce torrent (priorité sur celui de l'épisode)
+                    if (p.formatted_name?.trim()) {
+                        const fmtBase = p.formatted_name.replace(/[<>:"/\\|?*]/g, '').trim()
+                        idx(fmtBase, hash, fmtBase)
+                    }
                 }
 
-                // 2. original_filename, nfo_filename et formatted_name — indexés même si paths est vide
+                // 2. original_filename, nfo_filename et formatted_name épisode — fallback
                 const fallbackHash = ep.paths?.[0]?.infohash?.toLowerCase() ?? 'manual'
                 if (ep.original_filename) idx(ep.original_filename, fallbackHash, ep.original_filename)
                 if (ep.nfo_filename)      idx(ep.nfo_filename, fallbackHash, ep.nfo_filename)
@@ -362,9 +367,16 @@ export async function syncFilenameChanges(
                     ? path.basename(orgEntry.dest_path)
                     : orgEntry.dest_filename
                 const srcExt = path.extname(currentName)
+                // Préférer le formatted_name du path correspondant au hash organisé
+                const matchedPathEntry = (ep.paths ?? []).find((p: any) =>
+                    typeof p === 'object' && p.infohash?.toLowerCase() === orgHash
+                )
+                const fmtName = matchedPathEntry?.formatted_name?.trim()
+                    ? matchedPathEntry.formatted_name
+                    : ep.formatted_name
                 const expectedName: string = nfoSupport
                     ? (ep.nfo_filename ? ep.nfo_filename.replace(/\.[^.]+$/, '') + srcExt : currentName)
-                    : (ep.formatted_name?.trim() ? ep.formatted_name.replace(/[<>:"/\\|?*]/g, '').trim() + srcExt : currentName)
+                    : (fmtName?.trim() ? fmtName.replace(/[<>:"/\\|?*]/g, '').trim() + srcExt : currentName)
 
                 if (expectedName === currentName) continue
 

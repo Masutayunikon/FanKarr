@@ -10,6 +10,7 @@ import { readAvailable, readInfohashMap, readSerieData } from '../lib/github-cac
 import {
     fankaiGet, normalizeSerie, normalizeSeason, normalizeEpisode,
     extractTorrentsFromSerieData, buildResolvedEpisodes, computeSerieDownloadState,
+    deduplicateEpisodes,
 } from '../lib/serie-helpers.js'
 
 const router = Router()
@@ -99,7 +100,7 @@ router.get('/series/:id', requireAuth, async (req, res) => {
                     for (const t of (ep.torrents ?? [])) {
                         if (!episodeTorrentMap[ep.id]) episodeTorrentMap[ep.id] = []
                         const pathEntry = (ep.paths ?? []).find((p: any) => typeof p === 'object' && p.infohash?.toLowerCase() === t.infohash?.toLowerCase())
-                        episodeTorrentMap[ep.id].push({ torrent_url: t.torrent_url, magnet: t.magnet, infohash: t.infohash?.toLowerCase() ?? null, type: 'episode', raw: t.title, torrent_name: t.torrent_name ?? null, manual: t.manual ?? false, fankai: t.fankai ?? true, file_index: pathEntry?.file_index ?? null, file_path: pathEntry?.path ?? null })
+                        episodeTorrentMap[ep.id].push({ torrent_url: t.torrent_url, magnet: t.magnet, infohash: t.infohash?.toLowerCase() ?? null, type: 'episode', raw: t.title, torrent_name: t.torrent_name ?? null, manual: t.manual ?? false, fankai: t.fankai ?? true, file_index: pathEntry?.file_index ?? null, file_path: pathEntry?.path ?? null, formatted_name: pathEntry?.formatted_name ?? ep.formatted_name ?? null })
                         availableEpisodeIds.add(ep.id)
                         const orgFiles = organized[t.infohash?.toLowerCase()] ?? {}
                         const isOrg = orgFiles[String(ep.id)] !== undefined
@@ -124,7 +125,7 @@ router.get('/series/:id', requireAuth, async (req, res) => {
                             if (!pack) continue
                             seenPackHashes.add(hashKey)
                             if (!episodeTorrentMap[ep.id]) episodeTorrentMap[ep.id] = []
-                            episodeTorrentMap[ep.id].push({ torrent_url: pack.torrent_url, magnet: pack.magnet, infohash: hashKey, type: pack.type, raw: pack.raw, torrent_name: pack.torrent_name ?? null, manual: false, fankai: pack.fankai, file_index: pathEntry.file_index ?? null, file_path: pathEntry.path ?? null })
+                            episodeTorrentMap[ep.id].push({ torrent_url: pack.torrent_url, magnet: pack.magnet, infohash: hashKey, type: pack.type, raw: pack.raw, torrent_name: pack.torrent_name ?? null, manual: false, fankai: pack.fankai, file_index: pathEntry.file_index ?? null, file_path: pathEntry.path ?? null, formatted_name: pathEntry.formatted_name ?? ep.formatted_name ?? null })
                             availableEpisodeIds.add(ep.id)
                         }
                     }
@@ -133,7 +134,7 @@ router.get('/series/:id', requireAuth, async (req, res) => {
         }
 
         const enrichedSeasons = seasonsWithEpisodes.map((season: any) => {
-            const eps = season.episodes.map((ep: any) => {
+            const rawEps = season.episodes.map((ep: any) => {
                 const epTorrents = episodeTorrentMap[ep.id] ?? []
                 const epTorrent = epTorrents[0] ?? null
                 let fankai: boolean | null = epTorrent ? (epTorrent.fankai ?? true) : null
@@ -160,6 +161,9 @@ router.get('/series/:id', requireAuth, async (req, res) => {
                     organized: organizedEpisodeIds.has(ep.id),
                 }
             })
+            // Dédoublonnage : plusieurs variantes (x264/x265…) du même episode_number
+            // sont fusionnées en un seul épisode avec la liste de torrents combinée
+            const eps = deduplicateEpisodes(rawEps)
             const total    = eps.filter((e: any) => e.available).length
             const orgCount = eps.filter((e: any) => e.organized).length
             const epTotal  = eps.length

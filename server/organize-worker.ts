@@ -113,13 +113,15 @@ function buildFileMap(
         if (seasonFilter !== undefined && season.season_number !== seasonFilter) continue
         for (const ep of season.episodes ?? []) {
             const paths: any[] = ep.paths ?? []
-            let matchedPath: string | null = null
+            let matchedPath   : string | null = null
+            let matchedPathObj: any            = null
 
             for (const p of paths) {
                 if (typeof p === 'string') {
                     if (!matchedPath) matchedPath = p.replace(/\\/g, '/')
                 } else if (p?.infohash?.toLowerCase() === h) {
-                    matchedPath = p.path.replace(/\\/g, '/')
+                    matchedPath    = p.path.replace(/\\/g, '/')
+                    matchedPathObj = p
                     break
                 }
             }
@@ -127,8 +129,12 @@ function buildFileMap(
             if (!matchedPath) continue
             const filename = matchedPath.split('/').pop() ?? matchedPath
 
-            const fmtName = ep.formatted_name?.trim()
-                ? ep.formatted_name.replace(/[<>:"/\\|?*]/g, '') + '.mkv'
+            // Préférer le formatted_name du path (spécifique à ce torrent) sur celui de l'épisode
+            const rawFmtName = matchedPathObj?.formatted_name?.trim()
+                ? matchedPathObj.formatted_name
+                : ep.formatted_name
+            const fmtName = rawFmtName?.trim()
+                ? rawFmtName.replace(/[<>:"/\\|?*]/g, '') + '.mkv'
                 : null
 
             if (!nfoSupport && !fmtName) {
@@ -289,14 +295,23 @@ async function organizeTorrent(hash: string, name: string, savePath: string, ser
         const ep      = torrent._episode
         const season  = torrent._season
         const paths: any[] = ep.paths ?? []
-        let filePath: string | null = null
+        let filePath   : string | null = null
+        let matchedPathObj: any         = null
         for (const p of paths) {
             if (typeof p === 'string') { if (!filePath) filePath = p.replace(/\\/g, '/') }
-            else if (p?.infohash?.toLowerCase() === hash.toLowerCase()) { filePath = p.path.replace(/\\/g, '/'); break }
+            else if (p?.infohash?.toLowerCase() === hash.toLowerCase()) {
+                filePath       = p.path.replace(/\\/g, '/')
+                matchedPathObj = p
+                break
+            }
         }
         const filename = filePath?.split('/').pop() ?? name
-        const fmtName  = ep.formatted_name?.trim()
-            ? ep.formatted_name.replace(/[<>:"/\\|?*]/g, '') + '.mkv'
+        // Préférer le formatted_name du path (spécifique à ce torrent) sur celui de l'épisode
+        const rawFmtName = matchedPathObj?.formatted_name?.trim()
+            ? matchedPathObj.formatted_name
+            : ep.formatted_name
+        const fmtName = rawFmtName?.trim()
+            ? rawFmtName.replace(/[<>:"/\\|?*]/g, '') + '.mkv'
             : null
 
         const srcExt       = path.extname(filename)

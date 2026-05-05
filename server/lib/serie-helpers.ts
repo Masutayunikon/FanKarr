@@ -43,6 +43,34 @@ export function extractTorrentsFromSerieData(sd: any): any[] {
     return result
 }
 
+/**
+ * Dédoublonne une liste d'épisodes par episode_number.
+ * Quand plusieurs variantes existent (ex. x264 + x265), on garde la première
+ * comme épisode principal et on fusionne les torrents des autres dans sa liste.
+ */
+export function deduplicateEpisodes(episodes: any[]): any[] {
+    const map = new Map<number, any>()
+    for (const ep of episodes) {
+        const key = ep.episode_number
+        if (!map.has(key)) {
+            map.set(key, { ...ep, torrents: [...(ep.torrents ?? [])] })
+        } else {
+            const primary = map.get(key)!
+            const seenHashes = new Set(primary.torrents.map((t: any) => t.infohash).filter(Boolean))
+            for (const t of ep.torrents ?? []) {
+                if (!t.infohash || !seenHashes.has(t.infohash)) {
+                    primary.torrents.push(t)
+                    if (t.infohash) seenHashes.add(t.infohash)
+                }
+            }
+            primary.torrent   = primary.torrents[0] ?? null
+            primary.available = primary.available || ep.available
+            primary.organized = primary.organized || ep.organized
+        }
+    }
+    return Array.from(map.values())
+}
+
 export function buildResolvedEpisodes(sd: any, hash: string, seasonFilter?: number): any[] {
     const resolved: any[] = []
     const h = hash.toLowerCase()
@@ -69,14 +97,19 @@ export function computeSerieDownloadState(serieData: any | null, organized: Reco
 
     if (allTorrents.some(t => t.infohash && activeTorrents.has(t.infohash.toLowerCase()))) return 'downloading'
 
-    const allEpisodeIds = new Set<number>()
+    // Dédoublonnage : épisodes uniques par (season_number, episode_number)
+    // pour éviter de compter x264 + x265 comme deux épisodes distincts
+    const uniqueEpKeys = new Set<string>()
+    const epIdToKey    = new Map<number, string>()
     for (const season of serieData.seasons ?? []) {
         for (const ep of season.episodes ?? []) {
-            allEpisodeIds.add(ep.id)
+            const key = `${season.season_number}:${ep.episode_number}`
+            uniqueEpKeys.add(key)
+            epIdToKey.set(ep.id, key)
         }
     }
 
-    const organizedEpisodeIds = new Set<number>()
+    const organizedEpKeys = new Set<string>()
 
     for (const t of allTorrents) {
         const hash = t.infohash?.toLowerCase()
@@ -85,18 +118,24 @@ export function computeSerieDownloadState(serieData: any | null, organized: Reco
         if (Object.keys(orgFiles).length === 0) continue
         for (const ep of buildResolvedEpisodes(serieData, hash, t.season_number)) {
             const isOrganized = orgFiles[String(ep.episode_id)] !== undefined || orgFiles[ep.filename] !== undefined
-            if (isOrganized) organizedEpisodeIds.add(ep.episode_id)
+            if (isOrganized) {
+                const key = epIdToKey.get(ep.episode_id)
+                if (key) organizedEpKeys.add(key)
+            }
         }
     }
 
     const manualOrg = organized['manual'] ?? {}
     for (const season of serieData.seasons ?? []) {
         for (const ep of season.episodes ?? []) {
-            if (manualOrg[String(ep.id)]) organizedEpisodeIds.add(ep.id)
+            if (manualOrg[String(ep.id)]) {
+                const key = epIdToKey.get(ep.id)
+                if (key) organizedEpKeys.add(key)
+            }
         }
     }
 
-    if (allEpisodeIds.size === 0 || organizedEpisodeIds.size === 0) return 'none'
-    if (organizedEpisodeIds.size >= allEpisodeIds.size) return 'complete'
+    if (uniqueEpKeys.size === 0 || organizedEpKeys.size === 0) return 'none'
+    if (organizedEpKeys.size >= uniqueEpKeys.size) return 'complete'
     return 'partial'
 }
