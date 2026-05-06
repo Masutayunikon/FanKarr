@@ -285,7 +285,7 @@ async function fetchActiveDownloads() {
           const key     = `${t.hash}:${f.index}`
           const prevProg = _prevFileProgresses.get(key)
           _prevFileProgresses.set(key, f.progress)
-          if (!isFirstPoll && prevProg !== undefined && prevProg < 100 && f.progress === 100 && !_recentlyOrganized.has(key)) {
+          if (!isFirstPoll && prevProg !== undefined && prevProg < 1 && f.progress >= 1 && !_recentlyOrganized.has(key)) {
             _recentlyOrganized.add(key)
             triggerOrganize(t)
           }

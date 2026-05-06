@@ -441,8 +441,8 @@ function epProgress(ep: any): ActiveTorrent | null {
         // Avec données par fichier on se fie à la progression réelle du fichier précis.
         // Si le fichier est à 100% sans session active → déjà téléchargé hors session
         // (ex : désimporté puis re-consulté) → ne pas afficher le spinner.
-        if (file != null && (sessionDl || (file.progress > 0 && file.progress < 100))) {
-          return { ...active, progress: file.progress }
+        if (file != null && (sessionDl || (file.progress > 0 && file.progress < 1))) {
+          return { ...active, progress: Math.round(file.progress * 100) }
         }
         if (!sessionDl) continue
       } else {
