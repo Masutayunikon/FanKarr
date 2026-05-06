@@ -36,7 +36,8 @@ export interface SavedClient {
 
 export interface TorrentFileProgress {
     index   : number
-    progress: number   // 0–100
+    name   ?: string   // chemin relatif dans le torrent (ex: "Pack S1/Episode1.mkv") — optionnel selon le client
+    progress: number   // 0–1
 }
 
 export interface TorrentInfo {
@@ -70,6 +71,7 @@ export interface TorrentClientDriver {
     add         : (config: Record<string, string | number>, url: string, options?: DownloadOptions) => Promise<void>
     list        : (config: Record<string, string | number>, category?: string) => Promise<TorrentInfo[]>
     remove      : (config: Record<string, string | number>, hash: string, deleteFiles?: boolean) => Promise<void>
+    getFiles   ?: (config: Record<string, string | number>, hash: string) => Promise<TorrentFileProgress[]>
 }
 
 // ─── Registry ─────────────────────────────────────────────────────────────────
@@ -341,4 +343,27 @@ export async function dispatchList(
     }
 
     return results
+}
+
+// ─── Dispatch file progress ────────────────────────────────────────────────────
+// Retourne la liste des fichiers d'un torrent avec leur progression (0–1).
+// clientUuid optionnel : si fourni, interroge uniquement ce client.
+
+export async function dispatchGetFiles(
+    hash       : string,
+    clientUuid?: string,
+): Promise<TorrentFileProgress[]> {
+    const clients = clientUuid
+        ? loadClients().filter(c => c.uuid === clientUuid)
+        : loadClients()
+
+    for (const client of clients) {
+        const driver = getDriver(client.type)
+        if (!driver?.getFiles) continue
+        try {
+            const files = await driver.getFiles(client.config, hash)
+            if (files.length > 0) return files
+        } catch {}
+    }
+    return []
 }

@@ -253,6 +253,26 @@ function seasonFolder(n: number): string {
     return n === 0 ? 'Specials' : `Saison ${n}`
 }
 
+/**
+ * Supprime un fichier avec retry en cas d'EBUSY (Windows : fichier encore ouvert par qBit/autre).
+ * 5 tentatives × 500 ms = 2,5 s max avant de remonter l'erreur.
+ */
+async function unlinkWithRetry(filePath: string, maxAttempts = 5): Promise<void> {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        try {
+            await fsp.unlink(filePath)
+            return
+        } catch (err: any) {
+            if (err?.code === 'EBUSY' && attempt < maxAttempts - 1) {
+                warn(`EBUSY sur "${path.basename(filePath)}" — retry ${attempt + 1}/${maxAttempts - 1}`)
+                await new Promise(r => setTimeout(r, 500))
+            } else {
+                throw err
+            }
+        }
+    }
+}
+
 function tryHardlink(src: string, dest: string): boolean {
     try { fs.linkSync(src, dest); return true }
     catch (err) {
@@ -270,7 +290,13 @@ function sanitizeDirName(name: string): string {
 }
 
 // ─── Organise un torrent ──────────────────────────────────────
-async function organizeTorrent(hash: string, name: string, savePath: string, seriesData: any[]) {
+async function organizeTorrent(
+    hash              : string,
+    name              : string,
+    savePath          : string,
+    seriesData        : any[],
+    completedFileNames: Set<string> | null = null,
+) {
     const { mediaPath, completePath, organizeMode, nfoSupport } = readSettings()
     const result = { total: 0, skipped: 0, done: 0, errors: [] as { file: string; error: string }[] }
 
@@ -325,6 +351,12 @@ async function organizeTorrent(hash: string, name: string, savePath: string, ser
 
         if (isOrganized(hash, ep.id)) return { ...result, total: 1, skipped: 1 }
 
+        // Vérification de complétion pour épisode unique
+        if (completedFileNames !== null && !completedFileNames.has(filename.toLowerCase())) {
+            debug(`Fichier incomplet (skip) : ${filename}`)
+            return { ...result, total: 1, skipped: 1 }
+        }
+
         const candidates = filePath ? [
             path.join(savePath, filePath),
             path.join(completePath, filePath),
@@ -356,7 +388,7 @@ async function organizeTorrent(hash: string, name: string, savePath: string, ser
                     episode: ep.episode_number, episode_id: ep.id,
                     src_filename: filename, dest_filename: destName, dest_path: dest,
                 })
-                await fsp.unlink(src)
+                await unlinkWithRetry(src)
                 log(`${destName} → Saison ${season.season_number}`)
                 return { ...result, total: 1, done: 1 }
             }
@@ -384,6 +416,14 @@ async function organizeTorrent(hash: string, name: string, savePath: string, ser
 
     for (const [filename, { season_number, episode_number, episode_id, nfo_filename, fullPath }] of fileMap) {
         if (isOrganized(hash, episode_id)) { result.skipped++; continue }
+
+        // Vérification de complétion : si on a les infos de progression par fichier,
+        // on skip les fichiers pas encore à 100% (ex: 1% téléchargé avant priorité appliquée).
+        if (completedFileNames !== null && !completedFileNames.has(filename.toLowerCase())) {
+            debug(`Fichier incomplet (skip) : ${filename}`)
+            result.skipped++
+            continue
+        }
 
         const candidates = [
             path.join(savePath, fullPath),
@@ -433,7 +473,7 @@ async function organizeTorrent(hash: string, name: string, savePath: string, ser
                     episode: episode_number, episode_id,
                     src_filename: filename, dest_filename: nfo_filename, dest_path: dest,
                 })
-                await fsp.unlink(src)
+                await unlinkWithRetry(src)
             }
             result.done++
             debug(`${nfo_filename} → Saison ${season_number}`)
@@ -479,7 +519,29 @@ parentPort?.on('message', async (msg: any) => {
         }
 
         try {
-            const result = await organizeTorrent(t.hash, t.name, t.save_path, seriesData)
+            // Construire l'ensemble des fichiers 100% complets à partir des infos de progression.
+            // On ne filtre QUE si le client fournit des noms de fichiers (qBittorrent, Transmission).
+            // Si aucun fichier n'a de nom (rtorrent…), on passe null → pas de filtrage.
+            let completedFileNames: Set<string> | null = null
+            if (Array.isArray(t.files) && t.files.length > 0) {
+                // Vérifier qu'au moins un fichier a un nom non vide
+                const hasNames = t.files.some((f: any) => f.name && String(f.name).trim())
+                if (hasNames) {
+                    completedFileNames = new Set(
+                        t.files
+                            .filter((f: any) => (f.progress ?? 0) >= 1 && f.name && String(f.name).trim())
+                            .map((f: any) => {
+                                // f.name est un chemin relatif ex: "Pack S1/Episode1.mkv"
+                                // on ne garde que le basename pour comparer au filename du fileMap
+                                const parts = String(f.name).replace(/\\/g, '/').split('/')
+                                return (parts[parts.length - 1] ?? '').toLowerCase()
+                            })
+                            .filter(Boolean)
+                    )
+                }
+            }
+
+            const result = await organizeTorrent(t.hash, t.name, t.save_path, seriesData, completedFileNames)
             parentPort?.postMessage({ type: 'result', hash: t.hash, name: t.name, ...result })
         } catch (err) {
             error(`Erreur lors de l'import de "${t.name}" : ${err instanceof Error ? err.message : err}`)

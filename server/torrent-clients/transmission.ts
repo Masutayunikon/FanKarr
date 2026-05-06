@@ -161,7 +161,8 @@ const TR: TorrentClientDriver = {
                 files     : Array.isArray(t.files) && t.files.length > 0
                     ? t.files.map((f: any, i: number) => ({
                         index   : i,
-                        progress: f.length > 0 ? Math.round((f.bytesCompleted / f.length) * 100) : 0,
+                        name    : String(f.name ?? ''),
+                        progress: f.length > 0 ? f.bytesCompleted / f.length : 0,
                     }))
                     : undefined,
             } satisfies TorrentInfo))

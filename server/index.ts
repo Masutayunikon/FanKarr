@@ -11,6 +11,7 @@ import transmissionDriver from './torrent-clients/transmission.js'
 import synologyDsDriver   from './torrent-clients/synology-ds.js'
 import utorrentDriver     from './torrent-clients/utorrent.js'
 import rtorrentDriver     from './torrent-clients/rtorrent.js'
+import realDebridDriver   from './torrent-clients/real-debrid.js'
 import { autoOrganizeAll, scanMediaPath, syncFilenameChanges, migrateOrganizedEpisodeIds } from './organize.js'
 import { logger } from './logger.js'
 import { DATA_DIR, BASE_DIR } from './config.js'
@@ -33,6 +34,7 @@ registerDriver(transmissionDriver)
 registerDriver(synologyDsDriver)
 registerDriver(utorrentDriver)
 registerDriver(rtorrentDriver)
+registerDriver(realDebridDriver)
 
 const app  = express()
 const PORT = Number(process.env.PORT) || 9898

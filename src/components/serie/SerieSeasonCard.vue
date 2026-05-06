@@ -149,7 +149,7 @@
                   title="Ce fichier ne provient pas du catalogue Fan-Kai officiel"
               >Hors Fankai</span>
             </div>
-            <div class="flex items-center gap-2 mt-0.5">
+            <div class="flex items-center gap-2 mt-0.5 flex-wrap">
               <span v-if="ep.aired" class="text-xs text-muted">{{ formatDate(ep.aired) }}</span>
               <span v-if="ep.duration" class="text-xs text-muted">{{ formatDuration(ep.duration) }}</span>
               <!-- Badge langue -->
@@ -175,6 +175,18 @@
                 <svg width="14" height="10" viewBox="0 0 14 10" class="rounded-[1px] shrink-0"><rect width="14" height="10" fill="#ED2939"/><rect width="9.33" height="10" fill="#fff"/><rect width="4.67" height="10" fill="#002395"/></svg>
                 VOSTFR
               </span>
+              <!-- Badge épisodes -->
+              <span
+                  v-if="parseEpChap(ep.plot).episodes"
+                  class="shrink-0 text-[10px] font-medium leading-none px-1.5 py-0.5 rounded border bg-violet-500/10 border-violet-500/20 text-violet-300 select-none"
+                  :title="`Plage d'épisodes couverts`"
+              >{{ parseEpChap(ep.plot).episodes }}</span>
+              <!-- Badge chapitres -->
+              <span
+                  v-if="parseEpChap(ep.plot).chapters"
+                  class="shrink-0 text-[10px] font-medium leading-none px-1.5 py-0.5 rounded border bg-teal-500/10 border-teal-500/20 text-teal-300 select-none"
+                  :title="`Plage de chapitres manga couverts`"
+              >{{ parseEpChap(ep.plot).chapters }}</span>
             </div>
           </div>
 
@@ -247,7 +259,7 @@
 
         <!-- Synopsis -->
         <div v-if="plotOpen === ep.id && ep.plot" class="mt-2 sm:pl-[92px]">
-          <p class="text-xs text-muted leading-relaxed" style="white-space: pre-line">{{ ep.plot }}</p>
+          <p class="text-xs text-muted leading-relaxed" style="white-space: pre-line">{{ parseEpChap(ep.plot).cleanPlot }}</p>
         </div>
       </div>
     </div>
@@ -509,6 +521,52 @@ function epNeedsRename(ep: any): boolean {
   if (!entry) return false
   const expected = epExpectedName(ep)
   return !!expected && expected !== entry.dest_filename
+}
+
+// ── Extraction épisodes / chapitres depuis le synopsis ─────────
+// Cache léger pour éviter de recalculer pour chaque accès template (badges + synopsis)
+const _epChapCache = new Map<string | null | undefined, ReturnType<typeof _parseEpChap>>()
+/**
+ * Extrait les plages d'épisodes et chapitres depuis un synopsis.
+ * Ex: "...épisodes 628 à 634 soit les chapitres 700 à 706."
+ * → { episodes: "628–634", chapters: "700–706", cleanPlot: "..." }
+ * La phrase (ou ligne) contenant ces infos est retirée du synopsis affiché.
+ */
+function _parseEpChap(plot: string | null | undefined): {
+  episodes: string | null
+  chapters: string | null
+  cleanPlot: string
+} {
+  const text = plot ?? ''
+
+  const epMatch   = text.match(/[éeÉE]pisodes?\s+(\d+)(?:\s+[àa]\s+(\d+))?/i)
+  const chapMatch = text.match(/chapitres?\s+(\d+)(?:\s+[àa]\s+(\d+))?/i)
+
+  const episodes = epMatch
+    ? (epMatch[2] ? `Ép. ${epMatch[1]}–${epMatch[2]}` : `Ép. ${epMatch[1]}`)
+    : null
+  const chapters = chapMatch
+    ? (chapMatch[2] ? `Ch. ${chapMatch[1]}–${chapMatch[2]}` : `Ch. ${chapMatch[1]}`)
+    : null
+
+  // Retirer les lignes contenant les références d'épisodes ou chapitres
+  let cleanPlot = text
+  if (episodes || chapters) {
+    cleanPlot = text
+      .split(/\r?\n/)
+      .filter(line => !/[éeÉE]pisodes?\s+\d+|chapitres?\s+\d+/i.test(line))
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+  }
+
+  return { episodes, chapters, cleanPlot }
+}
+function parseEpChap(plot: string | null | undefined) {
+  if (_epChapCache.has(plot)) return _epChapCache.get(plot)!
+  const result = _parseEpChap(plot)
+  _epChapCache.set(plot, result)
+  return result
 }
 
 // ── Détection langue ───────────────────────────────────────────

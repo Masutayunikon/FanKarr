@@ -397,8 +397,9 @@ export async function migrateOrganizedEpisodeIds(
             if (newId && newId !== oldId) {
                 // Vérifier qu'on n'écrase pas une entrée déjà présente avec le nouvel ID
                 if (newEpisodes[String(newId)] || (episodes as any)[String(newId)]) {
-                    logger.warn('organize', `Migration ID : conflit ep ${oldId} → ${newId} — entrée existante conservée`)
-                    newEpisodes[oldIdStr] = entry
+                    // Le nouvel ID est déjà présent → l'ancien est un orphelin inutile, on le supprime simplement
+                    changed = true
+                    logger.info('organize', `Migration ID : ep ${oldId} orphelin supprimé (${newId} déjà présent) (${hash.slice(0, 8)}… S${entry.season}E${entry.episode})`)
                 } else {
                     newEpisodes[String(newId)] = { ...entry, episode_id: newId }
                     updated++

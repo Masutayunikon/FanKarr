@@ -9,9 +9,9 @@
       <div class="absolute inset-0 bg-gradient-to-b from-transparent to-main" />
     </div>
 
-    <div class="relative px-4 md:px-8 pt-6 pb-10 flex gap-6 min-h-[200px]">
+    <div class="relative px-4 md:px-8 pt-6 pb-10 flex items-start gap-6 min-h-[200px]">
       <!-- Poster -->
-      <div class="shrink-0 w-32 rounded-xl overflow-hidden border border-border shadow-xl hidden sm:block">
+      <div class="shrink-0 w-32 aspect-[2/3] rounded-xl overflow-hidden border border-border shadow-xl hidden sm:block">
         <img v-if="serie.poster_image" :src="serie.poster_image" class="w-full h-full object-cover" />
         <div v-else class="w-full aspect-[2/3] bg-card flex items-center justify-center text-muted">
           <Tv :size="28" />
@@ -47,6 +47,18 @@
         >
           {{ serie.plot }}
         </p>
+
+        <!-- Lien wiki -->
+        <a
+            v-if="serie.wiki"
+            :href="serie.wiki"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center gap-1.5 text-xs text-accent hover:text-accent/80 transition-colors w-fit"
+        >
+          <ExternalLink :size="12" />
+          Wiki
+        </a>
       </div>
     </div>
   </div>
@@ -55,7 +67,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { ArrowLeft, Tv } from 'lucide-vue-next'
+import { ArrowLeft, Tv, ExternalLink } from 'lucide-vue-next'
 
 defineProps<{ serie: any }>()
 const expanded = ref(false)

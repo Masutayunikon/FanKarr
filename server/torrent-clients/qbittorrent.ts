@@ -57,9 +57,9 @@ async function qbApplyFilePriority(
     fileIndex: number,
     resume   : boolean,
 ): Promise<void> {
-    // 60 tentatives × 500 ms = 30 s max
+    // Première tentative rapide (100 ms), puis 500 ms — 60 tentatives max ≈ 30 s
     for (let attempt = 0; attempt < 60; attempt++) {
-        await new Promise(r => setTimeout(r, 500))
+        await new Promise(r => setTimeout(r, attempt === 0 ? 100 : 500))
         try {
             const sid = await qbLogin(config)
             const res = await fetch(`${config.url}/api/v2/torrents/files?hash=${hash}`, {
@@ -223,10 +223,28 @@ const QB: TorrentClientDriver = {
                 save_path : t.save_path,
                 category  : t.category ?? '',
                 files     : fileInfo.length > 0
-                    ? fileInfo.map((f: any, i: number) => ({ index: i, progress: Math.round((f.progress ?? 0) * 100) }))
+                    ? fileInfo.map((f: any, i: number) => ({
+                        index   : i,
+                        name    : String(f.name ?? ''),
+                        progress: f.progress ?? 0,   // 0–1
+                    }))
                     : undefined,
             } satisfies TorrentInfo
         })
+    },
+
+    async getFiles(config, hash) {
+        const sid = await qbLogin(config)
+        const res = await fetch(`${config.url}/api/v2/torrents/files?hash=${hash}`, {
+            headers: { Cookie: `SID=${sid}` },
+        })
+        if (!res.ok) return []
+        const data: any[] = await res.json()
+        return data.map((f: any, i: number) => ({
+            index   : i,
+            name    : String(f.name ?? ''),
+            progress: f.progress ?? 0,
+        }))
     },
 
     async add(config, url, options?: DownloadOptions) {
@@ -259,15 +277,11 @@ const QB: TorrentClientDriver = {
                 } catch {}
             }
 
-            // Ajout du torrent en pause immédiate (toutes versions qBit)
-            // paused=true  → qBit < 5.0
-            // stopped=true → qBit ≥ 5.0
+            // Ajout normal du torrent (pas en pause) pour que qBit récupère les métadonnées immédiatement
             const form = new FormData()
             form.append('urls', url)
             if (config.category) form.append('category', String(config.category))
             if (config.savePath)  form.append('savepath', String(config.savePath))
-            form.append('paused',  'true')
-            form.append('stopped', 'true')
 
             const res  = await fetch(`${config.url}/api/v2/torrents/add`, {
                 method: 'POST', body: form, headers: { Cookie: `SID=${sid}` },
@@ -276,7 +290,7 @@ const QB: TorrentClientDriver = {
             if (text !== 'Ok.') throw new Error(`Ajout échoué : ${text}`)
 
             if (hash) {
-                logger.info('qbittorrent', `Torrent ajouté (en pause, sélection fichier ${options.file_index} en attente)`)
+                logger.info('qbittorrent', `Torrent ajouté — sélection fichier ${options.file_index} en attente des métadonnées`)
                 qbApplyFilePriority(config, hash, options.file_index, true).catch(err =>
                     logger.warn('qbittorrent', `Priorité fichier non appliquée : ${err instanceof Error ? err.message : err}`)
                 )
