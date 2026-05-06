@@ -278,39 +278,34 @@ const QB: TorrentClientDriver = {
             }
 
             // Stratégie d'ajout selon le type de lien :
-            //   .torrent URL → ajout en pause (métadonnées dans le fichier, disponibles immédiatement)
-            //   magnet link  → ajout normal  (métadonnées viennent des pairs, la pause bloque leur récupération)
+            //   .torrent URL → FanKarr télécharge le fichier et l'uploade directement à qBit
+            //                  (qBit n'a pas forcément accès à internet / nyaa.si depuis son réseau Docker)
+            //   magnet link  → passage de l'URL brute, ajout normal sans pause
+            //                  (les métadonnées arrivent via les pairs, la pause bloquerait tout)
             const isMagnet = url.startsWith('magnet:')
             const form = new FormData()
-            form.append('urls', url)
             if (config.category) form.append('category', String(config.category))
             if (config.savePath)  form.append('savepath', String(config.savePath))
-            if (!isMagnet) {
+
+            if (isMagnet) {
+                form.append('urls', url)
+            } else {
+                // FanKarr télécharge le .torrent et l'envoie directement à qBit
+                logger.debug('qbittorrent', `Téléchargement .torrent via FanKarr : ${url.slice(0, 120)}`)
+                const torrentRes = await fetch(url, { headers: { 'User-Agent': 'FanKarr/1.0' } })
+                if (!torrentRes.ok) throw new Error(`Impossible de télécharger le .torrent (${torrentRes.status}) : ${url}`)
+                const torrentBytes = await torrentRes.arrayBuffer()
+                form.append('torrents', new Blob([torrentBytes], { type: 'application/x-bittorrent' }), 'torrent.torrent')
+                // Pause : métadonnées déjà dans le fichier → liste de fichiers disponible immédiatement
                 form.append('paused',  'true')   // qBit < 5.0
                 form.append('stopped', 'true')   // qBit ≥ 5.0
             }
 
-            logger.debug('qbittorrent', `Ajout torrent — URL : ${url.slice(0, 120)}${url.length > 120 ? '…' : ''}`)
             const res  = await fetch(`${config.url}/api/v2/torrents/add`, {
                 method: 'POST', body: form, headers: { Cookie: `SID=${sid}` },
             })
             const text = await res.text()
             if (text !== 'Ok.') throw new Error(`Ajout échoué : ${text}`)
-
-            // Vérifier que le torrent apparaît bien dans qBit après l'add
-            if (hash) {
-                let appeared = false
-                for (let i = 0; i < 10; i++) {
-                    await new Promise(r => setTimeout(r, 300))
-                    const s2  = await qbLogin(config)
-                    appeared  = await qbTorrentExists(config, s2, hash)
-                    if (appeared) break
-                }
-                if (!appeared) {
-                    logger.warn('qbittorrent', `Torrent ${hash.slice(0, 8)}… non visible dans qBit après l'add — URL inaccessible depuis qBit ? URL : ${url.slice(0, 200)}`)
-                    return
-                }
-            }
 
             if (hash) {
                 logger.info('qbittorrent', `Torrent ajouté (${isMagnet ? 'magnet, actif' : 'en pause'}) — sélection fichier ${options.file_index} en attente des métadonnées`)
