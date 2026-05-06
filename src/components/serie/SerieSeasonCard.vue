@@ -519,8 +519,7 @@ function epExpectedName(ep: any): string {
 function epNeedsRename(ep: any): boolean {
   const entry = props.organizedByEpisode[String(ep.id)]
   if (!entry) return false
-  const expected = epExpectedName(ep)
-  return !!expected && expected !== entry.dest_filename
+  return entry.needs_rename === true
 }
 
 // ── Extraction épisodes / chapitres depuis le synopsis ─────────

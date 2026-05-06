@@ -139,19 +139,35 @@ router.get('/organized/:serieId', requireAuth, async (req, res) => {
     try {
         const sd = await readSerieData(serieId)
         if (!sd) { res.status(404).json({ error: 'Série introuvable' }); return }
-        const organized = loadOrganizedJson()
+        const organized    = loadOrganizedJson()
+        const { nfoSupport } = readSettings()
         const result: Record<string, any> = {}
         for (const season of sd.seasons ?? []) {
             for (const ep of season.episodes ?? []) {
+                let entry: any    = null
+                let entryHash     = 'manual'
                 for (const p of ep.paths ?? []) {
                     if (typeof p !== 'object' || !p.infohash) continue
-                    const hash    = p.infohash.toLowerCase()
-                    const entry   = (organized[hash] ?? {})[String(ep.id)]
-                    if (entry) { result[String(ep.id)] = { ...entry, hash }; break }
+                    const h = p.infohash.toLowerCase()
+                    const e = (organized[h] ?? {})[String(ep.id)]
+                    if (e) { entry = e; entryHash = h; break }
                 }
-                if (!result[String(ep.id)] && organized['manual']?.[String(ep.id)]) {
-                    result[String(ep.id)] = organized['manual'][String(ep.id)]
+                if (!entry && organized['manual']?.[String(ep.id)]) {
+                    entry = organized['manual'][String(ep.id)]
                 }
+                if (!entry) continue
+
+                // Calculer needs_rename côté serveur avec la même logique que le rename endpoint
+                const currentName = entry.dest_path ? path.basename(entry.dest_path) : entry.dest_filename
+                const srcExt      = path.extname(currentName)
+                const { formatted_name: rawFmt, nfo_filename: rawNfo } = resolveEpNaming(ep, entryHash)
+                let expectedName: string
+                if (nfoSupport) {
+                    expectedName = rawNfo ? rawNfo.replace(/\.[^.]+$/, '') + srcExt : currentName
+                } else {
+                    expectedName = rawFmt?.trim() ? rawFmt.replace(/[<>:"/\\|?*]/g, '').trim() + srcExt : currentName
+                }
+                result[String(ep.id)] = { ...entry, hash: entryHash, needs_rename: expectedName !== currentName }
             }
         }
         res.json(result)
