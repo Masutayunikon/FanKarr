@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.13.2](https://github.com/Masutayunikon/FanKarr/compare/v3.13.1...v3.13.2) (2026-05-06)
+
+
+### Bug Fixes
+
+* le bouton rename n'apparait plus quand on utilise differents torrents entre les épisode ([0d5d44a](https://github.com/Masutayunikon/FanKarr/commit/0d5d44a4840df27d8b23bde9935d12c664d5ad6c))
+
 ## [3.13.1](https://github.com/Masutayunikon/FanKarr/compare/v3.13.0...v3.13.1) (2026-05-06)
 
 
