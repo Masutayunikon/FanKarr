@@ -147,7 +147,7 @@ router.get('/organized/:serieId', requireAuth, async (req, res) => {
                     if (typeof p !== 'object' || !p.infohash) continue
                     const hash    = p.infohash.toLowerCase()
                     const entry   = (organized[hash] ?? {})[String(ep.id)]
-                    if (entry) { result[String(ep.id)] = entry; break }
+                    if (entry) { result[String(ep.id)] = { ...entry, hash }; break }
                 }
                 if (!result[String(ep.id)] && organized['manual']?.[String(ep.id)]) {
                     result[String(ep.id)] = organized['manual'][String(ep.id)]
