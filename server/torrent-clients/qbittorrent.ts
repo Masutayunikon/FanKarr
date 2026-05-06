@@ -290,11 +290,27 @@ const QB: TorrentClientDriver = {
                 form.append('stopped', 'true')   // qBit ≥ 5.0
             }
 
+            logger.debug('qbittorrent', `Ajout torrent — URL : ${url.slice(0, 120)}${url.length > 120 ? '…' : ''}`)
             const res  = await fetch(`${config.url}/api/v2/torrents/add`, {
                 method: 'POST', body: form, headers: { Cookie: `SID=${sid}` },
             })
             const text = await res.text()
             if (text !== 'Ok.') throw new Error(`Ajout échoué : ${text}`)
+
+            // Vérifier que le torrent apparaît bien dans qBit après l'add
+            if (hash) {
+                let appeared = false
+                for (let i = 0; i < 10; i++) {
+                    await new Promise(r => setTimeout(r, 300))
+                    const s2  = await qbLogin(config)
+                    appeared  = await qbTorrentExists(config, s2, hash)
+                    if (appeared) break
+                }
+                if (!appeared) {
+                    logger.warn('qbittorrent', `Torrent ${hash.slice(0, 8)}… non visible dans qBit après l'add — URL inaccessible depuis qBit ? URL : ${url.slice(0, 200)}`)
+                    return
+                }
+            }
 
             if (hash) {
                 logger.info('qbittorrent', `Torrent ajouté (${isMagnet ? 'magnet, actif' : 'en pause'}) — sélection fichier ${options.file_index} en attente des métadonnées`)
