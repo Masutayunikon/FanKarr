@@ -1,5 +1,30 @@
 # Changelog
 
+## [3.13.0](https://github.com/Masutayunikon/FanKarr/compare/v3.12.1...v3.13.0) (2026-05-06)
+
+
+### Features
+
+* ajout de la mise a jour des id's ([39463bf](https://github.com/Masutayunikon/FanKarr/commit/39463bfbcb74c7241420504ba51bd91108df20e4))
+* ajout de la prise en charges des codex ([83437de](https://github.com/Masutayunikon/FanKarr/commit/83437def32618c8a5b9ca4364db992762b9359f8))
+* **organize:** vérification de complétion par fichier avant d'importer ([2a77a38](https://github.com/Masutayunikon/FanKarr/commit/2a77a38655dcc307e36371422f8698e33fd73135))
+* **serie:** badges épisodes et chapitres extraits du synopsis ([2a77a38](https://github.com/Masutayunikon/FanKarr/commit/2a77a38655dcc307e36371422f8698e33fd73135))
+* **serie:** lien wiki dans le header de la série si serie.wiki est défini ([2a77a38](https://github.com/Masutayunikon/FanKarr/commit/2a77a38655dcc307e36371422f8698e33fd73135))
+* **torrent-clients:** ajout du driver Real-Debrid ([2a77a38](https://github.com/Masutayunikon/FanKarr/commit/2a77a38655dcc307e36371422f8698e33fd73135))
+
+
+### Bug Fixes
+
+* ajout de log ([d299b76](https://github.com/Masutayunikon/FanKarr/commit/d299b76bd3fc8a8411e71f9f05318901df8372ef))
+* **organize:** retry EBUSY sur unlink — 5 tentatives × 500 ms (Windows) ([2a77a38](https://github.com/Masutayunikon/FanKarr/commit/2a77a38655dcc307e36371422f8698e33fd73135))
+* **organize:** suppression des entrées orphelines lors de la migration d'IDs ([2a77a38](https://github.com/Masutayunikon/FanKarr/commit/2a77a38655dcc307e36371422f8698e33fd73135))
+* progression ([35655d7](https://github.com/Masutayunikon/FanKarr/commit/35655d7784025c9b2d7f992b24181d62b8488130))
+* **qbittorrent:** FanKarr télécharge le .torrent et l'uploade directement à qBit ([434da54](https://github.com/Masutayunikon/FanKarr/commit/434da54ede8ece06c1fbcf4d66fe6ecdf87557a5))
+* **qbittorrent:** pause uniquement pour les .torrent, pas pour les magnets ([9f90b6a](https://github.com/Masutayunikon/FanKarr/commit/9f90b6ab6c0aa97e33244d827370492abcfe9a13))
+* **qbittorrent:** suppression de paused/stopped à l'ajout du torrent ([2a77a38](https://github.com/Masutayunikon/FanKarr/commit/2a77a38655dcc307e36371422f8698e33fd73135))
+* **serie:** header mobile — items-start + aspect-[2/3] sur le poster ([2a77a38](https://github.com/Masutayunikon/FanKarr/commit/2a77a38655dcc307e36371422f8698e33fd73135))
+* utilisation de formated_name depuis les paths ([39463bf](https://github.com/Masutayunikon/FanKarr/commit/39463bfbcb74c7241420504ba51bd91108df20e4))
+
 ## [3.12.1](https://github.com/Masutayunikon/FanKarr/compare/v3.12.0...v3.12.1) (2026-04-29)
 
 
