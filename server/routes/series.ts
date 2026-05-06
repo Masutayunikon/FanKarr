@@ -41,7 +41,7 @@ router.get('/series/:id', requireAuth, async (req, res) => {
     const id = Number(req.params.id)
     try {
         const [serieRaw, seasonsData, serieData] = await Promise.all([fankaiGet(`/series/${id}`), fankaiGet(`/series/${id}/seasons`), readSerieData(id)])
-        const serie   = normalizeSerie(serieRaw)
+        const serie   = { ...normalizeSerie(serieRaw), wiki: serieData?.wiki ?? null }
         const seasons = Array.isArray(seasonsData) ? seasonsData : (seasonsData.seasons ?? [])
         const seasonsWithEpisodes = await Promise.all(seasons.map(async (season: any) => {
             const epsData  = await fankaiGet(`/seasons/${season.id}/episodes`)

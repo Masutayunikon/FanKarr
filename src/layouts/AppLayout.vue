@@ -16,7 +16,7 @@
     </Transition>
 
     <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
-      <header class="md:hidden flex items-center gap-3 px-4 py-3 border-b border-border bg-sidebar shrink-0">
+      <header class="md:hidden flex items-center gap-3 px-4 py-3 border-b border-border bg-sidebar shrink-0 relative z-10">
         <button @click="mobileOpen = true" class="text-muted hover:text-primary transition-colors">
           <Menu :size="20" />
         </button>
