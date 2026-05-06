@@ -1,11 +1,25 @@
 import { Router } from 'express'
 import { requireAuth } from '../auth.js'
 import { logger } from '../logger.js'
-import { organizeTorrent } from '../organize.js'
+import { organizeTorrent, migrateOrganizedEpisodeIds } from '../organize.js'
 import { loadEnrichedSeriesData } from '../lib/github-cache.js'
 import { recentOrganized, pushNotif } from '../lib/notifs.js'
+import { DATA_DIR } from '../config.js'
+import path from 'path'
 
 const router = Router()
+
+router.post('/organize/migrate-ids', requireAuth, async (_req, res) => {
+    try {
+        const seriesData    = await loadEnrichedSeriesData()
+        const organizedPath = path.join(DATA_DIR, 'organized.json')
+        const result        = await migrateOrganizedEpisodeIds(organizedPath, seriesData)
+        res.json({ ok: true, ...result })
+    } catch (err) {
+        logger.error('api', `Migration IDs échouée : ${err instanceof Error ? err.message : err}`)
+        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
+    }
+})
 
 router.get('/organize/recent', requireAuth, (_req, res) => {
     res.json(recentOrganized)

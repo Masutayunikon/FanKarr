@@ -11,7 +11,7 @@ import transmissionDriver from './torrent-clients/transmission.js'
 import synologyDsDriver   from './torrent-clients/synology-ds.js'
 import utorrentDriver     from './torrent-clients/utorrent.js'
 import rtorrentDriver     from './torrent-clients/rtorrent.js'
-import { autoOrganizeAll, scanMediaPath, syncFilenameChanges } from './organize.js'
+import { autoOrganizeAll, scanMediaPath, syncFilenameChanges, migrateOrganizedEpisodeIds } from './organize.js'
 import { logger } from './logger.js'
 import { DATA_DIR, BASE_DIR } from './config.js'
 import { readAvailable, readInfohashMap, loadEnrichedSeriesData } from './lib/github-cache.js'
@@ -97,7 +97,10 @@ server.listen(PORT, async () => {
     } catch {}
 
     loadEnrichedSeriesData()
-        .then(seriesData => scanMediaPath(mediaPath, ORGANIZED_PATH, seriesData))
+        .then(async seriesData => {
+            await migrateOrganizedEpisodeIds(ORGANIZED_PATH, seriesData)
+            return scanMediaPath(mediaPath, ORGANIZED_PATH, seriesData)
+        })
         .catch(err => logger.error('api', `Scan initial échoué : ${err instanceof Error ? err.message : err}`))
 
     const autoOrganize = async () => {
@@ -144,8 +147,12 @@ server.listen(PORT, async () => {
     // Le TTL du cache GitHub est de 1h — ce setInterval tire toujours sur des données fraîches.
     setInterval(async () => {
         try {
-            const seriesData = await loadEnrichedSeriesData()
-            const { renamed } = await syncFilenameChanges(seriesData, path.join(DATA_DIR, 'organized.json'))
+            const seriesData   = await loadEnrichedSeriesData()
+            const organizedPath = path.join(DATA_DIR, 'organized.json')
+            const { updated }  = await migrateOrganizedEpisodeIds(organizedPath, seriesData)
+            if (updated > 0)
+                logger.info('api', `Migration IDs auto — ${updated} ID(s) mis à jour`)
+            const { renamed }  = await syncFilenameChanges(seriesData, organizedPath)
             if (renamed > 0)
                 logger.info('api', `Sync noms auto — ${renamed} fichier(s) renommé(s)`)
         } catch (err) {

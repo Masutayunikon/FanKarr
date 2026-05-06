@@ -44,6 +44,30 @@ export function extractTorrentsFromSerieData(sd: any): any[] {
 }
 
 /**
+ * Résout les noms d'un épisode en préférant les valeurs du path entry
+ * correspondant au hash donné (spécifique au torrent/encoding),
+ * avec fallback sur les champs de niveau épisode.
+ *
+ * Utilisation :
+ *   const { formatted_name, nfo_filename, original_filename } = resolveEpNaming(ep, hash)
+ */
+export function resolveEpNaming(ep: any, hash?: string | null): {
+    formatted_name   : string | null
+    nfo_filename     : string | null
+    original_filename: string | null
+} {
+    const h = hash?.toLowerCase() ?? null
+    const pathEntry = h
+        ? (ep.paths ?? []).find((p: any) => typeof p === 'object' && p.infohash?.toLowerCase() === h)
+        : null
+    return {
+        formatted_name   : pathEntry?.formatted_name    ?? ep.formatted_name    ?? null,
+        nfo_filename     : pathEntry?.nfo_filename      ?? ep.nfo_filename      ?? null,
+        original_filename: pathEntry?.original_filename ?? ep.original_filename ?? null,
+    }
+}
+
+/**
  * Dédoublonne une liste d'épisodes par episode_number.
  * Quand plusieurs variantes existent (ex. x264 + x265), on garde la première
  * comme épisode principal et on fusionne les torrents des autres dans sa liste.

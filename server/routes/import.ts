@@ -7,6 +7,7 @@ import { DATA_DIR } from '../config.js'
 import { readSettings } from '../settings.js'
 import { getGitlabTitle } from '../gitlab-map.js'
 import { readSerieData, loadEnrichedSeriesData } from '../lib/github-cache.js'
+import { resolveEpNaming } from '../lib/serie-helpers.js'
 import { GITLAB_API_NFO, GITLAB_RAW_NFO } from '../lib/nfo.js'
 import { dispatchRemove } from '../torrent-clients/index.js'
 
@@ -51,10 +52,11 @@ router.post('/manual-import', requireAuth, async (req, res) => {
         const { ep, season } = found
         const srcFilename   = path.basename(file_path)
         const srcExt        = path.extname(srcFilename)
-        const fmtName       = ep.formatted_name?.trim() ? ep.formatted_name.replace(/[<>:"/\\|?*]/g, '') + '.mkv' : null
+        const { formatted_name: rawFmt, nfo_filename: rawNfo, original_filename: rawOrig } = resolveEpNaming(ep, hash)
+        const fmtName       = rawFmt?.trim() ? rawFmt.replace(/[<>:"/\\|?*]/g, '') + '.mkv' : null
         const resolvedName  = nfoSupport
-            ? (ep.nfo_filename ?? ep.original_filename ?? srcFilename)
-            : (fmtName ?? ep.nfo_filename ?? ep.original_filename ?? srcFilename)
+            ? (rawNfo ?? rawOrig ?? srcFilename)
+            : (fmtName ?? rawNfo ?? rawOrig ?? srcFilename)
         const resolvedExt  = path.extname(resolvedName)
         const destFilename = resolvedExt && resolvedExt !== srcExt
             ? resolvedName.slice(0, -resolvedExt.length) + srcExt
@@ -186,11 +188,12 @@ router.post('/rename-episode', requireAuth, async (req, res) => {
     if (!orgEntry) { res.status(404).json({ error: 'Épisode non importé' }); return }
     const currentName = orgEntry.dest_path ? path.basename(orgEntry.dest_path) : orgEntry.dest_filename
     const srcExt = path.extname(currentName)
+    const { formatted_name: rawFmt, nfo_filename: rawNfo } = resolveEpNaming(ep, entryHash)
     let newName: string
     if (nfoSupport) {
-        newName = ep.nfo_filename ? ep.nfo_filename.replace(/\.[^.]+$/, '') + srcExt : currentName
+        newName = rawNfo ? rawNfo.replace(/\.[^.]+$/, '') + srcExt : currentName
     } else {
-        newName = ep.formatted_name?.trim() ? ep.formatted_name.replace(/[<>:"/\\|?*]/g, '').trim() + srcExt : currentName
+        newName = rawFmt?.trim() ? rawFmt.replace(/[<>:"/\\|?*]/g, '').trim() + srcExt : currentName
     }
     if (newName === currentName) { res.json({ ok: true, renamed: false, message: 'Nom déjà correct' }); return }
     const oldPath = orgEntry.dest_path
@@ -338,11 +341,12 @@ router.get('/organized-summary', requireAuth, async (_req, res) => {
                     if (!orgEntry) continue
                     const currentName = orgEntry.dest_path ? path.basename(orgEntry.dest_path) : orgEntry.dest_filename
                     const srcExt = path.extname(currentName)
+                    const { formatted_name: rawFmt, nfo_filename: rawNfo } = resolveEpNaming(ep, orgHash)
                     let expectedName: string
                     if (nfoSupport) {
-                        expectedName = ep.nfo_filename ? ep.nfo_filename.replace(/\.[^.]+$/, '') + srcExt : currentName
+                        expectedName = rawNfo ? rawNfo.replace(/\.[^.]+$/, '') + srcExt : currentName
                     } else {
-                        expectedName = ep.formatted_name?.trim() ? ep.formatted_name.replace(/[<>:"/\\|?*]/g, '').trim() + srcExt : currentName
+                        expectedName = rawFmt?.trim() ? rawFmt.replace(/[<>:"/\\|?*]/g, '').trim() + srcExt : currentName
                     }
                     const needsRename = expectedName !== currentName
                     const fileExists  = orgEntry.dest_path ? fs.existsSync(orgEntry.dest_path) : false
@@ -380,11 +384,12 @@ router.post('/rename-all', requireAuth, async (req, res) => {
                 if (!orgEntry || !orgHash) continue
                 const currentName = orgEntry.dest_path ? path.basename(orgEntry.dest_path) : orgEntry.dest_filename
                 const srcExt = path.extname(currentName)
+                const { formatted_name: rawFmt, nfo_filename: rawNfo } = resolveEpNaming(ep, orgHash)
                 let expectedName: string
                 if (nfoSupport) {
-                    expectedName = ep.nfo_filename ? ep.nfo_filename.replace(/\.[^.]+$/, '') + srcExt : currentName
+                    expectedName = rawNfo ? rawNfo.replace(/\.[^.]+$/, '') + srcExt : currentName
                 } else {
-                    expectedName = ep.formatted_name?.trim() ? ep.formatted_name.replace(/[<>:"/\\|?*]/g, '').trim() + srcExt : currentName
+                    expectedName = rawFmt?.trim() ? rawFmt.replace(/[<>:"/\\|?*]/g, '').trim() + srcExt : currentName
                 }
                 if (expectedName === currentName) continue
                 const oldPath = orgEntry.dest_path

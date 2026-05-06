@@ -129,12 +129,12 @@ function buildFileMap(
             if (!matchedPath) continue
             const filename = matchedPath.split('/').pop() ?? matchedPath
 
-            // Préférer le formatted_name du path (spécifique à ce torrent) sur celui de l'épisode
-            const rawFmtName = matchedPathObj?.formatted_name?.trim()
-                ? matchedPathObj.formatted_name
-                : ep.formatted_name
-            const fmtName = rawFmtName?.trim()
-                ? rawFmtName.replace(/[<>:"/\\|?*]/g, '') + '.mkv'
+            // Nommage : priorité aux valeurs du path entry (spécifique au torrent/encoding)
+            const rawFmt      = matchedPathObj?.formatted_name    ?? ep.formatted_name
+            const rawNfo      = matchedPathObj?.nfo_filename      ?? ep.nfo_filename
+            const rawOriginal = matchedPathObj?.original_filename ?? ep.original_filename
+            const fmtName     = rawFmt?.trim()
+                ? rawFmt.replace(/[<>:"/\\|?*]/g, '') + '.mkv'
                 : null
 
             if (!nfoSupport && !fmtName) {
@@ -143,8 +143,8 @@ function buildFileMap(
 
             const srcExt = path.extname(filename)
             const resolvedName = nfoSupport
-                ? (ep.nfo_filename ?? ep.original_filename ?? filename)
-                : (fmtName ?? ep.nfo_filename ?? ep.original_filename ?? filename)
+                ? (rawNfo ?? rawOriginal ?? filename)
+                : (fmtName ?? rawNfo ?? rawOriginal ?? filename)
             const destName = swapExtension(resolvedName, srcExt)
 
             map.set(filename, {
@@ -306,18 +306,18 @@ async function organizeTorrent(hash: string, name: string, savePath: string, ser
             }
         }
         const filename = filePath?.split('/').pop() ?? name
-        // Préférer le formatted_name du path (spécifique à ce torrent) sur celui de l'épisode
-        const rawFmtName = matchedPathObj?.formatted_name?.trim()
-            ? matchedPathObj.formatted_name
-            : ep.formatted_name
-        const fmtName = rawFmtName?.trim()
-            ? rawFmtName.replace(/[<>:"/\\|?*]/g, '') + '.mkv'
+        // Nommage : priorité aux valeurs du path entry (spécifique au torrent/encoding)
+        const rawFmt      = matchedPathObj?.formatted_name    ?? ep.formatted_name
+        const rawNfo      = matchedPathObj?.nfo_filename      ?? ep.nfo_filename
+        const rawOriginal = matchedPathObj?.original_filename ?? ep.original_filename
+        const fmtName     = rawFmt?.trim()
+            ? rawFmt.replace(/[<>:"/\\|?*]/g, '') + '.mkv'
             : null
 
         const srcExt       = path.extname(filename)
         const resolvedName = nfoSupport
-            ? (ep.nfo_filename ?? ep.original_filename ?? filename)
-            : (fmtName ?? ep.nfo_filename ?? ep.original_filename ?? filename)
+            ? (rawNfo ?? rawOriginal ?? filename)
+            : (fmtName ?? rawNfo ?? rawOriginal ?? filename)
         const destName = swapExtension(resolvedName, srcExt)
 
         const destDir = path.join(mediaPath, serieTitle, seasonFolder(season.season_number ?? 1))

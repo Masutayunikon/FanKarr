@@ -100,10 +100,12 @@ export async function scanMediaPath(
                     const srcFilename = p.path.replace(/\\/g, '/').split('/').pop()
                     if (!srcFilename) continue
                     idx(srcFilename, hash)
-                    if (ep.nfo_filename) idx(ep.nfo_filename, hash, ep.nfo_filename)
-                    // formatted_name spécifique à ce torrent (priorité sur celui de l'épisode)
-                    if (p.formatted_name?.trim()) {
-                        const fmtBase = p.formatted_name.replace(/[<>:"/\\|?*]/g, '').trim()
+                    // nfo_filename et formatted_name du path en priorité sur ceux de l'épisode
+                    const pathNfo = p.nfo_filename ?? ep.nfo_filename
+                    if (pathNfo) idx(pathNfo, hash, pathNfo)
+                    const pathFmt = p.formatted_name ?? ep.formatted_name
+                    if (pathFmt?.trim()) {
+                        const fmtBase = pathFmt.replace(/[<>:"/\\|?*]/g, '').trim()
                         idx(fmtBase, hash, fmtBase)
                     }
                 }
@@ -332,6 +334,100 @@ export async function autoOrganizeAll(
     worker.postMessage({ type: 'run', torrents, seriesData })
 }
 
+// ── Migration des IDs épisodes ────────────────────────────────
+//
+// Les IDs d'épisodes, saisons et séries peuvent changer entre deux passages
+// du scraper. On utilise (infohash, season_number, episode_number) comme clé
+// stable pour retrouver le nouvel ID et mettre à jour organized.json.
+
+export async function migrateOrganizedEpisodeIds(
+    organizedPath: string,
+    seriesData   : any[]
+): Promise<{ updated: number; orphaned: number }> {
+
+    // 1. Construire les tables de lookup depuis le catalogue actuel
+    //    hashEpMap : infohash → Map<"S:E", new_episode_id>
+    const hashEpMap = new Map<string, Map<string, number>>()
+    const validIds  = new Set<number>()
+
+    for (const sd of seriesData) {
+        for (const season of sd.seasons ?? []) {
+            for (const ep of season.episodes ?? []) {
+                validIds.add(ep.id)
+                for (const p of ep.paths ?? []) {
+                    if (typeof p !== 'object' || !p.infohash) continue
+                    const h   = p.infohash.toLowerCase()
+                    const key = `${season.season_number}:${ep.episode_number}`
+                    if (!hashEpMap.has(h)) hashEpMap.set(h, new Map())
+                    hashEpMap.get(h)!.set(key, ep.id)
+                }
+            }
+        }
+    }
+
+    // 2. Charger organized.json
+    let organized: Organized = {}
+    try {
+        if (fs.existsSync(organizedPath))
+            organized = JSON.parse(fs.readFileSync(organizedPath, 'utf-8'))
+    } catch { return { updated: 0, orphaned: 0 } }
+
+    let updated = 0
+    let orphaned = 0
+    let changed  = false
+
+    for (const [hash, episodes] of Object.entries(organized)) {
+        if (hash === 'manual') continue
+        const epMap = hashEpMap.get(hash.toLowerCase())
+
+        const newEpisodes: Record<string, any> = {}
+        for (const [oldIdStr, entry] of Object.entries(episodes as Record<string, any>)) {
+            const oldId = Number(oldIdStr)
+
+            if (validIds.has(oldId)) {
+                // ID encore valide, aucun changement
+                newEpisodes[oldIdStr] = entry
+                continue
+            }
+
+            // ID orphelin — chercher le nouvel ID via (hash, saison, épisode)
+            const key   = `${entry.season}:${entry.episode}`
+            const newId = epMap?.get(key)
+
+            if (newId && newId !== oldId) {
+                // Vérifier qu'on n'écrase pas une entrée déjà présente avec le nouvel ID
+                if (newEpisodes[String(newId)] || (episodes as any)[String(newId)]) {
+                    logger.warn('organize', `Migration ID : conflit ep ${oldId} → ${newId} — entrée existante conservée`)
+                    newEpisodes[oldIdStr] = entry
+                } else {
+                    newEpisodes[String(newId)] = { ...entry, episode_id: newId }
+                    updated++
+                    changed = true
+                    logger.info('organize', `Migration ID : ep ${oldId} → ${newId} (${hash.slice(0, 8)}… S${entry.season}E${entry.episode})`)
+                }
+            } else {
+                // Introuvable — on conserve pour ne pas perdre l'entrée
+                orphaned++
+                newEpisodes[oldIdStr] = entry
+                logger.warn('organize', `Migration ID : ep ${oldId} introuvable dans le catalogue (${hash.slice(0, 8)}… S${entry.season}E${entry.episode})`)
+            }
+        }
+
+        organized[hash] = newEpisodes
+        // Nettoyer les hash vides
+        if (Object.keys(organized[hash]).length === 0) delete organized[hash]
+    }
+
+    if (changed) {
+        fs.writeFileSync(organizedPath, JSON.stringify(organized, null, 2), 'utf-8')
+        logger.info('organize', `Migration IDs terminée — ${updated} mis à jour${orphaned > 0 ? `, ${orphaned} non résolus` : ''}`)
+    } else {
+        logger.debug('organize', `Migration IDs — aucun changement nécessaire${orphaned > 0 ? ` (${orphaned} IDs inconnus conservés)` : ''}`)
+    }
+
+    return { updated, orphaned }
+}
+
 // ── Sync des noms de fichiers après mise à jour du scraper ────
 
 export async function syncFilenameChanges(
@@ -367,16 +463,15 @@ export async function syncFilenameChanges(
                     ? path.basename(orgEntry.dest_path)
                     : orgEntry.dest_filename
                 const srcExt = path.extname(currentName)
-                // Préférer le formatted_name du path correspondant au hash organisé
+                // Priorité aux valeurs du path entry correspondant au hash organisé
                 const matchedPathEntry = (ep.paths ?? []).find((p: any) =>
                     typeof p === 'object' && p.infohash?.toLowerCase() === orgHash
                 )
-                const fmtName = matchedPathEntry?.formatted_name?.trim()
-                    ? matchedPathEntry.formatted_name
-                    : ep.formatted_name
+                const rawFmt = matchedPathEntry?.formatted_name ?? ep.formatted_name
+                const rawNfo = matchedPathEntry?.nfo_filename   ?? ep.nfo_filename
                 const expectedName: string = nfoSupport
-                    ? (ep.nfo_filename ? ep.nfo_filename.replace(/\.[^.]+$/, '') + srcExt : currentName)
-                    : (fmtName?.trim() ? fmtName.replace(/[<>:"/\\|?*]/g, '').trim() + srcExt : currentName)
+                    ? (rawNfo ? rawNfo.replace(/\.[^.]+$/, '') + srcExt : currentName)
+                    : (rawFmt?.trim() ? rawFmt.replace(/[<>:"/\\|?*]/g, '').trim() + srcExt : currentName)
 
                 if (expectedName === currentName) continue
 
