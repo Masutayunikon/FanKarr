@@ -277,11 +277,18 @@ const QB: TorrentClientDriver = {
                 } catch {}
             }
 
-            // Ajout normal du torrent (pas en pause) pour que qBit récupère les métadonnées immédiatement
+            // Stratégie d'ajout selon le type de lien :
+            //   .torrent URL → ajout en pause (métadonnées dans le fichier, disponibles immédiatement)
+            //   magnet link  → ajout normal  (métadonnées viennent des pairs, la pause bloque leur récupération)
+            const isMagnet = url.startsWith('magnet:')
             const form = new FormData()
             form.append('urls', url)
             if (config.category) form.append('category', String(config.category))
             if (config.savePath)  form.append('savepath', String(config.savePath))
+            if (!isMagnet) {
+                form.append('paused',  'true')   // qBit < 5.0
+                form.append('stopped', 'true')   // qBit ≥ 5.0
+            }
 
             const res  = await fetch(`${config.url}/api/v2/torrents/add`, {
                 method: 'POST', body: form, headers: { Cookie: `SID=${sid}` },
@@ -290,7 +297,7 @@ const QB: TorrentClientDriver = {
             if (text !== 'Ok.') throw new Error(`Ajout échoué : ${text}`)
 
             if (hash) {
-                logger.info('qbittorrent', `Torrent ajouté — sélection fichier ${options.file_index} en attente des métadonnées`)
+                logger.info('qbittorrent', `Torrent ajouté (${isMagnet ? 'magnet, actif' : 'en pause'}) — sélection fichier ${options.file_index} en attente des métadonnées`)
                 qbApplyFilePriority(config, hash, options.file_index, true).catch(err =>
                     logger.warn('qbittorrent', `Priorité fichier non appliquée : ${err instanceof Error ? err.message : err}`)
                 )
