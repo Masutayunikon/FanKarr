@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.13.1](https://github.com/Masutayunikon/FanKarr/compare/v3.13.0...v3.13.1) (2026-05-06)
+
+
+### Bug Fixes
+
+* ajout du champ wiki dans l'api ([95d2b27](https://github.com/Masutayunikon/FanKarr/commit/95d2b270dcb3052b65f5918ec770799b43316cd6))
+
 ## [3.13.0](https://github.com/Masutayunikon/FanKarr/compare/v3.12.1...v3.13.0) (2026-05-06)
 
 
