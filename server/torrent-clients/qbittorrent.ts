@@ -31,20 +31,25 @@ async function qbLogin(config: Record<string, string | number>): Promise<string>
     form.append('username', String(config.username ?? ''))
     form.append('password', String(config.password ?? ''))
 
+    logger.debug('qbittorrent', `Login → POST ${config.url}/api/v2/auth/login (user: ${config.username})`)
+
     const res = await fetch(`${config.url}/api/v2/auth/login`, {
         method : 'POST',
         body   : form,
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     })
 
-    const text = await res.text()
-    if (text !== 'Ok.') throw new Error(`Login échoué : ${text}`)
-
+    const text      = await res.text()
     const setCookie = res.headers.get('set-cookie') ?? ''
+    logger.debug('qbittorrent', `Login ← HTTP ${res.status} | body: "${text.trim()}" | set-cookie: "${setCookie}"`)
+
+    if (text.trim() !== 'Ok.') throw new Error(`Login échoué : ${text.trim()}`)
+
     // ≥5.2.0 : QBT_SID_<PORT>=<value>   |   <5.2.0 : SID=<value>
     const match = setCookie.match(/(?:QBT_SID_\d+|SID)=([^;]+)/)
-    if (!match) throw new Error('Cookie SID introuvable')
+    if (!match) throw new Error(`Cookie SID introuvable (set-cookie reçu : "${setCookie}")`)
     // match[0] = "QBT_SID_8080=abc123" ou "SID=abc123" — on renvoie le pair complet
+    logger.debug('qbittorrent', `Login OK — cookie: ${match[0].split('=')[0]}=***`)
     return match[0]
 }
 
