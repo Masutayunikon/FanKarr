@@ -1,3 +1,5 @@
+import path from 'path'
+
 const FANKAI_API = 'https://metadata.fankai.fr'
 
 export async function fankaiGet(endpoint: string): Promise<any> {
@@ -65,6 +67,25 @@ export function resolveEpNaming(ep: any, hash?: string | null): {
         nfo_filename     : pathEntry?.nfo_filename      ?? ep.nfo_filename      ?? null,
         original_filename: pathEntry?.original_filename ?? ep.original_filename ?? null,
     }
+}
+
+/**
+ * Calcule le nom attendu d'un fichier épisode selon le mode (NFO ou formaté).
+ * Source unique de vérité partagée entre organized-summary, organized/:id, rename-episode et rename-all.
+ */
+export function computeExpectedName(
+    ep      : any,
+    orgEntry: any,
+    hash    : string | null,
+    nfoSupport: boolean,
+): { currentName: string; expectedName: string; needsRename: boolean } {
+    const currentName = orgEntry.dest_path ? path.basename(orgEntry.dest_path) : orgEntry.dest_filename
+    const srcExt      = path.extname(currentName)
+    const { formatted_name: rawFmt, nfo_filename: rawNfo } = resolveEpNaming(ep, hash)
+    const expectedName = nfoSupport
+        ? (rawNfo  ? rawNfo.replace(/\.[^.]+$/, '')  + srcExt : currentName)
+        : (rawFmt?.trim() ? rawFmt.replace(/[<>:"/\\|?*]/g, '').trim() + srcExt : currentName)
+    return { currentName, expectedName, needsRename: expectedName !== currentName }
 }
 
 /**
