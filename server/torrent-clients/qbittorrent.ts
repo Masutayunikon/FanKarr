@@ -15,15 +15,17 @@ function mapState(state: string): TorrentInfo['state'] {
     return 'unknown'
 }
 
-// Retourne les headers d'authentification : Bearer (≥5.2.0) ou cookie SID (<5.2.0)
+// Retourne les headers d'authentification : Bearer (≥5.2.0) ou cookie SID
 async function qbAuth(config: Record<string, string | number>): Promise<Record<string, string>> {
     if (config.apiKey) {
         return { Authorization: `Bearer ${config.apiKey}` }
     }
-    const sid = await qbLogin(config)
-    return { Cookie: `SID=${sid}` }
+    const cookie = await qbLogin(config)
+    return { Cookie: cookie }
 }
 
+// Retourne le cookie complet "name=value" à utiliser dans les requêtes suivantes.
+// En ≥5.2.0, le nom est QBT_SID_<PORT> ; en <5.2.0, c'est SID.
 async function qbLogin(config: Record<string, string | number>): Promise<string> {
     const form = new URLSearchParams()
     form.append('username', String(config.username ?? ''))
@@ -38,10 +40,12 @@ async function qbLogin(config: Record<string, string | number>): Promise<string>
     const text = await res.text()
     if (text !== 'Ok.') throw new Error(`Login échoué : ${text}`)
 
-    const cookie = res.headers.get('set-cookie') ?? ''
-    const sid    = cookie.match(/SID=([^;]+)/)?.[1]
-    if (!sid) throw new Error('Cookie SID introuvable')
-    return sid
+    const setCookie = res.headers.get('set-cookie') ?? ''
+    // ≥5.2.0 : QBT_SID_<PORT>=<value>   |   <5.2.0 : SID=<value>
+    const match = setCookie.match(/(?:QBT_SID_\d+|SID)=([^;]+)/)
+    if (!match) throw new Error('Cookie SID introuvable')
+    // match[0] = "QBT_SID_8080=abc123" ou "SID=abc123" — on renvoie le pair complet
+    return match[0]
 }
 
 async function qbTorrentExists(config: Record<string, string | number>, authHeaders: Record<string, string>, hash: string): Promise<boolean> {
