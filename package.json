@@ -15,6 +15,9 @@
     "start": "node dist/server/index.js",
     "preview": "vite preview"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  },
   "dependencies": {
     "@tailwindcss/vite": "^4.2.1",
     "@vueuse/core": "^14.2.1",
