@@ -1,5 +1,24 @@
 # Changelog
 
+## [3.14.0](https://github.com/Masutayunikon/FanKarr/compare/v3.13.2...v3.14.0) (2026-05-07)
+
+
+### Features
+
+* **qbittorrent:** support API key authentication (≥5.2.0) ([702847a](https://github.com/Masutayunikon/FanKarr/commit/702847a5c2eb5956f54a8475fefc80a08fca70f1))
+* **qbittorrent:** support cookie name (≥5.2.0) ([aa8b500](https://github.com/Masutayunikon/FanKarr/commit/aa8b500f57efb97aae10eb0bd8e254388a8aff42))
+
+
+### Bug Fixes
+
+* ajout de log pour le cookie ([2b3fd79](https://github.com/Masutayunikon/FanKarr/commit/2b3fd79a92bbc7d7ed2142b7a23e03799efe0a28))
+* cookie ([7da5a8d](https://github.com/Masutayunikon/FanKarr/commit/7da5a8d4e853f7e92770f20352478a76ee91642d))
+* le bouton rename n'apparait plus quand on utilise differents torrents entre les épisode ([105cc05](https://github.com/Masutayunikon/FanKarr/commit/105cc05bdf38127089869ea201165ac1d3479275))
+* on ne vois plus le telechargement de fichier qui ont une priorité basse (ne pas télécharger) ([1f50f9a](https://github.com/Masutayunikon/FanKarr/commit/1f50f9ae72ec9958bfb92b2e6936c699e19272f3))
+* renaming dans le managements des series ([1e92934](https://github.com/Masutayunikon/FanKarr/commit/1e92934f531c82b9da90c8597ec08cd162b5a9ee))
+* renaming dans le managements des series ([bf3f303](https://github.com/Masutayunikon/FanKarr/commit/bf3f30356e086d310b7213b267356bc20976589c))
+* rtorrent priority default to 1 ([bfabf9b](https://github.com/Masutayunikon/FanKarr/commit/bfabf9b7937f055579add331cd918a13f05084bf))
+
 ## [3.13.2](https://github.com/Masutayunikon/FanKarr/compare/v3.13.1...v3.13.2) (2026-05-06)
 
 
