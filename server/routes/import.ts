@@ -334,8 +334,16 @@ router.get('/organized-summary', requireAuth, async (_req, res) => {
                 for (const ep of season.episodes ?? []) {
                     let orgEntry: any = null
                     let orgHash: string | null = null
-                    for (const [hash, eps] of Object.entries(organized)) {
-                        if (eps[String(ep.id)]) { orgEntry = eps[String(ep.id)]; orgHash = hash; break }
+                    // Même stratégie que organized/:serieId : on cherche via ep.paths d'abord
+                    // pour garantir le bon hash → bon formatted_name dans resolveEpNaming
+                    for (const p of ep.paths ?? []) {
+                        if (typeof p !== 'object' || !p.infohash) continue
+                        const h = p.infohash.toLowerCase()
+                        const e = (organized[h] ?? {})[String(ep.id)]
+                        if (e) { orgEntry = e; orgHash = h; break }
+                    }
+                    if (!orgEntry && organized['manual']?.[String(ep.id)]) {
+                        orgEntry = organized['manual'][String(ep.id)]; orgHash = 'manual'
                     }
                     if (!orgEntry) continue
                     const { currentName, expectedName, needsRename } = computeExpectedName(ep, orgEntry, orgHash, nfoSupport)
