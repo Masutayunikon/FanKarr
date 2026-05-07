@@ -279,6 +279,7 @@ const RT: TorrentClientDriver = {
                             index   : i,
                             name    : String(f[2] ?? ''),
                             progress: Number(f[1]) > 0 ? Number(f[0]) / Number(f[1]) : 0,
+                            priority: 1,
                         }))
                         : undefined,
                 } satisfies TorrentInfo
