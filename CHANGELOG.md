@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.14.1](https://github.com/Masutayunikon/FanKarr/compare/v3.14.0...v3.14.1) (2026-05-07)
+
+
+### Bug Fixes
+
+* eslint build ([25ab373](https://github.com/Masutayunikon/FanKarr/commit/25ab373539c20942202e82cf678e5b7577ff0027))
+
 ## [3.14.0](https://github.com/Masutayunikon/FanKarr/compare/v3.13.2...v3.14.0) (2026-05-07)
 
 
