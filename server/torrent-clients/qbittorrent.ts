@@ -24,8 +24,6 @@ async function qbAuth(config: Record<string, string | number>): Promise<Record<s
     return { Cookie: cookie }
 }
 
-// Retourne le cookie complet "name=value" à utiliser dans les requêtes suivantes.
-// En ≥5.2.0, le nom est QBT_SID_<PORT> ; en <5.2.0, c'est SID.
 async function qbLogin(config: Record<string, string | number>): Promise<string> {
     const form = new URLSearchParams()
     form.append('username', String(config.username ?? ''))
@@ -37,17 +35,12 @@ async function qbLogin(config: Record<string, string | number>): Promise<string>
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     })
 
-    const text      = await res.text()
-    const setCookie = res.headers.get('set-cookie') ?? ''
-
-    // ≥5.2.0 : HTTP 204, body vide  |  <5.2.0 : HTTP 200, body "Ok."
+    const text = await res.text()
     if (!res.ok) throw new Error(`Login échoué : ${text.trim() || res.status}`)
 
-    // ≥5.2.0 : QBT_SID_<PORT>=<value>   |   <5.2.0 : SID=<value>
-    const match = setCookie.match(/(?:QBT_SID_\d+|SID)=([^;]+)/)
-    if (!match) throw new Error(`Cookie SID introuvable (set-cookie reçu : "${setCookie}")`)
-    // match[0] = "QBT_SID_8080=abc123" ou "SID=abc123" — on renvoie le pair complet
-    return match[0]
+    const cookie = (res.headers.get('set-cookie') ?? '').split(';')[0].trim()
+    if (!cookie) throw new Error('Cookie de session introuvable')
+    return cookie
 }
 
 async function qbTorrentExists(config: Record<string, string | number>, authHeaders: Record<string, string>, hash: string): Promise<boolean> {
@@ -246,6 +239,7 @@ const QB: TorrentClientDriver = {
                         index   : i,
                         name    : String(f.name ?? ''),
                         progress: f.progress ?? 0,   // 0–1
+                        priority: f.priority ?? 1,
                     }))
                     : undefined,
             } satisfies TorrentInfo
@@ -263,6 +257,7 @@ const QB: TorrentClientDriver = {
             index   : i,
             name    : String(f.name ?? ''),
             progress: f.progress ?? 0,
+            priority: f.priority ?? 1,
         }))
     },
 
