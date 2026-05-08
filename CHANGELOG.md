@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.14.3](https://github.com/Masutayunikon/FanKarr/compare/v3.14.2...v3.14.3) (2026-05-08)
+
+
+### Bug Fixes
+
+* build binaries node version ([6d8ea36](https://github.com/Masutayunikon/FanKarr/commit/6d8ea36260cb76e0592bbee3ce5450d2424b9209))
+
 ## [3.14.2](https://github.com/Masutayunikon/FanKarr/compare/v3.14.1...v3.14.2) (2026-05-07)
 
 
