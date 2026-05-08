@@ -14,7 +14,7 @@ jobs:
 
       - uses: pnpm/action-setup@v3
         with:
-          version: latest
+          version: 10
 
       - uses: actions/setup-node@v4
         with:
@@ -78,7 +78,7 @@ jobs:
 
       - uses: pnpm/action-setup@v3
         with:
-          version: latest
+          version: 10
 
       - uses: actions/setup-node@v4
         with:
