@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.14.4](https://github.com/Masutayunikon/FanKarr/compare/v3.14.3...v3.14.4) (2026-05-08)
+
+
+### Bug Fixes
+
+* lock file for build ([ef527c2](https://github.com/Masutayunikon/FanKarr/commit/ef527c2072a93650f9159de12ae875a671fb845c))
+
 ## [3.14.3](https://github.com/Masutayunikon/FanKarr/compare/v3.14.2...v3.14.3) (2026-05-08)
 
 
