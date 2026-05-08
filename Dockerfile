@@ -7,7 +7,7 @@ WORKDIR /app
 
 # ── Dépendances prod ───────────────────────────────────────────
 FROM base AS prod-deps
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --prod --frozen-lockfile
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --prod --frozen-lockfile --ignore-scripts
 
 # ── Build ──────────────────────────────────────────────────────
 FROM base AS build
