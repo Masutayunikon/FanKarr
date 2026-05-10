@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.15.0](https://github.com/Masutayunikon/FanKarr/compare/v3.14.6...v3.15.0) (2026-05-10)
+
+
+### Features
+
+* ajout build docker pour arm32 ([950a2ab](https://github.com/Masutayunikon/FanKarr/commit/950a2abc49fe0b7b5bcc0f47d781a45a01838ec3))
+
 ## [3.14.6](https://github.com/Masutayunikon/FanKarr/compare/v3.14.5...v3.14.6) (2026-05-08)
 
 
