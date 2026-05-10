@@ -49,19 +49,27 @@ router.get('/downloads', requireAuth, async (_req, res) => {
         const enriched = await Promise.all(torrents.map(async (t: any) => {
             const orgFiles = organized[t.hash] ?? {}
             let totalFiles = 1
+            let serieName: string | undefined
+            let episodes: any[] = []
             try {
                 const availableIds = await readAvailable()
                 for (const id of availableIds) {
                     const sd = await readSerieData(id)
                     if (!sd) continue
                     const match = extractTorrentsFromSerieData(sd).find((st: any) => st.infohash?.toLowerCase() === t.hash?.toLowerCase())
-                    if (match) { totalFiles = buildResolvedEpisodes(sd, match.infohash, match.season_number).length || 1; break }
+                    if (match) {
+                        const resolved = buildResolvedEpisodes(sd, match.infohash, match.season_number)
+                        totalFiles = resolved.length || 1
+                        serieName  = sd.title ?? sd.show_title
+                        episodes   = resolved
+                        break
+                    }
                 }
             } catch {}
             const doneFiles = Object.keys(orgFiles).length
             const organizeState: 'none' | 'partial' | 'done' = doneFiles >= totalFiles ? 'done' : doneFiles > 0 ? 'partial' : 'none'
             const notif = recentOrganized.find(n => n.hash === t.hash)
-            return { ...t, organizeState, organizeProgress: { done: doneFiles, total: totalFiles }, errorFiles: notif?.errorFiles ?? [] }
+            return { ...t, organizeState, organizeProgress: { done: doneFiles, total: totalFiles }, errorFiles: notif?.errorFiles ?? [], serieName, episodes }
         }))
         res.json(enriched)
     } catch (err) {

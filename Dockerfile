@@ -16,6 +16,7 @@ RUN pnpm run build
 
 # ── Production ─────────────────────────────────────────────────
 FROM node:22-slim
+ARG BUILD_VERSION=dev
 RUN apt-get update && apt-get install -y gosu && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -25,6 +26,7 @@ COPY --from=build /app/dist/client /app/public
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 RUN mkdir -p /config
+RUN echo "$BUILD_VERSION" > /app/version.txt
 
 EXPOSE 3001
 ENV NODE_ENV=production

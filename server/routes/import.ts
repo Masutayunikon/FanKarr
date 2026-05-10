@@ -32,7 +32,13 @@ router.post('/manual-import', requireAuth, async (req, res) => {
     }
     const { mediaPath, organizeMode, nfoSupport } = readSettings()
     const organized = loadOrganizedJson()
-    const sd = await readSerieData(Number(serie_id))
+    let sd = await readSerieData(Number(serie_id))
+    if (!sd) {
+        // readSerieData ne couvre que le cache local — fallback sur le catalogue complet
+        // (utile pour les séries sans torrent officiel dont les données sont peut-être absentes du cache individuel)
+        const all = await loadEnrichedSeriesData()
+        sd = all.find((s: any) => s.id === Number(serie_id)) ?? null
+    }
     if (!sd) { res.status(404).json({ error: 'Série introuvable dans le catalogue' }); return }
     const rawTitle   = sd.title ?? sd.show_title ?? ''
     const serieTitle = rawTitle.replace(/:/g, ' -').replace(/[<>"/\\|?*]/g, '').replace(/\s+/g, ' ').trim()

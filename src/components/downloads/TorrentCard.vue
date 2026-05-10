@@ -4,7 +4,30 @@
     <!-- Nom + état -->
     <div class="flex items-start justify-between gap-4">
       <div class="flex-1 min-w-0">
-        <p class="text-sm text-primary font-medium truncate">{{ torrent.name }}</p>
+        <!-- Nom du torrent + tooltip épisodes -->
+        <div class="relative group/eps inline-block max-w-full">
+          <p class="text-sm text-primary font-medium truncate cursor-default">{{ torrent.name }}</p>
+          <!-- Tooltip épisodes -->
+          <div v-if="episodesWithProgress.length > 0"
+               class="absolute bottom-full left-0 mb-2 hidden group-hover/eps:block z-20 min-w-56 max-w-80">
+            <div class="bg-card border border-border rounded-lg p-3 text-xs shadow-xl">
+              <p class="text-muted font-medium mb-2">{{ episodesWithProgress.length }} épisode{{ episodesWithProgress.length > 1 ? 's' : '' }}</p>
+              <div class="flex flex-col gap-1 max-h-48 overflow-y-auto">
+                <div v-for="ep in episodesWithProgress" :key="ep.episode_id"
+                     class="flex items-center justify-between gap-3">
+                  <span class="text-primary shrink-0">S{{ String(ep.season_number).padStart(2,'0') }}E{{ String(ep.episode_number).padStart(2,'0') }}</span>
+                  <span v-if="ep.progress !== null"
+                        class="text-[10px] px-1.5 py-0.5 rounded shrink-0"
+                        :class="ep.progress >= 100 ? 'bg-green-500/15 text-green-500' : ep.priority === 0 ? 'bg-border/50 text-muted' : 'bg-accent/15 text-accent'">
+                    {{ ep.priority === 0 ? 'ignoré' : ep.progress >= 100 ? '✓' : `${ep.progress}%` }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Nom de la série -->
+        <p v-if="torrent.serieName" class="text-[11px] text-muted truncate mt-0.5">{{ torrent.serieName }}</p>
         <div class="flex items-center gap-2 mt-1">
           <span class="text-[10px] px-2 py-0.5 rounded border" :class="stateBadge(torrent.state).class">{{ stateBadge(torrent.state).label }}</span>
           <span v-if="columns.client" class="text-xs text-muted">{{ torrent.client_name }}</span>
@@ -65,8 +88,12 @@
                 : 'Non importé' }}
           </span>
 
-          <button v-if="torrent.organizeState !== 'done'" @click="emit('import', torrent)" :disabled="importing" class="btn-secondary text-xs py-1">
-            {{ importing ? '...' : 'Importer' }}
+          <button v-if="torrent.organizeState !== 'done'" @click="emit('import', torrent)" :disabled="importing"
+                  class="btn-secondary text-xs py-1 flex items-center gap-1.5 min-w-[72px] justify-center">
+            <svg v-if="importing" width="10" height="10" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" fill="none" class="animate-spin shrink-0">
+              <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+            </svg>
+            {{ importing ? 'Import…' : 'Importer' }}
           </button>
         </template>
 
@@ -129,6 +156,23 @@ const emit = defineEmits<{
 const withFiles = ref(false)
 
 const clampedProgress = computed(() => Math.min(100, Math.max(0, props.torrent.progress ?? 0)))
+
+// Épisodes enrichis avec leur progression depuis les données de fichiers du client
+const episodesWithProgress = computed(() => {
+  const eps: any[] = props.torrent.episodes ?? []
+  if (!eps.length) return []
+  return eps.map((ep: any) => {
+    const file = (props.torrent.files ?? []).find((f: any) => {
+      const basename = String(f.name ?? '').replace(/\\/g, '/').split('/').pop() ?? ''
+      return basename.toLowerCase() === ep.filename?.toLowerCase()
+    })
+    return {
+      ...ep,
+      progress: file != null ? Math.round((file.progress ?? 0) * 100) : null,
+      priority: file?.priority ?? 1,
+    }
+  })
+})
 
 function stateBadge(state: string) {
   return ({

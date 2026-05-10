@@ -353,7 +353,7 @@ async function organizeTorrent(
 
         // Vérification de complétion pour épisode unique
         if (completedFileNames !== null && !completedFileNames.has(filename.toLowerCase())) {
-            debug(`Fichier incomplet (skip) : ${filename}`)
+            warn(`Skip (incomplet / priorité 0) : ${filename}`)
             return { ...result, total: 1, skipped: 1 }
         }
 
@@ -371,8 +371,8 @@ async function organizeTorrent(
         for (const c of candidates) { if (fs.existsSync(c)) { src = c; break } }
 
         if (!src) {
-            error(`Fichier source introuvable : ${filename}`)
-            return { ...result, total: 1, errors: [{ file: filename, error: 'Source introuvable' }] }
+            error(`Fichier source introuvable : ${filename}\n  Chemins essayés :\n${candidates.map(c => `    - ${c}`).join('\n')}`)
+            return { ...result, total: 1, errors: [{ file: filename, error: `Source introuvable (chemins essayés : ${candidates.join(', ')})` }] }
         }
 
         if (!fs.existsSync(dest)) {
@@ -418,9 +418,9 @@ async function organizeTorrent(
         if (isOrganized(hash, episode_id)) { result.skipped++; continue }
 
         // Vérification de complétion : si on a les infos de progression par fichier,
-        // on skip les fichiers pas encore à 100% (ex: 1% téléchargé avant priorité appliquée).
+        // on skip les fichiers pas encore à 100% (ex: priorité 0 ou en cours de téléchargement).
         if (completedFileNames !== null && !completedFileNames.has(filename.toLowerCase())) {
-            debug(`Fichier incomplet (skip) : ${filename}`)
+            warn(`Skip (incomplet / priorité 0) : ${filename}`)
             result.skipped++
             continue
         }
@@ -436,8 +436,7 @@ async function organizeTorrent(
 
         if (!src) {
             // Fichier absent du disque : pas encore téléchargé ou hors sélection (priorité 0).
-            // On skip silencieusement — pas une erreur.
-            debug(`Fichier non disponible (skip) : ${filename}`)
+            warn(`Skip (fichier absent) : ${filename}\n  Chemins essayés :\n${candidates.map(c => `    - ${c}`).join('\n')}`)
             result.skipped++
             continue
         }
