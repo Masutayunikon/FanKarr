@@ -113,14 +113,6 @@
       </div>
     </div>
 
-    <!-- Progression saison -->
-    <div v-if="seasonProgress && seasonProgress.progress < 100" class="px-5 pb-3 -mt-1">
-      <div class="h-0.5 bg-border rounded-full overflow-hidden">
-        <div class="h-full bg-accent rounded-full transition-all duration-500" :style="{ width: `${seasonProgress.progress}%` }" />
-      </div>
-      <p class="text-[11px] text-muted mt-1">{{ seasonProgress.progress }}%</p>
-    </div>
-
     <!-- Épisodes -->
     <div v-if="!collapsed" class="divide-y divide-border/50">
       <div
@@ -310,7 +302,7 @@
 import { ref, computed, h, onMounted, onUnmounted } from 'vue'
 import { ChevronUp, Download, Loader, Check, X, Trash2 } from 'lucide-vue-next'
 
-interface ActiveTorrent { hash: string; progress: number; state: string; files?: { index: number; progress: number }[] }
+interface ActiveTorrent { hash: string; progress: number; state: string; files?: { index: number; progress: number; priority?: number }[] }
 
 const props = defineProps<{
   season            : any
@@ -441,7 +433,7 @@ function epProgress(ep: any): ActiveTorrent | null {
         // Avec données par fichier on se fie à la progression réelle du fichier précis.
         // Si le fichier est à 100% sans session active → déjà téléchargé hors session
         // (ex : désimporté puis re-consulté) → ne pas afficher le spinner.
-        if (file != null && file.priority !== 0 && (sessionDl || (file.progress > 0 && file.progress < 1))) {
+        if (file != null && file.priority !== 0 && (sessionDl || file.progress < 1)) {
           return { ...active, progress: Math.round(file.progress * 100) }
         }
         if (!sessionDl) continue
