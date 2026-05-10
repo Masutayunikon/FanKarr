@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.14.6](https://github.com/Masutayunikon/FanKarr/compare/v3.14.5...v3.14.6) (2026-05-08)
+
+
+### Bug Fixes
+
+* pnpm build ([fcb176d](https://github.com/Masutayunikon/FanKarr/commit/fcb176d519b1bff49c40b79192e71b6062671998))
+
 ## [3.14.5](https://github.com/Masutayunikon/FanKarr/compare/v3.14.4...v3.14.5) (2026-05-08)
 
 
