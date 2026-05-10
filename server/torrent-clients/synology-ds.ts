@@ -166,7 +166,7 @@ const DS: TorrentClientDriver = {
             version: '1',
             method : 'delete',
             id     : found.id,
-            force_complete: deleteFiles ? 'false' : 'false',
+            force_complete: deleteFiles ? 'true' : 'false',
             _sid   : sid,
         })
         const res = await fetch(`${config.url}/webapi/DownloadStation/task.cgi?${params}`)

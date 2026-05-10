@@ -244,7 +244,7 @@ const RT: TorrentClientDriver = {
         await Promise.all(rows.map(async (r: any) => {
             const hash = String(r[0]).toUpperCase()
             try {
-                const files = await rpcCall(config, 'f.multicall', [hash, '', 'f.completed_length=', 'f.size_bytes=', 'f.path='])
+                const files = await rpcCall(config, 'f.multicall', [hash, '', 'f.completed_length=', 'f.size_bytes=', 'f.path=', 'f.priority='])
                 if (Array.isArray(files) && files.length > 0) fileMap.set(hash.toLowerCase(), files)
             } catch {}
         }))
@@ -279,7 +279,7 @@ const RT: TorrentClientDriver = {
                             index   : i,
                             name    : String(f[2] ?? ''),
                             progress: Number(f[1]) > 0 ? Number(f[0]) / Number(f[1]) : 0,
-                            priority: 1,
+                            priority: Number(f[3] ?? 1) === 0 ? 0 : 1,
                         }))
                         : undefined,
                 } satisfies TorrentInfo

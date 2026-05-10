@@ -48,40 +48,64 @@
         <table class="w-full text-xs">
           <thead>
             <tr class="border-b border-border bg-shell">
-              <th class="text-left px-4 py-2.5 text-muted font-medium">Client</th>
-              <th class="text-center px-3 py-2.5 text-muted font-medium">Sélection fichier</th>
-              <th class="text-center px-3 py-2.5 text-muted font-medium">Catégories</th>
-              <th class="text-center px-3 py-2.5 text-muted font-medium">Dossier cible</th>
-              <th class="text-center px-3 py-2.5 text-muted font-medium">Remap. chemin</th>
+              <th class="text-left px-4 py-2.5 text-muted font-medium whitespace-nowrap">Client</th>
+              <th class="text-center px-3 py-2.5 text-muted font-medium whitespace-nowrap">Auth</th>
+              <th class="text-center px-3 py-2.5 text-muted font-medium whitespace-nowrap">Sél. fichier</th>
+              <th class="text-center px-3 py-2.5 text-muted font-medium whitespace-nowrap">Prog. fichier</th>
+              <th class="text-center px-3 py-2.5 text-muted font-medium whitespace-nowrap">Upload .torrent</th>
+              <th class="text-center px-3 py-2.5 text-muted font-medium whitespace-nowrap">Catégories</th>
+              <th class="text-center px-3 py-2.5 text-muted font-medium whitespace-nowrap">Suppr. fichiers</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-border/60">
             <tr v-for="row in clientMatrix" :key="row.id" class="hover:bg-hover/40 transition-colors">
+              <!-- Client + version -->
               <td class="px-4 py-2.5">
                 <div class="flex items-center gap-2">
                   <span class="w-1.5 h-1.5 rounded-full shrink-0"
-                        :class="healthStatus[clients.find(c => c.type === row.id)?.uuid ?? ''] === true ? 'bg-green-500' :
-                                healthStatus[clients.find(c => c.type === row.id)?.uuid ?? ''] === false ? 'bg-red-500' : 'bg-transparent'" />
-                  <span class="text-primary font-medium">{{ row.label }}</span>
+                        :class="healthStatus[clients.find(c => c.type === row.id)?.uuid ?? ''] === true  ? 'bg-green-500' :
+                                healthStatus[clients.find(c => c.type === row.id)?.uuid ?? ''] === false ? 'bg-red-500'   : 'bg-transparent'" />
+                  <div>
+                    <p class="text-primary font-medium">{{ row.label }}</p>
+                    <p class="text-[10px] text-muted mt-0.5">{{ row.version }}</p>
+                  </div>
                 </div>
               </td>
+              <!-- Auth -->
+              <td class="text-center px-3 py-2.5 text-secondary whitespace-nowrap">{{ row.auth }}</td>
+              <!-- Sélection fichier -->
               <td class="text-center px-3 py-2.5">
-                <span :class="row.fileSelect === '✗' ? 'text-muted' : row.fileSelect.startsWith('Async') ? 'text-yellow-500' : 'text-green-400'">
-                  {{ row.fileSelect }}
+                <span :class="row.fileSelect ? 'text-yellow-400' : 'text-muted'">
+                  {{ row.fileSelect ? 'Async ✓' : '✗' }}
                 </span>
               </td>
-              <td class="text-center px-3 py-2.5" :class="row.categories ? 'text-green-400' : 'text-muted'">{{ row.categories ? '✓' : '✗' }}</td>
-              <td class="text-center px-3 py-2.5 text-green-400">✓</td>
-              <td class="text-center px-3 py-2.5 text-green-400">✓</td>
+              <!-- Progression par fichier -->
+              <td class="text-center px-3 py-2.5" :class="row.fileProgress ? 'text-green-400' : 'text-muted'">
+                {{ row.fileProgress ? '✓' : '✗' }}
+              </td>
+              <!-- Upload .torrent (FanKarr proxy) -->
+              <td class="text-center px-3 py-2.5">
+                <span :class="row.torrentUpload === 'proxy' ? 'text-green-400' : row.torrentUpload === 'url' ? 'text-secondary' : 'text-muted'">
+                  {{ row.torrentUpload === 'proxy' ? '✓ Proxy' : row.torrentUpload === 'url' ? 'URL' : '✗' }}
+                </span>
+              </td>
+              <!-- Catégories -->
+              <td class="text-center px-3 py-2.5" :class="row.categories ? 'text-green-400' : 'text-muted'">
+                {{ row.categories ? '✓' : '✗' }}
+              </td>
+              <!-- Suppression fichiers -->
+              <td class="text-center px-3 py-2.5" :class="row.deleteFiles ? 'text-green-400' : 'text-muted'">
+                {{ row.deleteFiles ? '✓' : '✗' }}
+              </td>
             </tr>
           </tbody>
         </table>
       </div>
-      <p class="text-[11px] text-muted mt-2">
-        <span class="text-green-400">✓ Natif</span> — sélection à l'ajout, aucun fichier superflu ·
-        <span class="text-green-400">Async ✓</span> — sélection dès réception des métadonnées, avant tout téléchargement ·
-        <span class="text-muted">✗</span> — non supporté, torrent complet téléchargé
-      </p>
+      <div class="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[11px] text-muted">
+        <span><span class="text-yellow-400">Async ✓</span> — sélection dès réception des métadonnées, aucun octet superflu téléchargé</span>
+        <span><span class="text-green-400">✓ Proxy</span> — FanKarr télécharge le .torrent et l'envoie au client (liens protégés supportés)</span>
+        <span><span class="text-secondary">URL</span> — le client télécharge le .torrent directement depuis l'URL</span>
+      </div>
     </div>
 
     <!-- Modal ajout -->
@@ -207,11 +231,30 @@ const availableClients = ref<any[]>([])
 const healthStatus     = ref<Record<string, boolean | null>>({})
 
 const clientMatrix = [
-  { id: 'qbittorrent',  label: 'qBittorrent',              fileSelect: 'Async ✓',  categories: true  },
-  { id: 'transmission', label: 'Transmission',             fileSelect: '✓ Natif',  categories: true  },
-  { id: 'rtorrent',     label: 'rTorrent / ruTorrent',     fileSelect: 'Async ✓',  categories: true  },
-  { id: 'utorrent',     label: 'uTorrent',                 fileSelect: 'Async ✓',  categories: true  },
-  { id: 'synology-ds',  label: 'Synology Download Station', fileSelect: '✗',       categories: false },
+  {
+    id: 'qbittorrent',  label: 'qBittorrent',              version: '4.1+',
+    auth: 'Login / MdP · Clé API (5.2+)', fileSelect: true,  fileProgress: true,  torrentUpload: 'proxy', categories: true,  deleteFiles: true,
+  },
+  {
+    id: 'transmission', label: 'Transmission',             version: '3.x / 4.x',
+    auth: 'Login / MdP',     fileSelect: true,  fileProgress: true,  torrentUpload: 'url',   categories: true,  deleteFiles: true,
+  },
+  {
+    id: 'rtorrent',     label: 'rTorrent / ruTorrent',     version: '0.9+',
+    auth: 'URL xmlrpc',      fileSelect: true,  fileProgress: true,  torrentUpload: 'url',   categories: true,  deleteFiles: true,
+  },
+  {
+    id: 'utorrent',     label: 'uTorrent',                 version: '3.x',
+    auth: 'Login / MdP',     fileSelect: true,  fileProgress: false, torrentUpload: 'url',   categories: true,  deleteFiles: true,
+  },
+  {
+    id: 'synology-ds',  label: 'Synology Download Station', version: '6.x+',
+    auth: 'Login / MdP',     fileSelect: false, fileProgress: false, torrentUpload: 'url',   categories: false, deleteFiles: true,
+  },
+  {
+    id: 'real-debrid',  label: 'Real-Debrid',              version: 'API v1',
+    auth: 'Clé API',          fileSelect: true,  fileProgress: true,  torrentUpload: 'proxy', categories: false, deleteFiles: true,
+  },
 ]
 
 const modal = ref({

@@ -28,6 +28,8 @@ import importRouter        from './routes/import.js'
 import systemRouter        from './routes/system.js'
 import nfoUpdatesRouter    from './routes/nfo-updates.js'
 import plexRouter          from './routes/plex.js'
+import rssSyncRouter       from './routes/rss-sync.js'
+import { runRssSync }      from './lib/rss-sync.js'
 
 registerDriver(qbittorrentDriver)
 registerDriver(transmissionDriver)
@@ -63,6 +65,7 @@ app.use('/api', importRouter)
 app.use('/api', systemRouter)
 app.use('/api', nfoUpdatesRouter)
 app.use('/api', plexRouter)
+app.use('/api', rssSyncRouter)
 
 // ── Catch-all SPA ──────────────────────────────────────────────
 if (fs.existsSync(PUBLIC_PATH)) {
@@ -161,4 +164,12 @@ server.listen(PORT, async () => {
             logger.error('api', `Sync noms auto échoué : ${err instanceof Error ? err.message : err}`)
         }
     }, 60 * 60_000)
+
+    // RSS sync — auto-téléchargement des nouveaux épisodes toutes les 6 heures.
+    setTimeout(() => {
+        runRssSync().catch(err => logger.error('rss-sync', `Sync initial échoué : ${err instanceof Error ? err.message : err}`))
+        setInterval(() => {
+            runRssSync().catch(err => logger.error('rss-sync', `Sync périodique échoué : ${err instanceof Error ? err.message : err}`))
+        }, 6 * 60 * 60_000)
+    }, 60_000) // premier cycle 1 min après le démarrage
 })
