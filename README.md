@@ -139,6 +139,13 @@ fankarr-windows-x64/
 **Linux / macOS** — rendre le binaire exécutable avant le premier lancement :
 
 ```bash
+wget https://github.com/Masutayunikon/FanKarr/releases/download/v3.14.6/fankarr-linux-arm64.zip
+unzip fankarr-linux-arm64.zip -d fankarr
+cd fankarr
+################
+# if the "fankarr" files in inside the binaries directory use this command
+# mv ./binaries/fankarr .
+##################
 chmod +x fankarr
 ./fankarr
 ```
