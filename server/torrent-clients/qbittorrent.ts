@@ -268,30 +268,33 @@ const QB: TorrentClientDriver = {
             }
 
             // Stratégie d'ajout selon le type de lien :
-            //   .torrent URL → FanKarr télécharge le fichier et l'uploade directement à qBit
+            //   magnet link  → URLSearchParams (application/x-www-form-urlencoded), pas de binaire
+            //   .torrent URL → FormData multipart obligatoire pour uploader le blob binaire
             //                  (qBit n'a pas forcément accès à internet / nyaa.si depuis son réseau Docker)
-            //   magnet link  → passage de l'URL brute, ajout normal sans pause
-            //                  (les métadonnées arrivent via les pairs, la pause bloquerait tout)
             const isMagnet = url.startsWith('magnet:')
-            const form = new FormData()
-            if (config.category) form.append('category', String(config.category))
-            if (config.savePath)  form.append('savepath', String(config.savePath))
+            let res: Response
 
             if (isMagnet) {
-                form.append('urls', url)
+                const params = new URLSearchParams()
+                params.set('urls', url)
+                if (config.category) params.set('category', String(config.category))
+                if (config.savePath)  params.set('savepath', String(config.savePath))
+                res = await fetch(`${config.url}/api/v2/torrents/add`, {
+                    method: 'POST', body: params,
+                    headers: { ...authH, 'Content-Type': 'application/x-www-form-urlencoded' },
+                })
             } else {
                 // FanKarr télécharge le .torrent et l'envoie directement à qBit
-                // (qBit n'a pas forcément accès à internet / nyaa.si depuis son réseau Docker)
                 logger.debug('qbittorrent', `Téléchargement .torrent via FanKarr : ${url.slice(0, 120)}`)
                 const torrentRes = await fetch(url, { headers: { 'User-Agent': 'FanKarr/1.0' } })
                 if (!torrentRes.ok) throw new Error(`Impossible de télécharger le .torrent (${torrentRes.status}) : ${url}`)
                 const torrentBytes = await torrentRes.arrayBuffer()
+                const form = new FormData()
+                if (config.category) form.append('category', String(config.category))
+                if (config.savePath)  form.append('savepath', String(config.savePath))
                 form.append('torrents', new Blob([torrentBytes], { type: 'application/x-bittorrent' }), 'torrent.torrent')
+                res = await fetch(`${config.url}/api/v2/torrents/add`, { method: 'POST', body: form, headers: authH })
             }
-
-            const res  = await fetch(`${config.url}/api/v2/torrents/add`, {
-                method: 'POST', body: form, headers: authH,
-            })
             const text = await res.text()
             if (text !== 'Ok.') throw new Error(`Ajout échoué : ${text}`)
 
@@ -325,14 +328,15 @@ const QB: TorrentClientDriver = {
             return
         }
 
-        // Pas de sélection de fichier → ajout normal
-        const form = new FormData()
-        form.append('urls', url)
-        if (config.category) form.append('category', String(config.category))
-        if (config.savePath)  form.append('savepath', String(config.savePath))
+        // Pas de sélection de fichier → ajout normal (URLSearchParams, pas de binaire)
+        const params = new URLSearchParams()
+        params.set('urls', url)
+        if (config.category) params.set('category', String(config.category))
+        if (config.savePath)  params.set('savepath', String(config.savePath))
 
         const res  = await fetch(`${config.url}/api/v2/torrents/add`, {
-            method: 'POST', body: form, headers: authH,
+            method: 'POST', body: params,
+            headers: { ...authH, 'Content-Type': 'application/x-www-form-urlencoded' },
         })
         const text = await res.text()
         if (text !== 'Ok.') throw new Error(`Ajout échoué : ${text}`)
@@ -341,13 +345,11 @@ const QB: TorrentClientDriver = {
 
     async remove(config, hash, deleteFiles = false) {
         const authH = await qbAuth(config)
-        const form = new FormData()
-        form.append('hashes', hash)
-        form.append('deleteFiles', deleteFiles ? 'true' : 'false')
+        const params = new URLSearchParams({ hashes: hash, deleteFiles: deleteFiles ? 'true' : 'false' })
         const res = await fetch(`${config.url}/api/v2/torrents/delete`, {
             method : 'POST',
-            body   : form,
-            headers: authH,
+            body   : params,
+            headers: { ...authH, 'Content-Type': 'application/x-www-form-urlencoded' },
         })
         if (!res.ok) throw new Error(`Suppression échouée : ${res.status}`)
         logger.info('qbittorrent', `Torrent ${hash.slice(0, 8)}… supprimé${deleteFiles ? ' (avec fichiers)' : ''}`)
