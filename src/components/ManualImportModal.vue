@@ -185,11 +185,12 @@ const serieTitle  = computed(() =>
 const serieFolder = computed(() => `${props.initialPath}/${serieTitle.value}`)
 
 interface FileItem {
-  file           : { name: string; path: string; size: number }
-  episode_id     : number | null
-  hash           : string | null
-  alreadyImported: boolean
-  willRename     : boolean
+  file              : { name: string; path: string; size: number }
+  episode_id        : number | null
+  previousEpisodeId : number | null   // ep_id original si alreadyImported et qu'on le réassigne
+  hash              : string | null
+  alreadyImported   : boolean
+  willRename        : boolean
 }
 
 const items = ref<FileItem[]>([])
@@ -266,8 +267,25 @@ function formatSize(bytes: number): string {
 }
 
 function onEpisodeChange(i: number) {
-  items.value[i].hash           = getHashForEpisode(Number(items.value[i].episode_id))
-  items.value[i].alreadyImported = false
+  const item    = items.value[i]
+  const newEpId = item.episode_id
+
+  // Tracker l'ancien épisode pour pouvoir nettoyer l'entrée organized au moment de l'import
+  if (item.alreadyImported && item.episode_id !== newEpId) {
+    item.previousEpisodeId = item.episode_id
+  }
+
+  item.hash            = getHashForEpisode(Number(newEpId))
+  item.alreadyImported = false
+  item.willRename      = newEpId !== null
+
+  // Retirer les autres fichiers "déjà importés" pour ce même épisode :
+  // l'utilisateur a choisi de les remplacer par ce fichier-ci.
+  if (newEpId !== null) {
+    items.value = items.value.filter(other =>
+      other === item || !(other.episode_id === newEpId && other.alreadyImported)
+    )
+  }
 }
 
 // ─── Actions ──────────────────────────────────────────────────
@@ -292,11 +310,11 @@ async function scan() {
       // Vérifier si déjà importé via dest_path
       const existingEpId = organizedByPath.get(f.path) ?? null
       if (existingEpId) {
-        return { file: f, episode_id: existingEpId, hash: getHashForEpisode(existingEpId), alreadyImported: true, willRename: false }
+        return { file: f, episode_id: existingEpId, previousEpisodeId: null, hash: getHashForEpisode(existingEpId), alreadyImported: true, willRename: false }
       }
 
       const match = autoMatch(f.name)
-      return { file: f, ...match, alreadyImported: false, willRename: match.episode_id !== null }
+      return { file: f, ...match, previousEpisodeId: null, alreadyImported: false, willRename: match.episode_id !== null }
     })
   } catch {
     scanError.value = 'Impossible de contacter le serveur'
@@ -317,6 +335,19 @@ async function doImport() {
     importError.value = 'Aucun nouveau fichier à importer'
     importing.value   = false
     return
+  }
+
+  // Nettoyer les anciens épisodes réassignés (fichier était "alreadyImported" ep A,
+  // l'utilisateur l'a changé en ep B → supprimer l'entrée organized de ep A sans toucher au fichier)
+  const toUnimport = items.value
+      .filter(i => i.previousEpisodeId !== null && i.episode_id !== i.previousEpisodeId)
+      .map(i => i.previousEpisodeId as number)
+  for (const oldEpId of toUnimport) {
+    try {
+      await fetch(`/api/organized/${props.serieId}/${oldEpId}?deleteFile=false`, {
+        method: 'DELETE', credentials: 'include',
+      })
+    } catch {}
   }
 
   try {
