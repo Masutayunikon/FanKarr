@@ -158,7 +158,7 @@
         :organized="organizedByEpisode"
         :initial-path="mediaPath"
         @close="manualImportOpen = false"
-        @imported="load(); fetchOrganized(); manualImportOpen = false"
+        @imported="load(); fetchOrganized()"
     />
 
   </div>

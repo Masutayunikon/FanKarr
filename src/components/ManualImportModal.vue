@@ -32,7 +32,7 @@
         </div>
 
         <!-- Liste fichiers -->
-        <template v-else-if="items.length > 0">
+        <template v-else-if="items.length > 0 && step !== 'done'">
 
           <!-- Toolbar -->
           <div class="flex items-center justify-between px-6 py-3 border-b border-border shrink-0 gap-3">
@@ -120,8 +120,10 @@
 
         <!-- Résultat -->
         <div v-else-if="step === 'done'" class="flex flex-col items-center gap-4 px-6 py-10 text-center">
-          <div class="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center">
-            <svg width="20" height="20" viewBox="0 0 24 24" stroke="#22c55e" stroke-width="2.5" fill="none"><polyline points="20 6 9 17 4 12"/></svg>
+          <div class="w-12 h-12 rounded-full flex items-center justify-center"
+               :class="importResult.errors.length === 0 ? 'bg-green-500/10' : 'bg-yellow-500/10'">
+            <svg v-if="importResult.errors.length === 0" width="20" height="20" viewBox="0 0 24 24" stroke="#22c55e" stroke-width="2.5" fill="none"><polyline points="20 6 9 17 4 12"/></svg>
+            <svg v-else width="20" height="20" viewBox="0 0 24 24" stroke="#eab308" stroke-width="2" fill="none"><path d="M12 2l9.27 16H2.73L12 2z"/><line x1="12" y1="9" x2="12" y2="13"/><circle cx="12" cy="16.5" r=".5" fill="currentColor"/></svg>
           </div>
           <div>
             <p class="text-sm font-semibold text-primary">Import terminé</p>
@@ -138,7 +140,10 @@
               <span class="text-primary font-mono">{{ e.file }}</span> — {{ e.error }}
             </div>
           </div>
-          <button @click="$emit('close'); $emit('imported')" class="btn-primary">Fermer</button>
+          <div class="flex gap-2">
+            <button @click="backToList" class="btn-secondary">Voir les fichiers</button>
+            <button @click="$emit('close')" class="btn-primary">Fermer</button>
+          </div>
         </div>
 
       </div>
@@ -322,14 +327,36 @@ async function doImport() {
       body       : JSON.stringify({ serie_id: props.serieId, items: payload }),
     })
     const data = await res.json()
-    if (!res.ok) { importError.value = data.error ?? 'Erreur inconnue'; return }
+    if (!res.ok) {
+      importError.value = data.error ?? 'Erreur inconnue'
+      toast(data.error ?? 'Erreur lors de l\'import', 'error')
+      return
+    }
+
     importResult.value = { done: data.done, errors: data.errors ?? [] }
+
+    if (data.done > 0) {
+      toast(`${data.done} fichier${data.done > 1 ? 's' : ''} importé${data.done > 1 ? 's' : ''} ✓`, 'success')
+    }
+    if ((data.errors ?? []).length > 0) {
+      toast(`${data.errors.length} fichier${data.errors.length > 1 ? 's' : ''} en erreur`, 'error')
+    }
+
+    // Notifier le parent immédiatement (rafraîchit organizedByEpisode + page série)
+    emit('imported')
+
     step.value = 'done'
   } catch {
     importError.value = 'Impossible de contacter le serveur'
+    toast('Impossible de contacter le serveur', 'error')
   } finally {
     importing.value = false
   }
+}
+
+function backToList() {
+  step.value = 'list'
+  scan()   // re-scan → les fichiers importés passent en "déjà importé"
 }
 
 onMounted(scan)

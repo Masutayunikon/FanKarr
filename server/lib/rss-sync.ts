@@ -1,13 +1,10 @@
 /**
- * RSS Sync — auto-téléchargement des nouveaux épisodes pour les séries surveillées.
+ * RSS Sync — auto-téléchargement des épisodes sortis après l'activation de la surveillance.
  *
- * Toutes les 6 heures, FanKarr vérifie si de nouveaux épisodes sont apparus
- * APRÈS le dernier épisode organisé de chaque saison.
- *
- * Règle de frontière : si le dernier épisode organisé d'une saison est le 9,
- * seuls les épisodes 10+ sont candidats au téléchargement automatique.
- * Si aucun épisode n'est encore organisé dans une saison, rien n'est déclenché
- * pour cette saison (l'utilisateur doit lancer le premier téléchargement manuellement).
+ * Toutes les 6 heures, FanKarr cherche les épisodes dont le champ `date_added`
+ * (date d'ajout dans la base metadata) est postérieur à la date d'activation
+ * du sync pour cette série. Si ces épisodes ont un torrent fankai et ne sont
+ * pas encore organisés, ils sont envoyés automatiquement au client torrent.
  */
 
 import path from 'path'
@@ -23,7 +20,7 @@ import { readSettings }                            from '../settings.js'
 export interface SyncedSerie {
     serieId  : number
     serieName: string
-    addedAt  : string   // ISO
+    addedAt  : string   // ISO — date d'activation de la surveillance
 }
 
 type SyncedMap = Record<number, SyncedSerie>
@@ -60,7 +57,7 @@ export function isSynced(serieId: number): boolean {
     return !!loadSynced()[serieId]
 }
 
-// ── Helpers organisés ─────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────
 
 function readOrganized(): Record<string, Record<string, any>> {
     try {
@@ -70,20 +67,14 @@ function readOrganized(): Record<string, Record<string, any>> {
     return {}
 }
 
-/**
- * Retourne l'ensemble des IDs d'épisodes organisés pour une série donnée,
- * en croisant organized.json avec les données de la série.
- */
 function getOrganizedEpisodeIds(sd: any, organized: Record<string, Record<string, any>>): Set<number> {
     const ids = new Set<number>()
 
-    // Import manuel
     const manual = organized['manual'] ?? {}
     for (const season of sd.seasons ?? [])
         for (const ep of season.episodes ?? [])
             if (manual[String(ep.id)]) ids.add(ep.id)
 
-    // Intégrales
     for (const t of sd.torrents ?? []) {
         const orgFiles = organized[t.infohash?.toLowerCase()] ?? {}
         for (const season of sd.seasons ?? [])
@@ -91,7 +82,6 @@ function getOrganizedEpisodeIds(sd: any, organized: Record<string, Record<string
                 if (orgFiles[String(ep.id)] !== undefined) ids.add(ep.id)
     }
 
-    // Packs saison + épisodes individuels
     for (const season of sd.seasons ?? []) {
         for (const t of season.torrents ?? []) {
             const orgFiles = organized[t.infohash?.toLowerCase()] ?? {}
@@ -102,7 +92,6 @@ function getOrganizedEpisodeIds(sd: any, organized: Record<string, Record<string
             for (const t of ep.torrents ?? []) {
                 const orgFiles = organized[t.infohash?.toLowerCase()] ?? {}
                 if (orgFiles[String(ep.id)] !== undefined) ids.add(ep.id)
-                // Fallback filename
                 const pathEntry = (ep.paths ?? []).find((p: any) => typeof p === 'object' && p.infohash?.toLowerCase() === t.infohash?.toLowerCase())
                 if (pathEntry) {
                     const fname = pathEntry.path?.split('/').pop()
@@ -115,31 +104,8 @@ function getOrganizedEpisodeIds(sd: any, organized: Record<string, Record<string
     return ids
 }
 
-/**
- * Pour une saison donnée, retourne le numéro d'épisode maximal parmi
- * les épisodes organisés, ou 0 si aucun n'est organisé.
- */
-function maxOrganizedEpNumber(season: any, organizedIds: Set<number>): number {
-    let max = 0
-    for (const ep of season.episodes ?? []) {
-        if (organizedIds.has(ep.id) && ep.episode_number > max)
-            max = ep.episode_number
-    }
-    return max
-}
-
 // ── Logique de sync ───────────────────────────────────────────
 
-/**
- * Lance un cycle de RSS sync.
- *
- * Par série surveillée :
- *  - Pour chaque saison, calcule la frontière = dernier épisode organisé.
- *  - Ne propose au téléchargement que les épisodes APRÈS cette frontière.
- *  - Si aucun épisode n'est organisé dans une saison → saison ignorée
- *    (l'utilisateur doit lancer le premier téléchargement manuellement).
- *  - Ne renvoie pas un torrent déjà actif dans le client.
- */
 export async function runRssSync(): Promise<{ sent: number; skipped: number; errors: number }> {
     const synced = loadSynced()
     const ids    = Object.keys(synced).map(Number)
@@ -150,7 +116,6 @@ export async function runRssSync(): Promise<{ sent: number; skipped: number; err
     const organized  = readOrganized()
     const seriesData = await loadEnrichedSeriesData()
 
-    // Torrents actifs dans le client
     const activeHashes = new Set<string>()
     try {
         const { category } = readSettings()
@@ -166,71 +131,46 @@ export async function runRssSync(): Promise<{ sent: number; skipped: number; err
     let errors  = 0
 
     for (const serieId of ids) {
-        const sd = seriesData.find((s: any) => s.id === serieId)
+        const syncedEntry = synced[serieId]
+        const sd          = seriesData.find((s: any) => s.id === serieId)
         if (!sd) {
             logger.warn('rss-sync', `Série ${serieId} introuvable dans le cache`)
             continue
         }
 
-        const title        = sd.title ?? sd.show_title ?? String(serieId)
+        const title      = sd.title ?? sd.show_title ?? String(serieId)
+        const activatedAt = new Date(syncedEntry.addedAt)
         const organizedIds = getOrganizedEpisodeIds(sd, organized)
 
-        if (organizedIds.size === 0) {
-            logger.info('rss-sync', `${title} — aucun épisode organisé, sync ignoré (lance le 1er téléchargement manuellement)`)
-            skipped++
-            continue
-        }
+        logger.info('rss-sync', `Vérification : ${title} (sync activé le ${activatedAt.toLocaleDateString('fr-FR')})`)
 
-        logger.info('rss-sync', `Vérification : ${title} (${organizedIds.size} épisodes organisés)`)
-
-        // Épisodes candidats = après la frontière, par saison
-        // Un épisode est candidat si : episode_number > max organisé dans cette saison
+        // Épisodes candidats : date_added > date d'activation ET pas encore organisés
         const candidateIds = new Set<number>()
         for (const season of sd.seasons ?? []) {
-            const frontier = maxOrganizedEpNumber(season, organizedIds)
-            if (frontier === 0) continue   // aucun épisode organisé dans cette saison → skip
-
             for (const ep of season.episodes ?? []) {
-                if (ep.episode_number > frontier && !organizedIds.has(ep.id))
-                    candidateIds.add(ep.id)
+                if (!ep.date_added) continue
+                const epDate = new Date(ep.date_added)
+                if (epDate <= activatedAt) continue
+                if (organizedIds.has(ep.id)) continue
+                // Doit avoir au moins un torrent fankai
+                const hasTorrent = (ep.torrents ?? []).some((t: any) => t.fankai && (t.torrent_url || t.magnet))
+                if (!hasTorrent) continue
+                candidateIds.add(ep.id)
             }
-
-            if (candidateIds.size > 0)
-                logger.info('rss-sync', `${title} S${season.season_number} — frontière ep${frontier}, ${
-                    [...candidateIds].length} candidat(s)`)
         }
 
         if (candidateIds.size === 0) {
-            logger.info('rss-sync', `${title} — aucun nouvel épisode`)
+            logger.info('rss-sync', `${title} — aucun nouvel épisode depuis l'activation`)
             continue
         }
 
-        // Construire la liste des téléchargements (intégrale → pack saison → épisode)
+        logger.info('rss-sync', `${title} — ${candidateIds.size} nouvel(s) épisode(s) à télécharger`)
+
+        // Construire les téléchargements : pack saison si couvre des candidats, sinon épisode par épisode
         const toDownload: { url: string; file_index?: number | null; file_path?: string | null; infohash?: string | null; label: string }[] = []
         const coveredIds  = new Set<number>()
 
-        // 1. Intégrale(s) — uniquement si elle couvre au moins un candidat
-        for (const t of sd.torrents ?? []) {
-            if (!t.fankai) continue
-            const url  = t.torrent_url ?? t.magnet
-            if (!url)  continue
-            const hash = t.infohash?.toLowerCase()
-            if (hash && activeHashes.has(hash)) { skipped++; continue }
-
-            const integraleEps: any[] = []
-            for (const season of sd.seasons ?? [])
-                for (const ep of season.episodes ?? [])
-                    if (ep.torrents?.some((et: any) => et.infohash?.toLowerCase() === hash))
-                        integraleEps.push(ep)
-
-            const coversSomeCandidate = integraleEps.some(ep => candidateIds.has(ep.id))
-            if (!coversSomeCandidate) { skipped++; continue }
-
-            toDownload.push({ url, infohash: hash ?? null, label: `intégrale ${title}` })
-            for (const ep of integraleEps) coveredIds.add(ep.id)
-        }
-
-        // 2. Packs saison — uniquement si le pack couvre au moins un candidat non couvert
+        // 1. Packs saison couvrant au moins un candidat
         for (const season of sd.seasons ?? []) {
             for (const t of season.torrents ?? []) {
                 if (!t.fankai) continue
@@ -249,7 +189,7 @@ export async function runRssSync(): Promise<{ sent: number; skipped: number; err
             }
         }
 
-        // 3. Épisodes individuels candidats non encore couverts
+        // 2. Épisodes individuels candidats non couverts par un pack
         for (const season of sd.seasons ?? []) {
             for (const ep of season.episodes ?? []) {
                 if (!candidateIds.has(ep.id) || coveredIds.has(ep.id)) continue
@@ -275,7 +215,6 @@ export async function runRssSync(): Promise<{ sent: number; skipped: number; err
             }
         }
 
-        // Envoyer
         for (const dl of toDownload) {
             try {
                 const results = await dispatchDownload(dl.url, {
