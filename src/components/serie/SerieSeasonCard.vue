@@ -594,23 +594,33 @@ function groupLabels(torrents: any[]): string[] {
 }
 
 // Packs parents distincts couvrant cette saison (quand pas de pack saison explicite)
-// Permet le dropdown "Saison ▾" quand une saison est couverte par plusieurs intégrales
+// Permet le dropdown "Saison ▾" quand une saison est couverte par plusieurs intégrales.
+// Un torrent individuel par épisode (hash unique) n'est PAS un pack → ignoré ici,
+// le bouton "Saison" simple suffira pour lancer tous les épisodes.
 const uniquePackOptions = computed(() => {
   if (props.season.torrents?.length) return []
-  const seen = new Set<string>()
-  const raw: { infohash: string; torrent: any }[] = []
+
+  // Compter combien d'épisodes chaque hash couvre
+  const hashCount   = new Map<string, number>()
+  const hashTorrent = new Map<string, any>()
   for (const ep of props.season.episodes) {
     if (!ep.available) continue
     for (const t of (ep.torrents ?? [])) {
       const hash = t.infohash ?? extractHash(t)
-      if (!hash || seen.has(hash)) continue
-      seen.add(hash)
-      raw.push({ infohash: hash, torrent: t })
+      if (!hash) continue
+      hashCount.set(hash, (hashCount.get(hash) ?? 0) + 1)
+      if (!hashTorrent.has(hash)) hashTorrent.set(hash, t)
     }
   }
-  if (raw.length <= 1) return []
-  const labels = groupLabels(raw.map(r => r.torrent))
-  return raw.map((r, i) => ({ infohash: r.infohash, label: labels[i] }))
+
+  // Garder uniquement les hash qui couvrent ≥ 2 épisodes (= vrais packs / intégrales)
+  const packs = [...hashCount.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([hash]) => ({ infohash: hash, torrent: hashTorrent.get(hash)! }))
+
+  if (packs.length <= 1) return []
+  const labels = groupLabels(packs.map(r => r.torrent))
+  return packs.map((r, i) => ({ infohash: r.infohash, label: labels[i] }))
 })
 
 function formatDate(d: string): string {
