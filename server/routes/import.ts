@@ -72,6 +72,19 @@ router.post('/manual-import', requireAuth, async (req, res) => {
         const destPath      = path.join(destDir, destFilename)
         try {
             if (!fs.existsSync(file_path)) throw new Error('Fichier source introuvable')
+
+            // Nettoyer toute entrée organized qui référence ce même fichier physique
+            // sous un épisode différent (réassignation → l'ancien enregistrement devient invalide)
+            for (const [h, eps] of Object.entries(organized)) {
+                for (const [epId, entry] of Object.entries(eps)) {
+                    if (entry?.dest_path === file_path && Number(epId) !== Number(episode_id)) {
+                        delete (organized[h] as any)[epId]
+                        logger.info('api', `Import manuel : suppression entrée stale ep ${epId} (fichier réassigné)`)
+                    }
+                }
+                if (Object.keys(organized[h]).length === 0) delete organized[h]
+            }
+
             fs.mkdirSync(destDir, { recursive: true })
             if (file_path !== destPath) {
                 const serieRootPath  = path.join(mediaPath, serieTitle)
