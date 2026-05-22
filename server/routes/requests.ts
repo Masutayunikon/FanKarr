@@ -84,6 +84,12 @@ async function autoDownloadRequest(req: SerieRequest): Promise<void> {
     const toDownload: TorrentEntry[] = []
     const seenHashes = new Set<string>()
 
+    // Tous les torrents pack (série + saisons) pour résoudre les ep.paths
+    const allPackTorrents: any[] = [
+        ...(serieData.torrents ?? []),
+        ...(serieData.seasons ?? []).flatMap((s: any) => s.torrents ?? []),
+    ]
+
     function addTorrent(t: any, file_index?: number | null, file_path?: string | null) {
         const key = `${t.infohash ?? t.magnet ?? t.torrent_url}:${file_index ?? ''}`
         if (seenHashes.has(key)) return
@@ -91,29 +97,40 @@ async function autoDownloadRequest(req: SerieRequest): Promise<void> {
         toDownload.push({ url: t.torrent_url, magnet: t.magnet ?? null, infohash: t.infohash ?? null, file_index: file_index ?? null, file_path: file_path ?? null })
     }
 
+    /**
+     * Ajoute tous les épisodes d'une liste via leurs torrents individuels ou via file_index dans un pack.
+     * Utilisé en fallback quand il n'y a pas de torrent de saison/série globale.
+     */
+    function addEpisodesByIndex(epList: any[]) {
+        for (const ep of epList) {
+            if (ep.torrents?.length > 0) {
+                for (const t of ep.torrents) addTorrent(t)
+            } else if (ep.paths?.length > 0) {
+                for (const p of ep.paths) {
+                    const pack = allPackTorrents.find((t: any) => t.infohash?.toLowerCase() === p.infohash?.toLowerCase())
+                    if (pack) addTorrent(pack, p.file_index ?? null, p.path ?? null)
+                }
+            }
+        }
+    }
+
     if (episodes.length > 0) {
         // ── Épisodes ciblés ───────────────────────────────────────
         for (const season of serieData.seasons ?? []) {
-            for (const ep of season.episodes ?? []) {
-                if (!episodes.includes(ep.id)) continue
-                if (ep.torrents?.length > 0) {
-                    // Torrent individuel
-                    for (const t of ep.torrents) addTorrent(t)
-                } else if (ep.paths?.length > 0) {
-                    // Épisode contenu dans un pack — télécharger le fichier spécifique
-                    for (const p of ep.paths) {
-                        const pack = [...(serieData.torrents ?? []), ...(serieData.seasons ?? []).flatMap((s: any) => s.torrents ?? [])]
-                            .find((t: any) => t.infohash?.toLowerCase() === p.infohash?.toLowerCase())
-                        if (pack) addTorrent(pack, p.file_index ?? null, p.path ?? null)
-                    }
-                }
-            }
+            const targets = (season.episodes ?? []).filter((ep: any) => episodes.includes(ep.id))
+            addEpisodesByIndex(targets)
         }
     } else if (seasons.length > 0) {
         // ── Saisons ciblées ───────────────────────────────────────
         for (const season of serieData.seasons ?? []) {
             if (!seasons.includes(season.season_number)) continue
-            for (const t of season.torrents ?? []) addTorrent(t)
+            if ((season.torrents ?? []).length > 0) {
+                // Pack saison disponible → télécharger en bloc
+                for (const t of season.torrents) addTorrent(t)
+            } else {
+                // Pas de pack → épisode par épisode avec file_index
+                addEpisodesByIndex(season.episodes ?? [])
+            }
         }
     } else {
         // ── Toutes les saisons : intégrale en priorité ────────────
@@ -122,6 +139,12 @@ async function autoDownloadRequest(req: SerieRequest): Promise<void> {
         if (toDownload.length === 0) {
             for (const season of serieData.seasons ?? []) {
                 for (const t of season.torrents ?? []) addTorrent(t)
+            }
+        }
+        // Sinon épisode par épisode avec file_index
+        if (toDownload.length === 0) {
+            for (const season of serieData.seasons ?? []) {
+                addEpisodesByIndex(season.episodes ?? [])
             }
         }
     }
