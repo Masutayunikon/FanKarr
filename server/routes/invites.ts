@@ -32,7 +32,7 @@ router.post('/invites', requireAdmin, (req, res) => {
 // DELETE /api/invites/:code  (admin)
 router.delete('/invites/:code', requireAdmin, (req, res) => {
     try {
-        deleteInvite(req.params.code)
+        deleteInvite(String(req.params.code))
         res.json({ success: true })
     } catch (err) {
         res.status(404).json({ error: err instanceof Error ? err.message : 'Erreur' })

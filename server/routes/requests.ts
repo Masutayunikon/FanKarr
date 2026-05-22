@@ -48,9 +48,10 @@ router.patch('/requests/:id', requireAdmin, (req, res) => {
     const { action, rejectionMessage } = req.body
     try {
         let request
-        if (action === 'approve')   request = approveRequest(req.params.id)
-        else if (action === 'reject')   request = rejectRequest(req.params.id, rejectionMessage)
-        else if (action === 'complete') request = completeRequest(req.params.id)
+        const id = String(req.params.id)
+        if (action === 'approve')        request = approveRequest(id)
+        else if (action === 'reject')    request = rejectRequest(id, rejectionMessage)
+        else if (action === 'complete')  request = completeRequest(id)
         else { res.status(400).json({ error: 'Action invalide (approve | reject | complete)' }); return }
         res.json(request)
     } catch (err) {
@@ -61,7 +62,7 @@ router.patch('/requests/:id', requireAdmin, (req, res) => {
 // DELETE /api/requests/:id — admin seulement
 router.delete('/requests/:id', requireAdmin, (req, res) => {
     try {
-        deleteRequest(req.params.id)
+        deleteRequest(String(req.params.id))
         res.json({ success: true })
     } catch (err) {
         res.status(404).json({ error: err instanceof Error ? err.message : 'Erreur' })
