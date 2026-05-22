@@ -19,6 +19,7 @@ import { logger } from './logger.js'
 import { DATA_DIR, BASE_DIR } from './config.js'
 import { readAvailable, readInfohashMap, loadEnrichedSeriesData } from './lib/github-cache.js'
 import { pushNotif } from './lib/notifs.js'
+import { readRequests, completeRequest } from './requests.js'
 import { checkNfoUpdates } from './lib/nfo.js'
 
 import usersRouter         from './routes/users.js'
@@ -160,6 +161,21 @@ server.listen(PORT, async () => {
                 async (result) => {
                     if (result.done > 0 || result.errors > 0) {
                         pushNotif({ ...result, at: new Date().toISOString() })
+                    }
+                    // Marquer les demandes actives comme disponibles quand des fichiers sont importés
+                    if (result.done > 0 && result.serieId != null) {
+                        try {
+                            const toComplete = readRequests().filter(r =>
+                                r.serieId === result.serieId &&
+                                (r.status === 'pending' || r.status === 'approved')
+                            )
+                            for (const r of toComplete) {
+                                completeRequest(r.id)
+                                logger.info('requests', `Demande "${r.serieName}" passée en disponible (import automatique)`)
+                            }
+                        } catch (err) {
+                            logger.warn('api', `Impossible de compléter les demandes pour série ${result.serieId} : ${err instanceof Error ? err.message : err}`)
+                        }
                     }
                     const { organizeMode, deleteTorrentOnMove } = readSettings()
                     if (organizeMode === 'move' && deleteTorrentOnMove && result.done > 0) {

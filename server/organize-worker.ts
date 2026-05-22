@@ -541,7 +541,7 @@ parentPort?.on('message', async (msg: any) => {
             }
 
             const result = await organizeTorrent(t.hash, t.name, t.save_path, seriesData, completedFileNames)
-            parentPort?.postMessage({ type: 'result', hash: t.hash, name: t.name, ...result })
+            parentPort?.postMessage({ type: 'result', hash: t.hash, name: t.name, serieId: serieData.id ?? null, ...result })
         } catch (err) {
             error(`Erreur lors de l'import de "${t.name}" : ${err instanceof Error ? err.message : err}`)
         }

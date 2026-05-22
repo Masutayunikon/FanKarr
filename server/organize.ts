@@ -234,7 +234,7 @@ export async function scanMediaPath(
 export async function autoOrganizeAll(
     listFn     : () => Promise<any[]>,
     seriesData : any[],
-    onResult  ?: (r: { hash: string; name: string; done: number; skipped: number; errors: number; errorFiles: { file: string; error: string }[] }) => void
+    onResult  ?: (r: { hash: string; name: string; serieId?: number | null; done: number; skipped: number; errors: number; errorFiles: { file: string; error: string }[] }) => void
 ): Promise<void> {
     const { autoImport } = readSettings()
     if (!autoImport) {
@@ -309,6 +309,7 @@ export async function autoOrganizeAll(
             onResult?.({
                 hash      : msg.hash,
                 name      : msg.name,
+                serieId   : msg.serieId ?? null,
                 done      : msg.done,
                 skipped   : msg.skipped,
                 errors    : msg.errors.length,
