@@ -10,17 +10,18 @@ router.get('/settings', requireAuth, (_req, res) => {
 })
 
 router.post('/settings', requireAuth, (req, res) => {
-    const { mediaPath, completePath, organizeMode, category, nfoSupport, autoImport, devMode, deleteTorrentOnMove, autoUnimportMissing } = req.body
+    const { mediaPath, completePath, organizeMode, category, nfoSupport, autoImport, devMode, deleteTorrentOnMove, autoUnimportMissing, requestAutoDownloadUsers } = req.body
     const patch: Record<string, any> = {}
-    if (mediaPath             !== undefined) patch.mediaPath             = mediaPath
-    if (completePath          !== undefined) patch.completePath          = completePath
-    if (organizeMode          !== undefined) patch.organizeMode          = organizeMode
-    if (category              !== undefined) patch.category              = category
-    if (nfoSupport            !== undefined) patch.nfoSupport            = nfoSupport
-    if (autoImport            !== undefined) patch.autoImport            = autoImport
-    if (devMode               !== undefined) patch.devMode               = devMode
-    if (deleteTorrentOnMove   !== undefined) patch.deleteTorrentOnMove   = deleteTorrentOnMove
-    if (autoUnimportMissing   !== undefined) patch.autoUnimportMissing   = autoUnimportMissing
+    if (mediaPath                    !== undefined) patch.mediaPath                    = mediaPath
+    if (completePath                 !== undefined) patch.completePath                 = completePath
+    if (organizeMode                 !== undefined) patch.organizeMode                 = organizeMode
+    if (category                     !== undefined) patch.category                     = category
+    if (nfoSupport                   !== undefined) patch.nfoSupport                   = nfoSupport
+    if (autoImport                   !== undefined) patch.autoImport                   = autoImport
+    if (devMode                      !== undefined) patch.devMode                      = devMode
+    if (deleteTorrentOnMove          !== undefined) patch.deleteTorrentOnMove          = deleteTorrentOnMove
+    if (autoUnimportMissing          !== undefined) patch.autoUnimportMissing          = autoUnimportMissing
+    if (requestAutoDownloadUsers     !== undefined) patch.requestAutoDownloadUsers     = requestAutoDownloadUsers
     const updated = writeSettings(patch)
     logger.info('api', 'Paramètres mis à jour')
     res.json(updated)

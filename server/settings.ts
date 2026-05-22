@@ -13,7 +13,7 @@ export interface Settings {
     autoImport          : boolean
     devMode             : boolean
     deleteTorrentOnMove : boolean
-    requestAutoImport   : boolean  // demandes users : import auto ou validation admin
+    requestAutoDownloadUsers: 'all' | string[]  // IDs users autorisés au dl auto sur approbation ; [] = désactivé
     jellyfinUrl         : string   // URL du serveur Jellyfin (ex: http://jellyfin:8096)
     jellyfinAdminToken  : string   // Token admin Jellyfin pour la sync
 }
@@ -27,7 +27,7 @@ const defaults: Settings = {
     autoImport         : true,
     devMode            : false,
     deleteTorrentOnMove: false,
-    requestAutoImport  : false,
+    requestAutoDownloadUsers: [],
     jellyfinUrl        : '',
     jellyfinAdminToken : '',
 }

@@ -8,6 +8,7 @@ import {
 } from '../requests.js'
 import { dispatchDownload } from '../torrent-clients/index.js'
 import { readSerieData }    from '../lib/github-cache.js'
+import { readSettings }     from '../settings.js'
 import { logger }           from '../logger.js'
 
 const router = Router()
@@ -56,10 +57,17 @@ router.patch('/requests/:id', requireAdmin, async (req, res) => {
         const id = String(req.params.id)
         if (action === 'approve') {
             request = approveRequest(id)
-            // Lancer le(s) téléchargement(s) correspondant à la demande
-            autoDownloadRequest(request).catch(err =>
-                logger.warn('requests', `Auto-dl échoué pour "${request.serieName}" : ${err instanceof Error ? err.message : err}`)
-            )
+            // Lancer le(s) téléchargement(s) si au moins un requester est autorisé
+            const { requestAutoDownloadUsers } = readSettings()
+            const enabled = requestAutoDownloadUsers === 'all'
+                ? true
+                : Array.isArray(requestAutoDownloadUsers) && requestAutoDownloadUsers.length > 0
+                  && request.requesters.some(r => (requestAutoDownloadUsers as string[]).includes(r.userId))
+            if (enabled) {
+                autoDownloadRequest(request).catch(err =>
+                    logger.warn('requests', `Auto-dl échoué pour "${request.serieName}" : ${err instanceof Error ? err.message : err}`)
+                )
+            }
         } else if (action === 'reject')   request = rejectRequest(id, rejectionMessage)
         else if (action === 'complete')   request = completeRequest(id)
         else { res.status(400).json({ error: 'Action invalide (approve | reject | complete)' }); return }

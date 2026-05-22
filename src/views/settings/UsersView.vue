@@ -94,6 +94,61 @@
       </div>
     </section>
 
+    <!-- ── Téléchargement automatique des demandes ──────────── -->
+    <section class="flex flex-col gap-4">
+      <div>
+        <h2 class="text-base font-semibold text-primary">Téléchargement automatique</h2>
+        <p class="text-sm text-muted mt-1">
+          Quand une demande est approuvée, lancer automatiquement le téléchargement pour les utilisateurs sélectionnés.
+        </p>
+      </div>
+
+      <div class="settings-card flex flex-col gap-4">
+        <!-- Tous les utilisateurs -->
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input
+              type="checkbox"
+              :checked="autoDownloadAll"
+              @change="toggleAutoDownloadAll"
+              class="w-4 h-4 rounded border-border accent-accent"
+          />
+          <div>
+            <p class="text-sm text-primary font-medium">Tous les utilisateurs</p>
+            <p class="text-xs text-muted">Chaque approbation déclenche un téléchargement, quel que soit le demandeur.</p>
+          </div>
+        </label>
+
+        <!-- Séparateur -->
+        <div v-if="!autoDownloadAll && users.length > 0" class="border-t border-border/50" />
+
+        <!-- Par utilisateur -->
+        <template v-if="!autoDownloadAll">
+          <label
+              v-for="u in users" :key="u.id"
+              class="flex items-center gap-3 cursor-pointer"
+          >
+            <input
+                type="checkbox"
+                :checked="autoDownloadUserIds.includes(u.id)"
+                @change="toggleAutoDownloadUser(u.id)"
+                class="w-4 h-4 rounded border-border accent-accent"
+            />
+            <div class="flex items-center gap-2">
+              <span
+                  class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
+                  :class="u.role === 'admin' ? 'bg-accent/20 text-accent' : 'bg-border text-muted'"
+              >{{ u.username[0].toUpperCase() }}</span>
+              <span class="text-sm text-primary">{{ u.username }}</span>
+              <span class="text-xs text-muted">{{ u.role === 'admin' ? 'Admin' : 'Utilisateur' }}</span>
+            </div>
+          </label>
+          <p v-if="users.length === 0" class="text-xs text-muted">Aucun utilisateur.</p>
+        </template>
+
+        <p v-if="autoDownloadSaved" class="text-xs text-green-400">Paramètre sauvegardé.</p>
+      </div>
+    </section>
+
     <!-- ── Modal créer/modifier utilisateur ─────────────────── -->
     <Teleport to="body">
       <div v-if="userModal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center px-4" @click.self="userModal = null">
@@ -203,6 +258,12 @@ const users   = ref<User[]>([])
 const invites = ref<Invite[]>([])
 const copied  = ref<string | null>(null)
 
+// ── Téléchargement auto des demandes ──────────────────────────
+const autoDownloadAll     = ref(false)
+const autoDownloadUserIds = ref<string[]>([])
+const autoDownloadSaved   = ref(false)
+let   autoDownloadTimer: ReturnType<typeof setTimeout> | null = null
+
 // ── Modals ────────────────────────────────────────────────────
 const userModal = ref<{
   mode    : 'create' | 'edit'
@@ -233,7 +294,47 @@ async function loadInvites() {
   if (res.ok) invites.value = await res.json()
 }
 
-onMounted(() => { loadUsers(); loadInvites() })
+async function loadAutoDownloadSetting() {
+  const res = await fetch('/api/settings', { credentials: 'include' })
+  if (!res.ok) return
+  const s = await res.json()
+  const val = s.requestAutoDownloadUsers ?? []
+  if (val === 'all') {
+    autoDownloadAll.value     = true
+    autoDownloadUserIds.value = []
+  } else {
+    autoDownloadAll.value     = false
+    autoDownloadUserIds.value = Array.isArray(val) ? val : []
+  }
+}
+
+async function saveAutoDownloadSetting() {
+  const value = autoDownloadAll.value ? 'all' : autoDownloadUserIds.value
+  await fetch('/api/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ requestAutoDownloadUsers: value }),
+  })
+  autoDownloadSaved.value = true
+  if (autoDownloadTimer) clearTimeout(autoDownloadTimer)
+  autoDownloadTimer = setTimeout(() => { autoDownloadSaved.value = false }, 2000)
+}
+
+function toggleAutoDownloadAll(e: Event) {
+  autoDownloadAll.value = (e.target as HTMLInputElement).checked
+  if (autoDownloadAll.value) autoDownloadUserIds.value = []
+  saveAutoDownloadSetting()
+}
+
+function toggleAutoDownloadUser(userId: string) {
+  const idx = autoDownloadUserIds.value.indexOf(userId)
+  if (idx >= 0) autoDownloadUserIds.value.splice(idx, 1)
+  else autoDownloadUserIds.value.push(userId)
+  saveAutoDownloadSetting()
+}
+
+onMounted(() => { loadUsers(); loadInvites(); loadAutoDownloadSetting() })
 
 // ── Users ─────────────────────────────────────────────────────
 function openCreateUser() {
