@@ -80,6 +80,48 @@
 
     </div>
 
+    <!-- Widget demandes -->
+    <div class="settings-card flex flex-col gap-3 mb-6">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-medium text-secondary">
+          {{ auth.isAdmin ? 'Demandes en attente' : 'Mes demandes' }}
+        </h2>
+        <div class="flex items-center gap-2">
+          <span v-if="auth.isAdmin && pendingRequests.length > 0" class="text-xs px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
+            {{ pendingRequests.length }} en attente
+          </span>
+          <RouterLink to="/requests" class="text-xs text-muted hover:text-accent transition">Voir tout →</RouterLink>
+        </div>
+      </div>
+      <div v-if="loadingRequests" class="flex items-center gap-2 text-muted text-xs py-2">
+        <div class="w-3 h-3 border border-border border-t-accent rounded-full animate-spin" />
+        Chargement…
+      </div>
+      <div v-else-if="pendingRequests.length === 0" class="text-xs text-muted py-2">
+        {{ auth.isAdmin ? 'Aucune demande en attente' : 'Aucune demande' }}
+      </div>
+      <div v-else class="flex flex-col divide-y divide-border/50">
+        <div v-for="req in pendingRequests" :key="req.id" class="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+          <div class="flex-1 min-w-0">
+            <RouterLink :to="`/series/${req.serieId}`" class="text-xs text-primary truncate hover:text-accent transition block">{{ req.serieName }}</RouterLink>
+            <p v-if="auth.isAdmin" class="text-[11px] text-muted mt-0.5">
+              {{ req.requesters.length }} demandeur{{ req.requesters.length > 1 ? 's' : '' }}
+              · {{ req.requesters.map((r: any) => r.username).join(', ') }}
+            </p>
+          </div>
+          <span class="text-[10px] px-1.5 py-0.5 rounded border shrink-0"
+                :class="{
+                  'bg-yellow-500/10 text-yellow-400 border-yellow-500/20': req.status === 'pending',
+                  'bg-blue-500/10 text-blue-400 border-blue-500/20'      : req.status === 'approved',
+                  'bg-green-500/10 text-green-400 border-green-500/20'   : req.status === 'completed',
+                  'bg-red-500/10 text-red-400 border-red-500/20'         : req.status === 'rejected',
+                }">
+            {{ { pending: 'Attente', approved: 'Approuvée', completed: 'Dispo', rejected: 'Refusée' }[req.status as string] }}
+          </span>
+        </div>
+      </div>
+    </div>
+
     <!-- Panneau debug -->
     <div v-if="devMode" class="flex flex-col gap-3">
       <div class="flex items-center gap-2">
@@ -129,7 +171,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
+import { useAuthStore }   from '@/stores/auth'
+import { RouterLink }     from 'vue-router'
 
+const auth            = useAuthStore()
 const loadingTorrents = ref(true)
 const loadingNotifs   = ref(true)
 const devMode         = ref(false)
@@ -137,6 +182,8 @@ const debug           = ref<any>(null)
 const stats           = ref({ catalogue: 0, imported: 0, downloading: 0, errors: 0 })
 const activeTorrents  = ref<any[]>([])
 const recentNotifs    = ref<any[]>([])
+const pendingRequests = ref<any[]>([])
+const loadingRequests = ref(true)
 
 let interval: ReturnType<typeof setInterval> | null = null
 
@@ -198,6 +245,21 @@ async function fetchNotifs() {
   }
 }
 
+async function fetchRequests() {
+  loadingRequests.value = true
+  try {
+    const res = await fetch('/api/requests', { credentials: 'include' })
+    if (res.ok) {
+      const all = await res.json()
+      pendingRequests.value = auth.isAdmin
+        ? all.filter((r: any) => r.status === 'pending').slice(0, 5)
+        : all.slice(0, 5)
+    }
+  } catch {} finally {
+    loadingRequests.value = false
+  }
+}
+
 function formatSize(bytes: number): string {
   if (!bytes) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
@@ -223,7 +285,7 @@ function formatRelative(iso: string): string {
 }
 
 onMounted(() => {
-  Promise.all([fetchStats(), fetchTorrents(), fetchNotifs(), fetchSettings()])
+  Promise.all([fetchStats(), fetchTorrents(), fetchNotifs(), fetchSettings(), fetchRequests()])
   interval = setInterval(() => {
     fetchTorrents()
     if (devMode.value) fetchDebug()

@@ -39,46 +39,71 @@ import { ref, computed } from 'vue'
 import { Menu } from 'lucide-vue-next'
 import SidebarNav from '@/components/nav/SidebarNav.vue'
 import { useDownloadsStore } from '@/stores/downloads'
+import { useAuthStore }      from '@/stores/auth'
 import type { NavItem } from '@/types/nav'
 
 const mobileOpen = ref(false)
 const dlStore    = useDownloadsStore()
+const auth       = useAuthStore()
 
-const navItems = computed<NavItem[]>(() => [
-  {
-    label: 'Dashboard',
-    icon : 'LayoutDashboard',
-    to   : '/dashboard',
-  },
-  {
-    label   : 'Médiathèque',
-    icon    : 'Tv',
-    to      : '/series',
-    children: [
-      { label: 'Séries', to: '/series' },
-    ],
-  },
-  {
-    label: 'Activité',
-    icon : 'Activity',
-    to   : '/activity',
-    badge: dlStore.activeCount > 0 ? dlStore.activeCount : undefined,
-  },
-  { separator: true },
-  {
-    label   : 'Paramètres',
-    icon    : 'Settings',
-    to      : '/settings',
-    children: [
+const navItems = computed<NavItem[]>(() => {
+  const items: NavItem[] = [
+    {
+      label: 'Dashboard',
+      icon : 'LayoutDashboard',
+      to   : '/dashboard',
+    },
+    {
+      label   : 'Médiathèque',
+      icon    : 'Tv',
+      to      : '/series',
+      children: [
+        { label: 'Séries', to: '/series' },
+      ],
+    },
+    {
+      label: 'Demandes',
+      icon : 'ClipboardList',
+      to   : '/requests',
+    },
+  ]
+
+  if (auth.isAdmin) {
+    items.push({
+      label: 'Activité',
+      icon : 'Activity',
+      to   : '/activity',
+      badge: dlStore.activeCount > 0 ? dlStore.activeCount : undefined,
+    })
+  }
+
+  items.push({ separator: true })
+
+  const settingsChildren: NavItem[] = [
+    { label: 'Mon profil', to: '/settings/profile' },
+  ]
+  if (auth.isAdmin) {
+    settingsChildren.push(
       { label: 'Clients de téléchargement', to: '/settings/download-client' },
       { label: 'Gestion des médias',        to: '/settings/media-management' },
-      { label: 'Management des séries',       to: '/settings/import-management' },
+      { label: 'Management des séries',     to: '/settings/import-management' },
       { label: 'Catalogue Fankai',          to: '/settings/catalogue' },
       { label: 'Journaux',                  to: '/settings/logs' },
       { label: 'Avancé',                    to: '/settings/advanced' },
-    ],
-  },
-])
+      { label: 'Utilisateurs',              to: '/settings/users' },
+      { label: 'Jellyfin & API',            to: '/settings/jellyfin' },
+    )
+  }
+
+  items.push({
+    label   : 'Paramètres',
+    icon    : 'Settings',
+    to      : '/settings',
+    children: settingsChildren,
+  })
+
+  return items
+})
 </script>
 
 <style scoped>

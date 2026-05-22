@@ -17,8 +17,8 @@
       <!-- Hero — poster, titre, métadonnées, synopsis -->
       <SerieHero :serie="data.serie" />
 
-      <!-- Barre d'actions -->
-      <div class="px-4 md:px-8 py-3 flex items-center justify-between gap-3 border-b border-border flex-wrap">
+      <!-- Barre d'actions admin -->
+      <div v-if="auth.isAdmin" class="px-4 md:px-8 py-3 flex items-center justify-between gap-3 border-b border-border flex-wrap">
 
         <!-- Gauche : gestion bibliothèque -->
         <div class="flex items-center gap-2">
@@ -103,6 +103,26 @@
         </div>
       </div>
 
+      <!-- Barre utilisateur (mode demande) -->
+      <div v-if="!auth.isAdmin" class="px-4 md:px-8 py-3 flex items-center justify-between gap-3 border-b border-border flex-wrap">
+        <div v-if="myRequest" class="flex items-center gap-3">
+          <span class="text-xs px-2 py-1 rounded border" :class="requestStatusClass(myRequest.status)">
+            {{ requestStatusLabel(myRequest.status) }}
+          </span>
+          <span v-if="myRequest.status === 'rejected' && myRequest.rejectionMessage" class="text-xs text-muted">
+            {{ myRequest.rejectionMessage }}
+          </span>
+        </div>
+        <div v-else class="text-xs text-muted">Cliquez sur une saison ou un épisode pour faire une demande</div>
+        <button
+            v-if="!myRequest || myRequest.status === 'rejected' || myRequest.status === 'completed'"
+            @click="openRequestModal()"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-accent text-white hover:bg-accent-hover transition"
+        >
+          Demander la série
+        </button>
+      </div>
+
       <!-- Saisons -->
       <div class="px-4 md:px-8 pb-16 flex flex-col gap-4 pt-4">
         <SerieSeasonCard
@@ -117,14 +137,55 @@
             :ep-action-loading="epActionLoading"
             :downloading-season="!!downloadingSeason[season.id]"
             :nfo-support="nfoSupport"
+            :request-mode="!auth.isAdmin"
+            :requested-seasons="requestedSeasonNumbers"
             @toggle="toggleSeason"
             @download="(key, url, magnet, fi, fp, ih) => download(key, url, magnet, fi, fp, ih)"
             @download-season="(s, h) => downloadSeason(s, h)"
             @rename-episode="(ep, s) => renameEpisode(ep, s)"
             @unimport-episode="(ep, s, del) => unimportEpisode(ep, s, del)"
             @unimport-season="(s, del) => unimportSeason(s, del)"
+            @request-season="handleRequestSeason"
+            @request-episode="handleRequestEpisode"
         />
       </div>
+
+      <!-- Modal demande (utilisateurs) -->
+      <Teleport to="body">
+        <div v-if="requestModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4" @click.self="requestModal = false">
+          <div class="bg-card border border-border rounded-xl w-full max-w-sm p-6 flex flex-col gap-5">
+            <div>
+              <p class="text-sm font-semibold text-primary">Demander une série</p>
+              <p class="text-xs text-muted mt-1 truncate">{{ data?.serie?.title }}</p>
+            </div>
+            <div class="flex flex-col gap-2">
+              <p class="text-xs text-muted font-medium">Saisons demandées</p>
+              <label
+                  v-for="season in data?.seasons"
+                  :key="season.id"
+                  class="flex items-center gap-3 cursor-pointer select-none"
+              >
+                <input
+                    type="checkbox"
+                    :value="season.season_number"
+                    v-model="requestSeasons"
+                    class="w-4 h-4 rounded border-border accent-accent"
+                />
+                <span class="text-sm text-primary">
+                  {{ season.season_number === 0 ? 'Spéciaux' : `Saison ${season.season_number}` }}
+                  <span v-if="season.title && season.title !== `Saison ${season.season_number}`" class="text-muted font-normal">— {{ season.title }}</span>
+                </span>
+              </label>
+            </div>
+            <div class="flex items-center justify-end gap-2">
+              <button @click="requestModal = false" class="btn-secondary text-xs">Annuler</button>
+              <button @click="submitRequest" :disabled="requestSeasons.length === 0" class="btn-primary text-xs disabled:opacity-50">
+                Envoyer la demande
+              </button>
+            </div>
+          </div>
+        </div>
+      </Teleport>
     </template>
 
     <!-- Modal désimport série -->
@@ -168,6 +229,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useSeriesStore } from '@/stores/series'
+import { useAuthStore }   from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
 import ManualImportModal from '@/components/ManualImportModal.vue'
 import SerieHero from '@/components/serie/SerieHero.vue'
@@ -176,7 +238,89 @@ import type { Season } from '@/stores/series'
 
 const route  = useRoute()
 const store  = useSeriesStore()
+const auth   = useAuthStore()
 const { add: toast } = useToast()
+
+// ── Mode demande (utilisateurs non-admin) ─────────────────────
+const myRequest      = ref<any>(null)   // demande existante de l'utilisateur pour cette série
+const requestModal   = ref(false)
+const requestSeasons = ref<number[]>([]) // saisons cochées dans le modal
+
+const requestedSeasonNumbers = computed<number[]>(() => {
+  if (!myRequest.value) return []
+  // Trouver l'entrée de l'utilisateur connecté dans la demande fusionnée
+  const r = myRequest.value.requesters?.find((r: any) => r.userId === auth.userId)
+  // [] = toutes les saisons demandées → on retourne toutes les saisons de la série
+  if (r && r.seasons.length === 0) return data.value?.seasons?.map((s: any) => s.season_number) ?? []
+  return r?.seasons ?? []
+})
+
+async function fetchMyRequest() {
+  try {
+    const res = await fetch('/api/requests', { credentials: 'include' })
+    if (res.ok) {
+      const list = await res.json()
+      myRequest.value = list.find((r: any) =>
+        r.serieId === Number(route.params.id) &&
+        r.status !== 'rejected' && r.status !== 'completed'
+      ) ?? null
+    }
+  } catch {}
+}
+
+function openRequestModal(preselectedSeason?: number) {
+  // Pré-cocher soit la saison cliquée, soit toutes les saisons disponibles
+  if (preselectedSeason !== undefined) {
+    requestSeasons.value = [preselectedSeason]
+  } else {
+    requestSeasons.value = data.value?.seasons?.map((s: any) => s.season_number) ?? []
+  }
+  requestModal.value = true
+}
+
+function handleRequestSeason(seasonNumber: number) {
+  openRequestModal(seasonNumber)
+}
+
+function handleRequestEpisode(seasonNumber: number, _episodeId: number) {
+  openRequestModal(seasonNumber)
+}
+
+async function submitRequest() {
+  if (!data.value) return
+  try {
+    const res = await fetch('/api/requests', {
+      method : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        serieId  : Number(route.params.id),
+        serieName: data.value.serie.title,
+        seasons  : requestSeasons.value,
+      }),
+    })
+    if (res.ok) {
+      myRequest.value  = await res.json()
+      requestModal.value = false
+      toast('Demande envoyée ✓', 'success')
+    } else {
+      const d = await res.json()
+      toast(d.error ?? 'Erreur', 'error')
+    }
+  } catch { toast('Impossible de contacter le serveur', 'error') }
+}
+
+function requestStatusLabel(status: string) {
+  return { pending: 'En attente', approved: 'Approuvée', rejected: 'Refusée', completed: 'Disponible' }[status] ?? status
+}
+function requestStatusClass(status: string) {
+  return {
+    pending  : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
+    approved : 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+    rejected : 'bg-red-500/10 text-red-400 border-red-500/20',
+    completed: 'bg-green-500/10 text-green-400 border-green-500/20',
+  }[status] ?? ''
+}
 
 const collapsedSeasons   = ref<Set<number>>(new Set())
 const downloading        = ref<string[]>([])
@@ -558,6 +702,7 @@ const closeMenus = () => { downloadMenuOpen.value = false }
 
 onMounted(() => {
   load(); fetchSettings(); fetchOrganized(); fetchActiveDownloads(); fetchRssSync()
+  if (!auth.isAdmin) fetchMyRequest()
   pollTimer = setInterval(fetchActiveDownloads, 5000)
   document.addEventListener('click', closeMenus)
 })

@@ -3,7 +3,8 @@ import cookieParser from 'cookie-parser'
 import http from 'http'
 import fs from 'fs'
 import path from 'path'
-import { authStatus, authSetup, authLogin, authLogout } from './auth.js'
+import { authStatus, authSetup, authLogin, authLogout, authMe, authChangePassword, authRegenerateToken, requireAuth, requireAdmin } from './auth.js'
+import { migrateIfNeeded } from './users.js'
 import { readSettings } from './settings.js'
 import { registerDriver, dispatchList, dispatchRemove } from './torrent-clients/index.js'
 import qbittorrentDriver  from './torrent-clients/qbittorrent.js'
@@ -20,6 +21,11 @@ import { readAvailable, readInfohashMap, loadEnrichedSeriesData } from './lib/gi
 import { pushNotif } from './lib/notifs.js'
 import { checkNfoUpdates } from './lib/nfo.js'
 
+import usersRouter         from './routes/users.js'
+import invitesRouter       from './routes/invites.js'
+import requestsRouter      from './routes/requests.js'
+import jellyfinRouter      from './routes/jellyfin.js'
+import publicApiRouter     from './routes/public-api.js'
 import settingsRouter      from './routes/settings.js'
 import torrentClientsRouter from './routes/torrent-clients.js'
 import seriesRouter        from './routes/series.js'
@@ -51,23 +57,39 @@ if (fs.existsSync(PUBLIC_PATH)) {
     app.use(express.static(PUBLIC_PATH))
 }
 
-// ── Auth ───────────────────────────────────────────────────────
-app.get('/api/auth/status', authStatus)
-app.post('/api/auth/setup',  authSetup)
-app.post('/api/auth/login',  authLogin)
-app.post('/api/auth/logout', authLogout)
+// ── Migration mono-user → multi-user ──────────────────────────
+migrateIfNeeded()
 
-// ── Routes ─────────────────────────────────────────────────────
-app.use('/api', settingsRouter)
-app.use('/api', torrentClientsRouter)
-app.use('/api', seriesRouter)
-app.use('/api', downloadsRouter)
-app.use('/api', organizeRouter)
-app.use('/api', importRouter)
-app.use('/api', systemRouter)
-app.use('/api', nfoUpdatesRouter)
-app.use('/api', plexRouter)
-app.use('/api', rssSyncRouter)
+// ── Auth ───────────────────────────────────────────────────────
+app.get ('/api/auth/status',          authStatus)
+app.post('/api/auth/setup',           authSetup)
+app.post('/api/auth/login',           authLogin)
+app.post('/api/auth/logout',          authLogout)
+app.get ('/api/auth/me',               requireAuth,  authMe)
+app.post('/api/auth/change-password',  requireAuth,  authChangePassword)
+app.post('/api/auth/regenerate-token', requireAuth,  authRegenerateToken)
+
+// ── API publique v1 (auth par token) ──────────────────────────
+app.use('/api', publicApiRouter)
+
+// ── Routes (admin uniquement) ──────────────────────────────────
+app.use('/api', requireAdmin, usersRouter)
+app.use('/api', requireAdmin, jellyfinRouter)
+app.use('/api', requireAdmin, settingsRouter)
+app.use('/api', requireAdmin, torrentClientsRouter)
+app.use('/api', requireAdmin, downloadsRouter)
+app.use('/api', requireAdmin, organizeRouter)
+app.use('/api', requireAdmin, importRouter)
+app.use('/api', requireAdmin, systemRouter)
+app.use('/api', requireAdmin, nfoUpdatesRouter)
+app.use('/api', requireAdmin, plexRouter)
+app.use('/api', requireAdmin, rssSyncRouter)
+
+// ── Routes accessibles à tous les utilisateurs connectés ───────
+app.use('/api', requireAuth, seriesRouter)
+app.use('/api', requireAuth, requestsRouter)
+// Invites : mix public + admin (le router gère ses propres middlewares)
+app.use('/api', invitesRouter)
 
 // ── Catch-all SPA ──────────────────────────────────────────────
 if (fs.existsSync(PUBLIC_PATH)) {

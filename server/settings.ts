@@ -7,23 +7,29 @@ const DATA_PATH = path.join(DATA_DIR, 'settings.json')
 export interface Settings {
     mediaPath           : string
     completePath        : string
-    organizeMode        : 'hardlink' | 'copy' | 'move'  // ← ajouter 'copy'
+    organizeMode        : 'hardlink' | 'copy' | 'move'
     category            : string
     nfoSupport          : boolean
     autoImport          : boolean
     devMode             : boolean
-    deleteTorrentOnMove : boolean  // ← ajouter
+    deleteTorrentOnMove : boolean
+    requestAutoImport   : boolean  // demandes users : import auto ou validation admin
+    jellyfinUrl         : string   // URL du serveur Jellyfin (ex: http://jellyfin:8096)
+    jellyfinAdminToken  : string   // Token admin Jellyfin pour la sync
 }
 
 const defaults: Settings = {
-    mediaPath   : '',
-    completePath: '',
-    organizeMode: 'hardlink',
-    category    : 'fankai',
-    nfoSupport  : false,
-    autoImport  : true,
-    devMode     : false,
+    mediaPath          : '',
+    completePath       : '',
+    organizeMode       : 'hardlink',
+    category           : 'fankai',
+    nfoSupport         : false,
+    autoImport         : true,
+    devMode            : false,
     deleteTorrentOnMove: false,
+    requestAutoImport  : false,
+    jellyfinUrl        : '',
+    jellyfinAdminToken : '',
 }
 
 export function readSettings(): Settings {

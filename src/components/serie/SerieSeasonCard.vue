@@ -31,18 +31,81 @@
 
       <!-- Boutons saison -->
       <div class="flex items-center gap-2">
-        <!-- Corbeille saison -->
+        <!-- Corbeille saison (admin uniquement) -->
         <button
-            v-if="season.organized_count > 0"
+            v-if="!requestMode && season.organized_count > 0"
             @click.stop="openUnimportSeasonModal"
             class="w-8 h-8 rounded-lg border flex items-center justify-center transition-colors border-red-500/30 text-red-400 bg-red-500/10 hover:bg-red-500/20"
             title="Désimporter la saison"
         >
           <Trash2 :size="14" />
         </button>
-        <!-- Pas de pack saison : bouton "Saison" (dropdown si plusieurs packs via intégrales) -->
-        <template v-if="season.torrents.length === 0 && hasDownloadable">
-          <div v-if="uniquePackOptions.length > 1" class="relative" @click.stop>
+
+        <!-- ── Mode demande ────────────────────────────────────── -->
+        <template v-if="requestMode">
+          <button
+              @click.stop="emit('requestSeason', season.season_number)"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition"
+              :class="isSeasonRequested
+                ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 cursor-default'
+                : 'bg-accent-muted text-accent border-accent/20 hover:bg-accent/20'"
+          >
+            <component :is="isSeasonRequested ? checkIcon : requestIcon" />
+            {{ isSeasonRequested ? 'Demandé' : 'Demander' }}
+          </button>
+        </template>
+
+        <!-- ── Mode téléchargement (admin) ─────────────────────── -->
+        <template v-else>
+          <!-- Pas de pack saison : bouton "Saison" (dropdown si plusieurs packs via intégrales) -->
+          <template v-if="season.torrents.length === 0 && hasDownloadable">
+            <div v-if="uniquePackOptions.length > 1" class="relative" @click.stop>
+              <button
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition bg-accent-muted text-accent border-accent/20 hover:bg-accent/20"
+                  @click="seasonMenuOpen = !seasonMenuOpen"
+              >
+                <component :is="downloadIcon" />
+                Saison ▾
+              </button>
+              <div v-if="seasonMenuOpen" class="absolute right-0 bottom-full mb-1 bg-card border border-border rounded-xl p-1 z-20 w-56 shadow-xl flex flex-col gap-0.5">
+                <button
+                    v-for="opt in uniquePackOptions"
+                    :key="opt.infohash"
+                    class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-primary hover:bg-hover transition-colors text-left"
+                    @click="emit('downloadSeason', season, opt.infohash); seasonMenuOpen = false"
+                >
+                  <component :is="downloadIcon" />
+                  {{ opt.label }}
+                </button>
+              </div>
+            </div>
+            <button
+                v-else
+                @click="emit('downloadSeason', season)"
+                :disabled="downloadingSeason"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border bg-accent-muted text-accent border-accent/20 hover:bg-accent/20 transition"
+            >
+              <component :is="downloadingSeason ? loaderIcon : downloadIcon" />
+              {{ downloadingSeason ? 'Envoi…' : 'Saison' }}
+            </button>
+          </template>
+
+          <!-- Pack saison unique -->
+          <button
+              v-if="season.torrents.length === 1"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition"
+              :class="canDownloadSeason
+              ? 'bg-accent-muted text-accent border-accent/20 hover:bg-accent/20'
+              : 'text-muted border-border cursor-not-allowed opacity-50'"
+              :disabled="!canDownloadSeason"
+              @click="canDownloadSeason && emit('download', `season-${season.id}`, season.torrent.torrent_url, season.torrent.magnet)"
+          >
+            <component :is="seasonBtnIcon" />
+            {{ seasonBtnLabel }}
+          </button>
+
+          <!-- Dropdown packs saison multiples -->
+          <div v-if="season.torrents.length > 1" class="relative" @click.stop>
             <button
                 class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition bg-accent-muted text-accent border-accent/20 hover:bg-accent/20"
                 @click="seasonMenuOpen = !seasonMenuOpen"
@@ -50,66 +113,21 @@
               <component :is="downloadIcon" />
               Saison ▾
             </button>
-            <div v-if="seasonMenuOpen" class="absolute right-0 bottom-full mb-1 bg-card border border-border rounded-xl p-1 z-20 w-56 shadow-xl flex flex-col gap-0.5">
+            <div v-if="seasonMenuOpen" class="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl p-1 z-20 w-52 shadow-xl flex flex-col gap-0.5">
               <button
-                  v-for="opt in uniquePackOptions"
-                  :key="opt.infohash"
-                  class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-primary hover:bg-hover transition-colors text-left"
-                  @click="emit('downloadSeason', season, opt.infohash); seasonMenuOpen = false"
+                  v-for="(t, i) in season.torrents"
+                  :key="i"
+                  class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-primary hover:bg-hover transition-colors"
+                  :class="(isDownloaded(`season-${season.id}-${i}`) || isAlreadyQueued(t)) ? 'opacity-50 cursor-not-allowed' : ''"
+                  :disabled="isDownloaded(`season-${season.id}-${i}`) || isAlreadyQueued(t)"
+                  @click="!isDownloaded(`season-${season.id}-${i}`) && !isAlreadyQueued(t) && (emit('download', `season-${season.id}-${i}`, t.torrent_url, t.magnet), seasonMenuOpen = false)"
               >
-                <component :is="downloadIcon" />
-                {{ opt.label }}
+                <component :is="(isDownloaded(`season-${season.id}-${i}`) || isAlreadyQueued(t)) ? checkIcon : downloadIcon" />
+                {{ groupLabels(season.torrents)[i] }}
               </button>
             </div>
           </div>
-          <button
-              v-else
-              @click="emit('downloadSeason', season)"
-              :disabled="downloadingSeason"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border bg-accent-muted text-accent border-accent/20 hover:bg-accent/20 transition"
-          >
-            <component :is="downloadingSeason ? loaderIcon : downloadIcon" />
-            {{ downloadingSeason ? 'Envoi…' : 'Saison' }}
-          </button>
         </template>
-
-        <!-- Pack saison unique -->
-        <button
-            v-if="season.torrents.length === 1"
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition"
-            :class="canDownloadSeason
-            ? 'bg-accent-muted text-accent border-accent/20 hover:bg-accent/20'
-            : 'text-muted border-border cursor-not-allowed opacity-50'"
-            :disabled="!canDownloadSeason"
-            @click="canDownloadSeason && emit('download', `season-${season.id}`, season.torrent.torrent_url, season.torrent.magnet)"
-        >
-          <component :is="seasonBtnIcon" />
-          {{ seasonBtnLabel }}
-        </button>
-
-        <!-- Dropdown packs saison multiples -->
-        <div v-if="season.torrents.length > 1" class="relative" @click.stop>
-          <button
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition bg-accent-muted text-accent border-accent/20 hover:bg-accent/20"
-              @click="seasonMenuOpen = !seasonMenuOpen"
-          >
-            <component :is="downloadIcon" />
-            Saison ▾
-          </button>
-          <div v-if="seasonMenuOpen" class="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl p-1 z-20 w-52 shadow-xl flex flex-col gap-0.5">
-            <button
-                v-for="(t, i) in season.torrents"
-                :key="i"
-                class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-primary hover:bg-hover transition-colors"
-                :class="(isDownloaded(`season-${season.id}-${i}`) || isAlreadyQueued(t)) ? 'opacity-50 cursor-not-allowed' : ''"
-                :disabled="isDownloaded(`season-${season.id}-${i}`) || isAlreadyQueued(t)"
-                @click="!isDownloaded(`season-${season.id}-${i}`) && !isAlreadyQueued(t) && (emit('download', `season-${season.id}-${i}`, t.torrent_url, t.magnet), seasonMenuOpen = false)"
-            >
-              <component :is="(isDownloaded(`season-${season.id}-${i}`) || isAlreadyQueued(t)) ? checkIcon : downloadIcon" />
-              {{ groupLabels(season.torrents)[i] }}
-            </button>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -182,9 +200,22 @@
             </div>
           </div>
 
-          <!-- Bouton téléchargement épisode (uniquement si non organisé) -->
+          <!-- Bouton épisode -->
           <div v-if="!ep.organized" class="relative shrink-0" @click.stop>
+            <!-- Mode demande -->
             <button
+                v-if="requestMode"
+                class="w-8 h-8 rounded-lg border flex items-center justify-center transition-colors"
+                :class="(requestedSeasons?.includes(season.season_number))
+                  ? 'border-blue-500/30 text-blue-400 bg-blue-500/10 cursor-default'
+                  : 'border-border text-muted hover:border-accent hover:text-accent cursor-pointer'"
+                @click="!requestedSeasons?.includes(season.season_number) && emit('requestEpisode', season.season_number, ep.id)"
+            >
+              <component :is="requestedSeasons?.includes(season.season_number) ? checkIcon : requestIcon" />
+            </button>
+            <!-- Mode téléchargement (admin) -->
+            <button
+                v-else
                 class="w-8 h-8 rounded-lg border flex items-center justify-center transition-colors"
                 :class="epBtnClass(ep)"
                 :disabled="epState(ep) !== 'idle'"
@@ -209,8 +240,8 @@
             </div>
           </div>
 
-          <!-- Actions épisode importé -->
-          <template v-if="ep.organized && organizedByEpisode[String(ep.id)]">
+          <!-- Actions épisode importé (admin uniquement) -->
+          <template v-if="!requestMode && ep.organized && organizedByEpisode[String(ep.id)]">
             <!-- Badge rename cliquable -->
             <button
                 v-if="epNeedsRename(ep)"
@@ -314,6 +345,8 @@ const props = defineProps<{
   epActionLoading   : Record<number, boolean>
   downloadingSeason ?: boolean
   nfoSupport        ?: boolean
+  requestMode       ?: boolean   // true = boutons demande au lieu de téléchargement
+  requestedSeasons  ?: number[]  // saisons déjà demandées par cet user pour cette série
 }>()
 
 const emit = defineEmits<{
@@ -323,7 +356,18 @@ const emit = defineEmits<{
   renameEpisode  : [ep: any, season: any]
   unimportEpisode: [ep: any, season: any, deleteFile: boolean]
   unimportSeason : [season: any, deleteFiles: boolean]
+  // Mode demande
+  requestSeason  : [seasonNumber: number]
+  requestEpisode : [seasonNumber: number, episodeId: number]
 }>()
+
+const requestIcon = h('svg', { viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': 2, fill: 'none', width: 12, height: 12 },
+  [h('circle', { cx: 12, cy: 12, r: 10 }), h('path', { d: 'M12 8v4l2 2' })]
+)
+
+const isSeasonRequested = computed(() =>
+  props.requestedSeasons?.includes(props.season.season_number) ?? false
+)
 
 const epOptionsOpen      = ref<number | null>(null)
 const plotOpen           = ref<number | null>(null)

@@ -14,10 +14,13 @@ import { useRoute } from 'vue-router'
 const route = useRoute()
 
 const titles: Record<string, string> = {
+  'settings-profile'   : 'Mon profil',
   'settings-download'  : 'Clients de téléchargement',
   'settings-media'     : 'Gestion des médias',
   'settings-catalogue' : 'Catalogue Fankai',
   'settings-logs'      : 'Journaux',
+  'settings-users'     : 'Utilisateurs & Invitations',
+  'settings-jellyfin'  : 'Jellyfin & API',
 }
 
 const pageTitle = computed(() => titles[route.name as string] ?? 'Paramètres')

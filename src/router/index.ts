@@ -1,14 +1,26 @@
 import { createRouter, createWebHistory } from 'vue-router'
+
+declare module 'vue-router' {
+    interface RouteMeta {
+        public?    : boolean
+        adminOnly? : boolean
+    }
+}
 import { useAuthStore } from '@/stores/auth'
 import AppLayout from '@/layouts/AppLayout.vue'
 
 const router = createRouter({
     history: createWebHistory(),
     routes: [
-        // ─── Page publique hors layout ───────────────────────────
+        // ─── Pages publiques hors layout ─────────────────────────
         {
             path: '/auth',
             component: () => import('@/views/AuthView.vue'),
+            meta: { public: true },
+        },
+        {
+            path: '/invite/:code',
+            component: () => import('@/views/InviteView.vue'),
             meta: { public: true },
         },
 
@@ -52,7 +64,12 @@ const router = createRouter({
                     path: 'settings',
                     component: () => import('@/views/settings/SettingsLayout.vue'),
                     children: [
-                        { path: '',                redirect: '/settings/download-client' },
+                        { path: '',                redirect: '/settings/profile' },
+                        {
+                            path: 'profile',
+                            name: 'settings-profile',
+                            component: () => import('@/views/settings/ProfileView.vue'),
+                        },
                         {
                             path: 'download-client',
                             name: 'settings-download',
@@ -83,7 +100,26 @@ const router = createRouter({
                             name: 'settings-advanced',
                             component: () => import('@/views/settings/AdvancedView.vue'),
                         },
+                        {
+                            path: 'users',
+                            name: 'settings-users',
+                            component: () => import('@/views/settings/UsersView.vue'),
+                            meta: { adminOnly: true },
+                        },
+                        {
+                            path: 'jellyfin',
+                            name: 'settings-jellyfin',
+                            component: () => import('@/views/settings/JellyfinView.vue'),
+                            meta: { adminOnly: true },
+                        },
                     ],
+                },
+
+                // Demandes
+                {
+                    path: 'requests',
+                    name: 'requests',
+                    component: () => import('@/views/RequestsView.vue'),
                 },
             ],
         },
@@ -97,21 +133,20 @@ const router = createRouter({
     },
 })
 
-// ─── Guard auth (inchangé) ────────────────────────────────────
+// ─── Guard auth ───────────────────────────────────────────────
 router.beforeEach(async (to) => {
     const auth = useAuthStore()
 
-    if (auth.loading) {
-        await auth.checkStatus()
-    }
+    if (auth.loading) await auth.checkStatus()
 
-    if (!to.meta.public && !auth.loggedIn) {
-        return '/auth'
-    }
+    // Redirige vers /auth si non connecté
+    if (!to.meta.public && !auth.loggedIn) return '/auth'
 
-    if (to.path === '/auth' && auth.loggedIn) {
-        return '/series'
-    }
+    // Redirige vers /series si déjà connecté et tente d'accéder à /auth
+    if (to.path === '/auth' && auth.loggedIn) return '/series'
+
+    // Redirige les non-admins hors des pages admin
+    if (to.meta.adminOnly && !auth.isAdmin) return '/series'
 })
 
 export default router
