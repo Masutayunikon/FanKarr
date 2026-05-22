@@ -255,6 +255,10 @@ const clientMatrix = [
     id: 'real-debrid',  label: 'Real-Debrid',              version: 'API v1',
     auth: 'Clé API',          fileSelect: true,  fileProgress: true,  torrentUpload: 'proxy', categories: false, deleteFiles: true,
   },
+  {
+    id: 'alldebrid',    label: 'AllDebrid',                version: 'API v4',
+    auth: 'Clé API',          fileSelect: true,  fileProgress: true,  torrentUpload: 'proxy', categories: false, deleteFiles: true,
+  },
 ]
 
 const modal = ref({

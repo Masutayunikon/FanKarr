@@ -71,38 +71,6 @@
       </div>
     </section>
 
-    <!-- ── Token API utilisateur ──────────────────────────────── -->
-    <section class="flex flex-col gap-4">
-      <div>
-        <h2 class="text-base font-semibold text-primary">Token API personnel</h2>
-        <p class="text-sm text-muted mt-1">
-          Utilisez ce token pour vous authentifier sur l'API publique FanKarr
-          (ex : configuration manuelle du plugin Jellyfin).
-        </p>
-      </div>
-
-      <div class="settings-card flex flex-col gap-3">
-        <div class="flex items-center gap-2">
-          <code class="flex-1 text-xs bg-shell px-3 py-2 rounded-lg border border-border text-muted font-mono truncate">
-            {{ showToken ? myToken : '••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••' }}
-          </code>
-          <button @click="showToken = !showToken" class="btn-ghost text-xs shrink-0">
-            {{ showToken ? 'Masquer' : 'Afficher' }}
-          </button>
-          <button @click="copyToken" class="btn-ghost text-xs shrink-0">
-            {{ tokenCopied ? 'Copié !' : 'Copier' }}
-          </button>
-        </div>
-        <button @click="regenerateToken" class="btn-ghost text-xs text-red-400 hover:text-red-300 w-fit">
-          Regénérer le token
-        </button>
-        <p class="text-xs text-muted">
-          Endpoint auth plugin :
-          <code class="bg-shell px-1.5 py-0.5 rounded text-xs">POST {{ origin }}/api/v1/auth/jellyfin</code>
-        </p>
-      </div>
-    </section>
-
     <!-- ── Référence API ──────────────────────────────────────── -->
     <section class="flex flex-col gap-3">
       <h2 class="text-base font-semibold text-primary">Référence API v1</h2>
@@ -147,10 +115,7 @@ const syncing            = ref(false)
 const syncResult         = ref<{ created: number; skipped: number; users: string[] } | null>(null)
 const syncError          = ref<string | null>(null)
 
-const myToken     = ref('')
-const showToken   = ref(false)
-const tokenCopied = ref(false)
-const origin      = window.location.origin
+const origin = window.location.origin
 
 const apiEndpoints = [
   { method: 'POST', path: '/api/v1/auth/jellyfin', desc: 'Échanger un token Jellyfin contre un token FanKarr' },
@@ -173,15 +138,7 @@ async function loadSettings() {
   }
 }
 
-async function loadMyToken() {
-  const res = await fetch('/api/auth/me', { credentials: 'include' })
-  if (res.ok) {
-    const d      = await res.json()
-    myToken.value = d.apiToken ?? ''
-  }
-}
-
-onMounted(() => { loadSettings(); loadMyToken() })
+onMounted(() => { loadSettings() })
 
 async function save() {
   saving.value = true
@@ -227,14 +184,5 @@ async function copyToken() {
   setTimeout(() => { tokenCopied.value = false }, 2000)
 }
 
-async function regenerateToken() {
-  if (!confirm('Regénérer le token ? L\'ancien token sera immédiatement invalidé.')) return
-  const res = await fetch('/api/auth/regenerate-token', {
-    method: 'POST', credentials: 'include',
-  })
-  if (res.ok) {
-    const d = await res.json()
-    myToken.value = d.apiToken
-  }
-}
+
 </script>

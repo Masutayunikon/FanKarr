@@ -26,6 +26,7 @@ import SettingsToggle from '@/components/settings/SettingsToggle.vue'
 const devMode = ref(false)
 const saved   = ref(false)
 let saveTimer: ReturnType<typeof setTimeout> | null = null
+let loaded    = false
 
 onMounted(async () => {
   const res = await fetch('/api/settings', { credentials: 'include' })
@@ -33,9 +34,11 @@ onMounted(async () => {
     const s = await res.json()
     devMode.value = s.devMode ?? false
   }
+  loaded = true
 })
 
 watch(devMode, async (val) => {
+  if (!loaded) return
   await fetch('/api/settings', {
     method : 'POST',
     headers: { 'Content-Type': 'application/json' },

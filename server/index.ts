@@ -72,20 +72,35 @@ app.post('/api/auth/regenerate-token', requireAuth,  authRegenerateToken)
 // ── API publique v1 (auth par token) ──────────────────────────
 app.use('/api', publicApiRouter)
 
-// ── Routes (admin uniquement) ──────────────────────────────────
-app.use('/api', requireAdmin, usersRouter)
-app.use('/api', requireAdmin, jellyfinRouter)
-app.use('/api', requireAdmin, settingsRouter)
-app.use('/api', requireAdmin, torrentClientsRouter)
-app.use('/api', requireAdmin, downloadsRouter)
-app.use('/api', requireAdmin, organizeRouter)
-app.use('/api', requireAdmin, importRouter)
-app.use('/api', requireAdmin, systemRouter)
-app.use('/api', requireAdmin, nfoUpdatesRouter)
-app.use('/api', requireAdmin, plexRouter)
-app.use('/api', requireAdmin, rssSyncRouter)
+// ── Garde admin : protège les préfixes réservés aux admins ────
+// NOTE : app.use('/api', requireAdmin, router) s'applique à TOUTES
+// les requêtes /api/* avant même que le router vérifie ses routes,
+// ce qui bloquerait les utilisateurs standard. On utilise donc un
+// middleware ciblé sur les chemins réellement admin-only.
+const ADMIN_PREFIXES = [
+    '/users', '/jellyfin', '/settings', '/torrent-clients',
+    '/downloads', '/download', '/organize', '/import',
+    '/system', '/nfo-updates', '/plex', '/rss-sync',
+]
+app.use('/api', (req, res, next) => {
+    if (ADMIN_PREFIXES.some(p => req.path === p || req.path.startsWith(p + '/'))) {
+        return requireAdmin(req, res, next)
+    }
+    next()
+})
 
-// ── Routes accessibles à tous les utilisateurs connectés ───────
+// ── Routers (admin + utilisateurs connectés) ───────────────────
+app.use('/api', usersRouter)
+app.use('/api', jellyfinRouter)
+app.use('/api', settingsRouter)
+app.use('/api', torrentClientsRouter)
+app.use('/api', downloadsRouter)
+app.use('/api', organizeRouter)
+app.use('/api', importRouter)
+app.use('/api', systemRouter)
+app.use('/api', nfoUpdatesRouter)
+app.use('/api', plexRouter)
+app.use('/api', rssSyncRouter)
 app.use('/api', requireAuth, seriesRouter)
 app.use('/api', requireAuth, requestsRouter)
 // Invites : mix public + admin (le router gère ses propres middlewares)
