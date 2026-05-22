@@ -293,19 +293,29 @@ function handleRequestSeason(seasonNumber: number) {
   openRequestModal(seasonNumber)
 }
 
-async function handleRequestEpisode(_seasonNumber: number, episodeId: number) {
+async function handleRequestEpisode(_seasonNumber: number, episodeId: number, torrent?: any) {
   if (!data.value) return
   try {
+    const body: Record<string, any> = {
+      serieId  : Number(route.params.id),
+      serieName: data.value.serie.title,
+      seasons  : [],
+      episodes : [episodeId],
+    }
+    if (torrent) {
+      body.torrentOverride = {
+        torrent_url: torrent.torrent_url ?? null,
+        magnet     : torrent.magnet      ?? null,
+        infohash   : torrent.infohash    ?? null,
+        file_index : torrent.file_index  ?? null,
+        file_path  : torrent.file_path   ?? null,
+      }
+    }
     const res = await fetch('/api/requests', {
       method : 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({
-        serieId  : Number(route.params.id),
-        serieName: data.value.serie.title,
-        seasons  : [],
-        episodes : [episodeId],
-      }),
+      body: JSON.stringify(body),
     })
     if (res.ok) {
       myRequest.value = await res.json()

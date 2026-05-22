@@ -210,7 +210,7 @@
                   ? 'border-blue-500/30 text-blue-400 bg-blue-500/10 cursor-default'
                   : 'border-border text-muted hover:border-accent hover:text-accent cursor-pointer'"
                 :title="isEpisodeRequested(ep.id) ? 'Déjà demandé' : 'Demander cet épisode'"
-                @click="!isEpisodeRequested(ep.id) && emit('requestEpisode', season.season_number, ep.id)"
+                @click="handleEpRequestClick(ep)"
             >
               <component :is="isEpisodeRequested(ep.id) ? checkIcon : requestIcon" />
             </button>
@@ -224,8 +224,24 @@
             >
               <component :is="epStateIcon(ep)" />
             </button>
-            <!-- Dropdown quand plusieurs options de torrent -->
-            <div v-if="epOptionsOpen === ep.id && ep.torrents && ep.torrents.length > 1"
+
+            <!-- Dropdown sélection torrent — mode demande -->
+            <div v-if="requestMode && epOptionsOpen === ep.id && ep.torrents && ep.torrents.length > 1"
+                 class="absolute right-0 bottom-full mb-1 bg-card border border-border rounded-xl p-1 z-20 w-64 shadow-xl flex flex-col gap-0.5">
+              <p class="px-3 pt-1.5 pb-0.5 text-[10px] text-muted font-medium uppercase tracking-wide">Choisir le torrent</p>
+              <button
+                  v-for="(t, i) in ep.torrents"
+                  :key="i"
+                  class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-primary hover:bg-hover transition-colors text-left"
+                  @click="emit('requestEpisode', season.season_number, ep.id, t); epOptionsOpen = null"
+              >
+                <component :is="requestIcon" class="shrink-0" />
+                <span class="truncate">{{ groupLabels(ep.torrents)[i] }}</span>
+              </button>
+            </div>
+
+            <!-- Dropdown sélection torrent — mode téléchargement -->
+            <div v-if="!requestMode && epOptionsOpen === ep.id && ep.torrents && ep.torrents.length > 1"
                  class="absolute right-0 bottom-full mb-1 bg-card border border-border rounded-xl p-1 z-20 w-52 shadow-xl flex flex-col gap-0.5">
               <button
                   v-for="(t, i) in ep.torrents"
@@ -360,7 +376,7 @@ const emit = defineEmits<{
   unimportSeason : [season: any, deleteFiles: boolean]
   // Mode demande
   requestSeason  : [seasonNumber: number]
-  requestEpisode : [seasonNumber: number, episodeId: number]
+  requestEpisode : [seasonNumber: number, episodeId: number, torrent?: any]
 }>()
 
 const requestIcon = h('svg', { viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': 2, fill: 'none', width: 12, height: 12 },
@@ -511,6 +527,17 @@ function handleEpBtnClick(ep: any) {
   if (ep.torrent && !isAlreadyQueued(ep.torrent)) {
     emit('download', `ep-${ep.id}`, ep.torrent.torrent_url, ep.torrent.magnet, ep.torrent.file_index ?? null, ep.torrent.file_path ?? null, ep.torrent.infohash ?? null)
   }
+}
+
+function handleEpRequestClick(ep: any) {
+  if (isEpisodeRequested(ep.id)) return
+  if (ep.torrents && ep.torrents.length > 1) {
+    // Plusieurs torrents → afficher le picker
+    epOptionsOpen.value = epOptionsOpen.value === ep.id ? null : ep.id
+    return
+  }
+  // Torrent unique ou aucun → émettre directement
+  emit('requestEpisode', season.season_number, ep.id, ep.torrent ?? undefined)
 }
 
 function epState(ep: any): 'idle' | 'loading' | 'done' | 'unavailable' {

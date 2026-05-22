@@ -31,28 +31,47 @@ router.get('/requests/pending-count', (req, res) => {
 
 // POST /api/requests — créer ou mettre à jour une demande
 router.post('/requests', (req, res) => {
-    const { serieId, serieName, seasons, episodes } = req.body
+    const { serieId, serieName, seasons, episodes, torrentOverride } = req.body
     if (!serieId || !serieName) {
         res.status(400).json({ error: 'serieId et serieName requis' }); return
     }
     try {
+        const submittedSeasons  = Array.isArray(seasons)  ? seasons.map(Number)  : []
+        const submittedEpisodes = Array.isArray(episodes) ? episodes.map(Number) : []
+
         let request = upsertRequest(
             req.user!.id,
             Number(serieId),
             String(serieName),
-            Array.isArray(seasons)  ? seasons.map(Number)  : [],
-            Array.isArray(episodes) ? episodes.map(Number) : [],
+            submittedSeasons,
+            submittedEpisodes,
         )
 
         // Auto-approbation + téléchargement si l'utilisateur est autorisé
-        if (request.status === 'pending') {
-            const { requestAutoDownloadUsers } = readSettings()
-            const userId = req.user!.id
-            const allowed = requestAutoDownloadUsers === 'all'
-                || (Array.isArray(requestAutoDownloadUsers) && requestAutoDownloadUsers.includes(userId))
-            if (allowed) {
-                request = approveRequest(request.id)
-                autoDownloadRequest(request).catch(err =>
+        const { requestAutoDownloadUsers } = readSettings()
+        const userId = req.user!.id
+        const allowed = requestAutoDownloadUsers === 'all'
+            || (Array.isArray(requestAutoDownloadUsers) && requestAutoDownloadUsers.includes(userId))
+
+        if (allowed) {
+            const isNew = request.status === 'pending'
+            if (isNew) request = approveRequest(request.id)
+
+            if (torrentOverride?.torrent_url || torrentOverride?.magnet) {
+                // L'utilisateur a sélectionné un torrent spécifique → l'envoyer directement
+                const url = torrentOverride.torrent_url ?? torrentOverride.magnet
+                dispatchDownload(url, {
+                    infohash  : torrentOverride.infohash   ?? null,
+                    magnet    : torrentOverride.magnet     ?? null,
+                    file_index: torrentOverride.file_index ?? null,
+                    file_path : torrentOverride.file_path  ?? null,
+                }).catch(err =>
+                    logger.warn('requests', `Auto-dl (override) échoué pour "${request.serieName}" : ${err instanceof Error ? err.message : err}`)
+                )
+            } else {
+                // Pas de torrent sélectionné → résolution automatique
+                const dlOverride = isNew ? undefined : { seasons: submittedSeasons, episodes: submittedEpisodes }
+                autoDownloadRequest(request, dlOverride).catch(err =>
                     logger.warn('requests', `Auto-dl échoué pour "${request.serieName}" : ${err instanceof Error ? err.message : err}`)
                 )
             }
@@ -92,16 +111,20 @@ router.patch('/requests/:id', requireAdmin, async (req, res) => {
     }
 })
 
-/** Trouve et envoie au client torrent les fichiers correspondant à la demande. */
-async function autoDownloadRequest(req: SerieRequest): Promise<void> {
+/**
+ * Trouve et envoie au client torrent les fichiers correspondant à la demande.
+ * @param override - si fourni, utilise ces saisons/épisodes au lieu du merged de la demande
+ *                   (utile pour ne télécharger que ce qui vient d'être ajouté)
+ */
+async function autoDownloadRequest(req: SerieRequest, override?: { seasons: number[]; episodes: number[] }): Promise<void> {
     const serieData = await readSerieData(req.serieId)
     if (!serieData) {
         logger.warn('requests', `Auto-dl : aucune donnée torrent pour série ${req.serieId}`)
         return
     }
 
-    const seasons  = mergedSeasons(req)   // [] = toutes
-    const episodes = mergedEpisodes(req)  // IDs d'épisodes spécifiques
+    const seasons  = override !== undefined ? override.seasons  : mergedSeasons(req)
+    const episodes = override !== undefined ? override.episodes : mergedEpisodes(req)
 
     type TorrentEntry = { url: string; magnet: string | null; infohash: string | null; file_index?: number | null; file_path?: string | null }
     const toDownload: TorrentEntry[] = []
@@ -121,18 +144,19 @@ async function autoDownloadRequest(req: SerieRequest): Promise<void> {
     }
 
     /**
-     * Ajoute tous les épisodes d'une liste via leurs torrents individuels ou via file_index dans un pack.
-     * Utilisé en fallback quand il n'y a pas de torrent de saison/série globale.
+     * Ajoute le premier torrent disponible par épisode (individuel ou via file_index dans un pack).
+     * On prend le premier uniquement pour éviter les doublons quand plusieurs sources existent.
      */
     function addEpisodesByIndex(epList: any[]) {
         for (const ep of epList) {
             if (ep.torrents?.length > 0) {
-                for (const t of ep.torrents) addTorrent(t)
+                // Premier torrent individuel disponible
+                addTorrent(ep.torrents[0])
             } else if (ep.paths?.length > 0) {
-                for (const p of ep.paths) {
-                    const pack = allPackTorrents.find((t: any) => t.infohash?.toLowerCase() === p.infohash?.toLowerCase())
-                    if (pack) addTorrent(pack, p.file_index ?? null, p.path ?? null)
-                }
+                // Premier path dans un pack
+                const p    = ep.paths[0]
+                const pack = allPackTorrents.find((t: any) => t.infohash?.toLowerCase() === p.infohash?.toLowerCase())
+                if (pack) addTorrent(pack, p.file_index ?? null, p.path ?? null)
             }
         }
     }
@@ -148,8 +172,8 @@ async function autoDownloadRequest(req: SerieRequest): Promise<void> {
         for (const season of serieData.seasons ?? []) {
             if (!seasons.includes(season.season_number)) continue
             if ((season.torrents ?? []).length > 0) {
-                // Pack saison disponible → télécharger en bloc
-                for (const t of season.torrents) addTorrent(t)
+                // Premier pack saison disponible → télécharger en bloc
+                addTorrent(season.torrents[0])
             } else {
                 // Pas de pack → épisode par épisode avec file_index
                 addEpisodesByIndex(season.episodes ?? [])
@@ -157,15 +181,15 @@ async function autoDownloadRequest(req: SerieRequest): Promise<void> {
         }
     } else {
         // ── Toutes les saisons : intégrale en priorité ────────────
-        for (const t of serieData.torrents ?? []) addTorrent(t)
-        // Sinon packs saison
-        if (toDownload.length === 0) {
+        if ((serieData.torrents ?? []).length > 0) {
+            addTorrent(serieData.torrents[0])
+        } else if ((serieData.seasons ?? []).some((s: any) => s.torrents?.length > 0)) {
+            // Packs saison (premier par saison)
             for (const season of serieData.seasons ?? []) {
-                for (const t of season.torrents ?? []) addTorrent(t)
+                if (season.torrents?.length > 0) addTorrent(season.torrents[0])
             }
-        }
-        // Sinon épisode par épisode avec file_index
-        if (toDownload.length === 0) {
+        } else {
+            // Fallback : épisode par épisode avec file_index
             for (const season of serieData.seasons ?? []) {
                 addEpisodesByIndex(season.episodes ?? [])
             }
