@@ -36,13 +36,28 @@ router.post('/requests', (req, res) => {
         res.status(400).json({ error: 'serieId et serieName requis' }); return
     }
     try {
-        const request = upsertRequest(
+        let request = upsertRequest(
             req.user!.id,
             Number(serieId),
             String(serieName),
             Array.isArray(seasons)  ? seasons.map(Number)  : [],
             Array.isArray(episodes) ? episodes.map(Number) : [],
         )
+
+        // Auto-approbation + téléchargement si l'utilisateur est autorisé
+        if (request.status === 'pending') {
+            const { requestAutoDownloadUsers } = readSettings()
+            const userId = req.user!.id
+            const allowed = requestAutoDownloadUsers === 'all'
+                || (Array.isArray(requestAutoDownloadUsers) && requestAutoDownloadUsers.includes(userId))
+            if (allowed) {
+                request = approveRequest(request.id)
+                autoDownloadRequest(request).catch(err =>
+                    logger.warn('requests', `Auto-dl échoué pour "${request.serieName}" : ${err instanceof Error ? err.message : err}`)
+                )
+            }
+        }
+
         res.json(request)
     } catch (err) {
         res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur' })
