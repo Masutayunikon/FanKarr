@@ -250,9 +250,13 @@ const requestSeasons = ref<number[]>([]) // saisons cochées dans le modal
 const requestedSeasonNumbers = computed<number[]>(() => {
   if (!myRequest.value) return []
   const r = myRequest.value.requesters?.find((r: any) => r.userId === auth.userId)
-  // [] = toutes les saisons demandées → on retourne toutes les saisons de la série
-  if (r && r.seasons.length === 0) return data.value?.seasons?.map((s: any) => s.season_number) ?? []
-  return r?.seasons ?? []
+  if (!r) return []
+  // seasons=[] ET episodes=[] → toutes les saisons demandées
+  // seasons=[] mais episodes=[…] → seulement des épisodes ciblés, pas toute une saison
+  if (r.seasons.length === 0 && (r.episodes ?? []).length === 0) {
+    return data.value?.seasons?.map((s: any) => s.season_number) ?? []
+  }
+  return r.seasons
 })
 
 const requestedEpisodeIds = computed<number[]>(() => {
