@@ -92,8 +92,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useAuthStore }   from '@/stores/auth'
+import { ref, onMounted }        from 'vue'
+import { useAuthStore }          from '@/stores/auth'
+import { copyToClipboard }       from '@/composables/useClipboard'
 
 const auth = useAuthStore()
 
@@ -156,9 +157,11 @@ async function loadMyToken() {
 onMounted(loadMyToken)
 
 async function copyToken() {
-  await navigator.clipboard.writeText(myToken.value)
-  tokenCopied.value = true
-  setTimeout(() => { tokenCopied.value = false }, 2000)
+  try {
+    await copyToClipboard(myToken.value)
+    tokenCopied.value = true
+    setTimeout(() => { tokenCopied.value = false }, 2000)
+  } catch {}
 }
 
 async function regenerateToken() {

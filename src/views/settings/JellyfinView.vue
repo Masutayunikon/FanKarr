@@ -102,7 +102,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted }  from 'vue'
+import { copyToClipboard } from '@/composables/useClipboard'
 
 const jellyfinUrl        = ref('')
 const jellyfinAdminToken = ref('')
@@ -179,9 +180,11 @@ async function syncUsers() {
 }
 
 async function copyToken() {
-  await navigator.clipboard.writeText(myToken.value)
-  tokenCopied.value = true
-  setTimeout(() => { tokenCopied.value = false }, 2000)
+  try {
+    await copyToClipboard(myToken.value)
+    tokenCopied.value = true
+    setTimeout(() => { tokenCopied.value = false }, 2000)
+  } catch {}
 }
 
 

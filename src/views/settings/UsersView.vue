@@ -174,8 +174,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useAuthStore }   from '@/stores/auth'
+import { ref, onMounted }  from 'vue'
+import { useAuthStore }    from '@/stores/auth'
+import { copyToClipboard } from '@/composables/useClipboard'
 
 interface User {
   id       : string
@@ -305,9 +306,11 @@ function inviteUrl(code: string) {
 }
 
 async function copyInvite(code: string) {
-  await navigator.clipboard.writeText(inviteUrl(code))
-  copied.value = code
-  setTimeout(() => { copied.value = null }, 2000)
+  try {
+    await copyToClipboard(inviteUrl(code))
+    copied.value = code
+    setTimeout(() => { copied.value = null }, 2000)
+  } catch {}
 }
 
 // ── Helpers ───────────────────────────────────────────────────
