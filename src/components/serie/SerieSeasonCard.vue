@@ -117,6 +117,7 @@
               <button
                   v-for="(t, i) in season.torrents"
                   :key="i"
+                  :title="t.raw ?? t.torrent_name ?? ''"
                   class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-primary hover:bg-hover transition-colors"
                   :class="(isDownloaded(`season-${season.id}-${i}`) || isAlreadyQueued(t)) ? 'opacity-50 cursor-not-allowed' : ''"
                   :disabled="isDownloaded(`season-${season.id}-${i}`) || isAlreadyQueued(t)"
@@ -227,16 +228,17 @@
 
             <!-- Dropdown sélection torrent — mode demande -->
             <div v-if="requestMode && epOptionsOpen === ep.id && ep.torrents && ep.torrents.length > 1"
-                 class="absolute right-0 bottom-full mb-1 bg-card border border-border rounded-xl p-1 z-20 w-64 shadow-xl flex flex-col gap-0.5">
+                 class="absolute right-0 bottom-full mb-1 bg-card border border-border rounded-xl p-1 z-20 w-72 shadow-xl flex flex-col gap-0.5">
               <p class="px-3 pt-1.5 pb-0.5 text-[10px] text-muted font-medium uppercase tracking-wide">Choisir le torrent</p>
               <button
                   v-for="(t, i) in ep.torrents"
                   :key="i"
-                  class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-primary hover:bg-hover transition-colors text-left"
+                  :title="t.raw ?? t.torrent_name ?? ''"
+                  class="flex items-start gap-2 px-3 py-2 rounded-lg text-xs text-primary hover:bg-hover transition-colors text-left"
                   @click="emit('requestEpisode', season.season_number, ep.id, t); epOptionsOpen = null"
               >
-                <component :is="requestIcon" class="shrink-0" />
-                <span class="truncate">{{ groupLabels(ep.torrents)[i] }}</span>
+                <component :is="requestIcon" class="shrink-0 mt-0.5" />
+                <span class="whitespace-normal break-words leading-relaxed">{{ t.raw ?? t.torrent_name ?? `Option ${i + 1}` }}</span>
               </button>
             </div>
 
@@ -246,6 +248,7 @@
               <button
                   v-for="(t, i) in ep.torrents"
                   :key="i"
+                  :title="t.raw ?? t.torrent_name ?? ''"
                   class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-primary hover:bg-hover transition-colors"
                   :class="(isDownloaded(`ep-${ep.id}-${i}`) || isAlreadyQueued(t)) ? 'opacity-50 cursor-not-allowed' : ''"
                   :disabled="isDownloaded(`ep-${ep.id}-${i}`) || isAlreadyQueued(t)"
