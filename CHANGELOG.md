@@ -1,5 +1,31 @@
 # Changelog
 
+## [3.16.0](https://github.com/Masutayunikon/FanKarr/compare/v3.15.0...v3.16.0) (2026-05-11)
+
+
+### Features
+
+* **log:** + de logs sur les erreurs d'import (chemin tenté et fichier du torrent chercher) ([cb28baf](https://github.com/Masutayunikon/FanKarr/commit/cb28baf25d7f24148ed7e13a0a4ea46f085b2ba4))
+* **rss:** ajout du rss sur les series ([086ca30](https://github.com/Masutayunikon/FanKarr/commit/086ca3053f5e563d8c3c2bb82379ff45d77a5499))
+* **UI/UX:** affichage de la serie et des episodes sur la page download du torrent ([cb28baf](https://github.com/Masutayunikon/FanKarr/commit/cb28baf25d7f24148ed7e13a0a4ea46f085b2ba4))
+
+
+### Bug Fixes
+
+* **client:** fix de plusieurs torrent et refonte du tableau de compatibilité ([086ca30](https://github.com/Masutayunikon/FanKarr/commit/086ca3053f5e563d8c3c2bb82379ff45d77a5499))
+* **docker:** ajout du fichier de versions pour la navbar dans docker lors du build ([cb28baf](https://github.com/Masutayunikon/FanKarr/commit/cb28baf25d7f24148ed7e13a0a4ea46f085b2ba4))
+* **download:** le telechargement de saison ne propose plus tout les torrents des episodes de la saisons si la serie n'a que des torrent par episodes ([c9040ea](https://github.com/Masutayunikon/FanKarr/commit/c9040ea68c52e65a656824ccfd101a04a2251edd))
+* **import:** les episodes avec une association changé n'apparait plus sur la page serie ([8972679](https://github.com/Masutayunikon/FanKarr/commit/8972679e2588b6e5cd3e9fd53b0223e3d1a6e56c))
+* **import:** les imports se font maintenant sur les series sans torrents qui n'avais pas de fichier de catalogue depuis le scraper ([cb28baf](https://github.com/Masutayunikon/FanKarr/commit/cb28baf25d7f24148ed7e13a0a4ea46f085b2ba4))
+* **import:** on ne peux plus importer plusieurs fichiers sur le meme episodes, celui deja importé ce retire de l'importation dans le modal ([ad829c0](https://github.com/Masutayunikon/FanKarr/commit/ad829c0a99b29ade7eba4673b1218c0ab768a2d7))
+* **import:** si on change un fichier son association alors il est bien retirer de l'import ([ad829c0](https://github.com/Masutayunikon/FanKarr/commit/ad829c0a99b29ade7eba4673b1218c0ab768a2d7))
+* les torrents n'utilise plus la pause ([cb28baf](https://github.com/Masutayunikon/FanKarr/commit/cb28baf25d7f24148ed7e13a0a4ea46f085b2ba4))
+* **rss:** le rss est maintenant sur les ajout apres l'activation de la surveillance ([a5e2aa0](https://github.com/Masutayunikon/FanKarr/commit/a5e2aa0da1b3af445a102d1acd77a3a08017689a))
+* **UI/UX:** la bar de progression de saison a été retirer et les bars de progression s'affiche meme si le fichier est à 0% dans le torrent ([f07b608](https://github.com/Masutayunikon/FanKarr/commit/f07b608288afd4b01079367b428123b72182b714))
+* **UI/UX:** retour sur le modal d'import et refresh ([a5e2aa0](https://github.com/Masutayunikon/FanKarr/commit/a5e2aa0da1b3af445a102d1acd77a3a08017689a))
+* **UI/UX:** retour visuel lors de l'import d'une serie/episode ([cb28baf](https://github.com/Masutayunikon/FanKarr/commit/cb28baf25d7f24148ed7e13a0a4ea46f085b2ba4))
+* utilisation de URLSearchParams pour les appels autre que pour le add du fichier .torrent ([42c9795](https://github.com/Masutayunikon/FanKarr/commit/42c979536b51e8ed263b23559b7c4a2d4d2b2902))
+
 ## [3.15.0](https://github.com/Masutayunikon/FanKarr/compare/v3.14.6...v3.15.0) (2026-05-10)
 
 
