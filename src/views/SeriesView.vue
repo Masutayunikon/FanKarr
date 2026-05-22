@@ -88,8 +88,9 @@
 import { ref, computed, onMounted, onUnmounted, onActivated } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Tv } from 'lucide-vue-next'
-import { useSeriesStore } from '@/stores/series'
+import { useSeriesStore }    from '@/stores/series'
 import { useDownloadsStore } from '@/stores/downloads'
+import { useAuthStore }      from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
 import { usePosterSize } from '@/composables/usePosterSize'
 import SeriesToolbar from '@/components/series/SeriesToolbar.vue'
@@ -98,6 +99,7 @@ defineOptions({ name: 'SeriesView' })
 
 const store     = useSeriesStore()
 const dlStore   = useDownloadsStore()
+const auth      = useAuthStore()
 const { add: toast } = useToast()
 const { current: posterSize, sizes: posterSizes } = usePosterSize()
 
@@ -198,17 +200,19 @@ async function fetchOrganizeNotifs() {
 
 onMounted(async () => {
   if (store.series.length === 0) await store.fetchSeries()
-  dlStore.refresh()
-  fetchOrganizeNotifs()
-  dlInterval = setInterval(() => {
+  if (auth.isAdmin) {
     dlStore.refresh()
     fetchOrganizeNotifs()
-  }, 10000)
+    dlInterval = setInterval(() => {
+      dlStore.refresh()
+      fetchOrganizeNotifs()
+    }, 10000)
+  }
 })
 
 onActivated(async () => {
   store.fetchSeries()
-  dlStore.refresh()
+  if (auth.isAdmin) dlStore.refresh()
 })
 
 onUnmounted(() => {

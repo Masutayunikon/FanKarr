@@ -94,18 +94,16 @@ export function upsertRequest(
         const idx = existing.requesters.findIndex(r => r.userId === userId)
         if (idx >= 0) {
             const r = existing.requesters[idx]
-            // Fusionner les saisons
-            if (seasons.length === 0 && episodes.length === 0) {
-                r.seasons  = []  // "toutes" — efface toute granularité
+            // "Tout" = seasons=[] ET episodes=[] (aucune granularité)
+            const newIsAll = seasons.length === 0 && episodes.length === 0
+            const curIsAll = r.seasons.length === 0 && (r.episodes ?? []).length === 0
+            if (newIsAll || curIsAll) {
+                // Dès que l'une des deux est "toutes les saisons" → effacer la granularité
+                r.seasons  = []
                 r.episodes = []
             } else {
-                if (seasons.length === 0 || r.seasons.length === 0) {
-                    r.seasons = []  // l'une des deux est "toutes" → toutes
-                } else {
-                    r.seasons = [...new Set([...r.seasons, ...seasons])].sort((a, b) => a - b)
-                }
-                // Fusionner les épisodes (union simple)
-                r.episodes = [...new Set([...(r.episodes ?? []), ...episodes])].sort((a, b) => a - b)
+                r.seasons  = [...new Set([...r.seasons,           ...seasons ])].sort((a, b) => a - b)
+                r.episodes = [...new Set([...(r.episodes ?? []), ...episodes ])].sort((a, b) => a - b)
             }
             r.requestedAt = now
         } else {

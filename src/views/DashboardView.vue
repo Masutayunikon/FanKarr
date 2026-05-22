@@ -2,7 +2,7 @@
   <div class="px-8 py-8 max-w-4xl">
 
     <!-- Stats -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+    <div class="grid gap-3 mb-6" :class="auth.isAdmin ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-2'">
       <div class="settings-card flex flex-col gap-1">
         <span class="text-xs text-muted">Catalogue</span>
         <span class="text-2xl font-semibold text-primary">{{ stats.catalogue }}</span>
@@ -13,19 +13,19 @@
         <span class="text-2xl font-semibold text-green-500">{{ stats.imported }}</span>
         <span class="text-xs text-muted">{{ stats.catalogue > 0 ? Math.round(stats.imported / stats.catalogue * 100) : 0 }}% du catalogue</span>
       </div>
-      <div class="settings-card flex flex-col gap-1">
+      <div v-if="auth.isAdmin" class="settings-card flex flex-col gap-1">
         <span class="text-xs text-muted">En cours</span>
         <span class="text-2xl font-semibold text-accent">{{ stats.downloading }}</span>
         <span class="text-xs text-muted">téléchargements</span>
       </div>
-      <div class="settings-card flex flex-col gap-1">
+      <div v-if="auth.isAdmin" class="settings-card flex flex-col gap-1">
         <span class="text-xs text-muted">Erreurs</span>
         <span class="text-2xl font-semibold" :class="stats.errors > 0 ? 'text-red-400' : 'text-muted'">{{ stats.errors }}</span>
         <span class="text-xs text-muted">{{ stats.errors === 0 ? 'aucune erreur' : 'à corriger' }}</span>
       </div>
     </div>
 
-    <div class="grid md:grid-cols-2 gap-4 mb-6">
+    <div v-if="auth.isAdmin" class="grid md:grid-cols-2 gap-4 mb-6">
 
       <!-- Téléchargements actifs -->
       <div class="settings-card flex flex-col gap-3">
@@ -188,6 +188,7 @@ const loadingRequests = ref(true)
 let interval: ReturnType<typeof setInterval> | null = null
 
 async function fetchSettings() {
+  if (!auth.isAdmin) return
   const res = await fetch('/api/settings', { credentials: 'include' })
   if (res.ok) {
     const s = await res.json()
@@ -203,10 +204,9 @@ async function fetchDebug() {
 
 async function fetchStats() {
   try {
-    const [statusRes, seriesRes, downloadsRes] = await Promise.all([
+    const [statusRes, seriesRes] = await Promise.all([
       fetch('/api/torrents/status', { credentials: 'include' }),
       fetch('/api/series',          { credentials: 'include' }),
-      fetch('/api/downloads',       { credentials: 'include' }),
     ])
     if (statusRes.ok) { const s = await statusRes.json(); stats.value.catalogue = s.count ?? 0 }
     if (seriesRes.ok) {
@@ -214,15 +214,20 @@ async function fetchStats() {
       const list = Array.isArray(s) ? s : (s.series ?? [])
       stats.value.imported = list.filter((s: any) => s.download_state === 'complete').length
     }
-    if (downloadsRes.ok) {
-      const torrents = await downloadsRes.json()
-      stats.value.downloading = torrents.filter((t: any) => t.state === 'downloading').length
-      stats.value.errors      = torrents.filter((t: any) => t.state === 'error').length
+    // Stats téléchargements : admin uniquement
+    if (auth.isAdmin) {
+      const downloadsRes = await fetch('/api/downloads', { credentials: 'include' })
+      if (downloadsRes.ok) {
+        const torrents = await downloadsRes.json()
+        stats.value.downloading = torrents.filter((t: any) => t.state === 'downloading').length
+        stats.value.errors      = torrents.filter((t: any) => t.state === 'error').length
+      }
     }
   } catch {}
 }
 
 async function fetchTorrents() {
+  if (!auth.isAdmin) { loadingTorrents.value = false; return }
   const isFirst = loadingTorrents.value
   try {
     const res = await fetch('/api/downloads', { credentials: 'include' })
@@ -236,6 +241,7 @@ async function fetchTorrents() {
 }
 
 async function fetchNotifs() {
+  if (!auth.isAdmin) { loadingNotifs.value = false; return }
   loadingNotifs.value = true
   try {
     const res = await fetch('/api/organize/recent', { credentials: 'include' })
