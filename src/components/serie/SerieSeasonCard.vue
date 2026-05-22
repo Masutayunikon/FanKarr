@@ -206,12 +206,13 @@
             <button
                 v-if="requestMode"
                 class="w-8 h-8 rounded-lg border flex items-center justify-center transition-colors"
-                :class="(requestedSeasons?.includes(season.season_number))
+                :class="isEpisodeRequested(ep.id)
                   ? 'border-blue-500/30 text-blue-400 bg-blue-500/10 cursor-default'
                   : 'border-border text-muted hover:border-accent hover:text-accent cursor-pointer'"
-                @click="!requestedSeasons?.includes(season.season_number) && emit('requestEpisode', season.season_number, ep.id)"
+                :title="isEpisodeRequested(ep.id) ? 'Déjà demandé' : 'Demander cet épisode'"
+                @click="!isEpisodeRequested(ep.id) && emit('requestEpisode', season.season_number, ep.id)"
             >
-              <component :is="requestedSeasons?.includes(season.season_number) ? checkIcon : requestIcon" />
+              <component :is="isEpisodeRequested(ep.id) ? checkIcon : requestIcon" />
             </button>
             <!-- Mode téléchargement (admin) -->
             <button
@@ -347,6 +348,7 @@ const props = defineProps<{
   nfoSupport        ?: boolean
   requestMode       ?: boolean   // true = boutons demande au lieu de téléchargement
   requestedSeasons  ?: number[]  // saisons déjà demandées par cet user pour cette série
+  requestedEpisodes ?: number[]  // IDs d'épisodes déjà demandés par cet user pour cette série
 }>()
 
 const emit = defineEmits<{
@@ -368,6 +370,11 @@ const requestIcon = h('svg', { viewBox: '0 0 24 24', stroke: 'currentColor', 'st
 const isSeasonRequested = computed(() =>
   props.requestedSeasons?.includes(props.season.season_number) ?? false
 )
+
+/** Un épisode est "demandé" si sa saison l'est, ou si son ID est dans requestedEpisodes */
+function isEpisodeRequested(episodeId: number): boolean {
+  return isSeasonRequested.value || (props.requestedEpisodes?.includes(episodeId) ?? false)
+}
 
 const epOptionsOpen      = ref<number | null>(null)
 const plotOpen           = ref<number | null>(null)

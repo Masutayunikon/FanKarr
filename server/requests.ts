@@ -15,6 +15,7 @@ export interface Requester {
     userId     : string
     username   : string
     seasons    : number[]  // numéros de saison ; [] = toutes les saisons dispo
+    episodes   : number[]  // IDs d'épisodes spécifiques ; [] = pas d'épisode ciblé
     requestedAt: string
 }
 
@@ -47,9 +48,16 @@ function writeRequests(requests: SerieRequest[]): void {
 
 /** Union des saisons demandées sur tous les requesters ([] = toutes) */
 export function mergedSeasons(req: SerieRequest): number[] {
-    if (req.requesters.some(r => r.seasons.length === 0)) return []
+    if (req.requesters.some(r => r.seasons.length === 0 && r.episodes.length === 0)) return []
     const all = new Set<number>()
     req.requesters.forEach(r => r.seasons.forEach(s => all.add(s)))
+    return [...all].sort((a, b) => a - b)
+}
+
+/** Union des IDs d'épisodes spécifiques sur tous les requesters */
+export function mergedEpisodes(req: SerieRequest): number[] {
+    const all = new Set<number>()
+    req.requesters.forEach(r => (r.episodes ?? []).forEach(e => all.add(e)))
     return [...all].sort((a, b) => a - b)
 }
 
@@ -61,10 +69,11 @@ export function mergedSeasons(req: SerieRequest): number[] {
  * - Sinon → crée une nouvelle demande
  */
 export function upsertRequest(
-    userId  : string,
-    serieId : number,
+    userId   : string,
+    serieId  : number,
     serieName: string,
-    seasons : number[],  // [] = toutes les saisons
+    seasons  : number[],  // [] = toutes les saisons
+    episodes : number[] = [],  // IDs d'épisodes spécifiques
 ): SerieRequest {
     const user = findById(userId)
     if (!user) throw new Error('Utilisateur introuvable')
@@ -84,16 +93,23 @@ export function upsertRequest(
         // Mettre à jour ou ajouter ce requester dans la demande existante
         const idx = existing.requesters.findIndex(r => r.userId === userId)
         if (idx >= 0) {
-            // Mettre à jour les saisons (union)
-            if (seasons.length === 0 || existing.requesters[idx].seasons.length === 0) {
-                existing.requesters[idx].seasons = []  // l'une ou l'autre est "toutes" → toutes
+            const r = existing.requesters[idx]
+            // Fusionner les saisons
+            if (seasons.length === 0 && episodes.length === 0) {
+                r.seasons  = []  // "toutes" — efface toute granularité
+                r.episodes = []
             } else {
-                const merged = new Set([...existing.requesters[idx].seasons, ...seasons])
-                existing.requesters[idx].seasons = [...merged].sort((a, b) => a - b)
+                if (seasons.length === 0 || r.seasons.length === 0) {
+                    r.seasons = []  // l'une des deux est "toutes" → toutes
+                } else {
+                    r.seasons = [...new Set([...r.seasons, ...seasons])].sort((a, b) => a - b)
+                }
+                // Fusionner les épisodes (union simple)
+                r.episodes = [...new Set([...(r.episodes ?? []), ...episodes])].sort((a, b) => a - b)
             }
-            existing.requesters[idx].requestedAt = now
+            r.requestedAt = now
         } else {
-            existing.requesters.push({ userId, username: user.username, seasons, requestedAt: now })
+            existing.requesters.push({ userId, username: user.username, seasons, episodes, requestedAt: now })
         }
         existing.updatedAt = now
         writeRequests(requests)
@@ -106,7 +122,7 @@ export function upsertRequest(
         id        : crypto.randomUUID(),
         serieId,
         serieName,
-        requesters: [{ userId, username: user.username, seasons, requestedAt: now }],
+        requesters: [{ userId, username: user.username, seasons, episodes, requestedAt: now }],
         status    : 'pending',
         createdAt : now,
         updatedAt : now,

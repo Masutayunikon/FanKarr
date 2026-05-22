@@ -70,12 +70,14 @@
                 {{ statusLabel(req.status) }}
               </span>
             </div>
-            <!-- Saisons fusionnées -->
+            <!-- Saisons / épisodes fusionnés -->
             <p class="text-xs text-muted mt-1">
-              <template v-if="mergedSeasons(req).length === 0">Toutes les saisons</template>
-              <template v-else>
-                Saisons : {{ mergedSeasons(req).map(s => s === 0 ? 'SP' : `S${s}`).join(', ') }}
+              <template v-if="mergedEpisodes(req).length > 0">
+                {{ mergedEpisodes(req).length }} épisode{{ mergedEpisodes(req).length > 1 ? 's' : '' }} spécifique{{ mergedEpisodes(req).length > 1 ? 's' : '' }}
+                <template v-if="mergedSeasons(req).length > 0"> · Saisons : {{ mergedSeasons(req).map((s: number) => s === 0 ? 'SP' : `S${s}`).join(', ') }}</template>
               </template>
+              <template v-else-if="mergedSeasons(req).length === 0">Toutes les saisons</template>
+              <template v-else>Saisons : {{ mergedSeasons(req).map((s: number) => s === 0 ? 'SP' : `S${s}`).join(', ') }}</template>
             </p>
             <!-- Message de refus -->
             <p v-if="req.rejectionMessage" class="text-xs text-red-400 mt-1">
@@ -112,7 +114,10 @@
               {{ r.username[0].toUpperCase() }}
             </span>
             <span class="text-muted">{{ r.username }}</span>
-            <span v-if="r.seasons.length > 0" class="text-muted/60">
+            <span v-if="r.episodes?.length > 0" class="text-muted/60">
+              ({{ r.episodes.length }} ep.)
+            </span>
+            <span v-else-if="r.seasons.length > 0" class="text-muted/60">
               ({{ r.seasons.map((s: number) => s === 0 ? 'SP' : `S${s}`).join(', ') }})
             </span>
           </div>
@@ -149,7 +154,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 
-interface Requester { userId: string; username: string; seasons: number[]; requestedAt: string }
+interface Requester { userId: string; username: string; seasons: number[]; episodes: number[]; requestedAt: string }
 interface SerieRequest {
   id: string; serieId: number; serieName: string
   requesters: Requester[]; status: string
@@ -230,9 +235,15 @@ async function confirmReject() {
 
 // ── Helpers ───────────────────────────────────────────────────
 function mergedSeasons(req: SerieRequest): number[] {
-  if (req.requesters.some(r => r.seasons.length === 0)) return []
+  if (req.requesters.some(r => r.seasons.length === 0 && (r.episodes?.length ?? 0) === 0)) return []
   const all = new Set<number>()
   req.requesters.forEach(r => r.seasons.forEach(s => all.add(s)))
+  return [...all].sort((a, b) => a - b)
+}
+
+function mergedEpisodes(req: SerieRequest): number[] {
+  const all = new Set<number>()
+  req.requesters.forEach(r => (r.episodes ?? []).forEach(e => all.add(e)))
   return [...all].sort((a, b) => a - b)
 }
 

@@ -139,6 +139,7 @@
             :nfo-support="nfoSupport"
             :request-mode="!auth.isAdmin"
             :requested-seasons="requestedSeasonNumbers"
+            :requested-episodes="requestedEpisodeIds"
             @toggle="toggleSeason"
             @download="(key, url, magnet, fi, fp, ih) => download(key, url, magnet, fi, fp, ih)"
             @download-season="(s, h) => downloadSeason(s, h)"
@@ -248,11 +249,17 @@ const requestSeasons = ref<number[]>([]) // saisons cochées dans le modal
 
 const requestedSeasonNumbers = computed<number[]>(() => {
   if (!myRequest.value) return []
-  // Trouver l'entrée de l'utilisateur connecté dans la demande fusionnée
   const r = myRequest.value.requesters?.find((r: any) => r.userId === auth.userId)
   // [] = toutes les saisons demandées → on retourne toutes les saisons de la série
   if (r && r.seasons.length === 0) return data.value?.seasons?.map((s: any) => s.season_number) ?? []
   return r?.seasons ?? []
+})
+
+const requestedEpisodeIds = computed<number[]>(() => {
+  if (!myRequest.value) return []
+  const r = myRequest.value.requesters?.find((r: any) => r.userId === auth.userId)
+  if (!r) return []
+  return r.episodes ?? []
 })
 
 async function fetchMyRequest() {
@@ -282,8 +289,28 @@ function handleRequestSeason(seasonNumber: number) {
   openRequestModal(seasonNumber)
 }
 
-function handleRequestEpisode(seasonNumber: number, _episodeId: number) {
-  openRequestModal(seasonNumber)
+async function handleRequestEpisode(_seasonNumber: number, episodeId: number) {
+  if (!data.value) return
+  try {
+    const res = await fetch('/api/requests', {
+      method : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        serieId  : Number(route.params.id),
+        serieName: data.value.serie.title,
+        seasons  : [],
+        episodes : [episodeId],
+      }),
+    })
+    if (res.ok) {
+      myRequest.value = await res.json()
+      toast('Épisode demandé ✓', 'success')
+    } else {
+      const d = await res.json()
+      toast(d.error ?? 'Erreur', 'error')
+    }
+  } catch { toast('Impossible de contacter le serveur', 'error') }
 }
 
 async function submitRequest() {
@@ -701,9 +728,13 @@ async function unimportEpisode(ep: any, _season: any, deleteFile: boolean) {
 const closeMenus = () => { downloadMenuOpen.value = false }
 
 onMounted(() => {
-  load(); fetchSettings(); fetchOrganized(); fetchActiveDownloads(); fetchRssSync()
-  if (!auth.isAdmin) fetchMyRequest()
-  pollTimer = setInterval(fetchActiveDownloads, 5000)
+  load()
+  if (auth.isAdmin) {
+    fetchSettings(); fetchOrganized(); fetchActiveDownloads(); fetchRssSync()
+    pollTimer = setInterval(fetchActiveDownloads, 5000)
+  } else {
+    fetchMyRequest()
+  }
   document.addEventListener('click', closeMenus)
 })
 onUnmounted(() => {
