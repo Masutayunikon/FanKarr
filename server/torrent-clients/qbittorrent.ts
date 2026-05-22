@@ -6,6 +6,17 @@
 import type { TorrentClientDriver, TorrentInfo, DownloadOptions } from './index.js'
 import { logger } from '../logger.js'
 
+// qBittorrent répond normalement "Ok." mais certains setups (reverse proxy, etc.)
+// peuvent wrapper la réponse en JSON — on accepte les deux
+function isQbAddSuccess(text: string): boolean {
+    if (text.trim() === 'Ok.') return true
+    try {
+        const json = JSON.parse(text)
+        if (typeof json?.success_count === 'number') return json.success_count > 0
+    } catch {}
+    return false
+}
+
 function mapState(state: string): TorrentInfo['state'] {
     if (['downloading', 'metaDL', 'queuedDL', 'stalledDL', 'forcedDL'].includes(state)) return 'downloading'
     if (['uploading', 'queuedUP', 'stalledUP', 'forcedUP'].includes(state))              return 'seeding'
@@ -37,6 +48,7 @@ async function qbLogin(config: Record<string, string | number>): Promise<string>
 
     const text = await res.text()
     if (!res.ok) throw new Error(`Login échoué : ${text.trim() || res.status}`)
+    if (text.trim() === 'Fails.') throw new Error('Identifiants incorrects (vérifiez le nom d\'utilisateur et le mot de passe)')
 
     const cookie = (res.headers.get('set-cookie') ?? '').split(';')[0].trim()
     if (!cookie) throw new Error('Cookie de session introuvable')
@@ -165,6 +177,7 @@ const QB: TorrentClientDriver = {
             })
             if (!res.ok) return { online: false }
             const version = (await res.text()).trim()
+            if (version.startsWith('<')) throw new Error('Réponse HTML reçue — clé API invalide ou non supportée par cette version de qBittorrent')
             logger.debug('qbittorrent', `Healthcheck OK — version ${version}`)
             return { online: true, version }
         } catch (err) {
@@ -296,7 +309,7 @@ const QB: TorrentClientDriver = {
                 res = await fetch(`${config.url}/api/v2/torrents/add`, { method: 'POST', body: form, headers: authH })
             }
             const text = await res.text()
-            if (text !== 'Ok.') throw new Error(`Ajout échoué : ${text}`)
+            if (!isQbAddSuccess(text)) throw new Error(`Ajout échoué : ${text}`)
 
             if (hash) {
                 logger.info('qbittorrent', `Torrent ajouté — sélection fichier ${options.file_index} en attente des métadonnées`)
@@ -339,7 +352,7 @@ const QB: TorrentClientDriver = {
             headers: { ...authH, 'Content-Type': 'application/x-www-form-urlencoded' },
         })
         const text = await res.text()
-        if (text !== 'Ok.') throw new Error(`Ajout échoué : ${text}`)
+        if (!isQbAddSuccess(text)) throw new Error(`Ajout échoué : ${text}`)
         logger.info('qbittorrent', `Torrent ajouté (catégorie: ${config.category ?? 'aucune'}${config.savePath ? `, dossier: ${config.savePath}` : ''})`)
     },
 

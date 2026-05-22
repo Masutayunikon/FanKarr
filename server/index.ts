@@ -12,6 +12,7 @@ import synologyDsDriver   from './torrent-clients/synology-ds.js'
 import utorrentDriver     from './torrent-clients/utorrent.js'
 import rtorrentDriver     from './torrent-clients/rtorrent.js'
 import realDebridDriver   from './torrent-clients/real-debrid.js'
+import allDebridDriver    from './torrent-clients/alldebrid.js'
 import { autoOrganizeAll, scanMediaPath, syncFilenameChanges, migrateOrganizedEpisodeIds } from './organize.js'
 import { logger } from './logger.js'
 import { DATA_DIR, BASE_DIR } from './config.js'
@@ -37,6 +38,7 @@ registerDriver(synologyDsDriver)
 registerDriver(utorrentDriver)
 registerDriver(rtorrentDriver)
 registerDriver(realDebridDriver)
+registerDriver(allDebridDriver)
 
 const app  = express()
 const PORT = Number(process.env.PORT) || 9898
@@ -76,7 +78,9 @@ if (fs.existsSync(PUBLIC_PATH)) {
 const server = http.createServer({ maxHeaderSize: 32768 }, app)
 
 server.listen(PORT, async () => {
-    logger.info('api', `Serveur démarré sur le port ${PORT}`)
+    const url = `http://localhost:${PORT}`
+    console.log(`\n  FanKarr  →  \x1b]8;;${url}\x1b\\${url}\x1b]8;;\x1b\\\n`)
+    logger.info('api', `Serveur démarré — ${url}`)
     try {
         const available = await readAvailable()
         logger.info('api', `Cache GitHub initialisé — ${available.length} séries disponibles`)

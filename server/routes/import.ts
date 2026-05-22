@@ -89,6 +89,22 @@ router.post('/manual-import', requireAuth, async (req, res) => {
             if (file_path !== destPath) {
                 const serieRootPath  = path.join(mediaPath, serieTitle)
                 const isInSeriePath  = file_path.startsWith(serieRootPath + path.sep) || file_path.startsWith(serieRootPath + '/')
+                // Si une ancienne version de cet épisode existe à la destination (réassignation),
+                // la supprimer avant le rename pour éviter un état incohérent.
+                if (isInSeriePath && fs.existsSync(destPath) && destPath !== file_path) {
+                    fs.unlinkSync(destPath)
+                    logger.info('api', `Import manuel (réassignation) : suppression ancien fichier "${destFilename}"`)
+                    // Nettoyer toute entrée organized qui pointait sur ce fichier supprimé
+                    for (const [h, eps] of Object.entries(organized)) {
+                        for (const [epId, entry] of Object.entries(eps)) {
+                            if (entry?.dest_path === destPath) {
+                                delete (organized[h] as any)[epId]
+                                logger.info('api', `Import manuel : suppression entrée stale ep ${epId} (ancien fichier écrasé)`)
+                            }
+                        }
+                        if (Object.keys(organized[h]).length === 0) delete organized[h]
+                    }
+                }
                 if (isInSeriePath && !fs.existsSync(destPath)) {
                     fs.renameSync(file_path, destPath)
                     logger.info('api', `Import manuel (rename) : "${srcFilename}" → "${destFilename}"`)
