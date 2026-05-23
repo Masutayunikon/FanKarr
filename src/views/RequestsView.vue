@@ -8,6 +8,13 @@
           {{ auth.isAdmin ? 'Toutes les demandes des utilisateurs.' : 'Vos demandes de séries.' }}
         </p>
       </div>
+      <!-- Actions admin -->
+      <div v-if="auth.isAdmin" class="flex items-center gap-2">
+        <button
+            @click="removeAll"
+            class="px-3 py-1.5 rounded-lg text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 transition"
+        >Tout supprimer</button>
+      </div>
       <!-- Filtres statuts -->
       <div class="flex items-center gap-1">
         <button
@@ -217,6 +224,14 @@ async function complete(req: SerieRequest) {
 async function remove(req: SerieRequest) {
   if (!confirm(`Supprimer la demande pour "${req.serieName}" ?`)) return
   await fetch(`/api/requests/${req.id}`, { method: 'DELETE', credentials: 'include' })
+  load()
+}
+
+async function removeAll() {
+  const n = requests.value.length
+  if (!n) return
+  if (!confirm(`Supprimer les ${n} demande${n > 1 ? 's' : ''} ?`)) return
+  await fetch('/api/requests', { method: 'DELETE', credentials: 'include' })
   load()
 }
 

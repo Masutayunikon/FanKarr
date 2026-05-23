@@ -10,6 +10,7 @@ import { readSerieData, loadEnrichedSeriesData } from '../lib/github-cache.js'
 import { resolveEpNaming, computeExpectedName } from '../lib/serie-helpers.js'
 import { GITLAB_API_NFO, GITLAB_RAW_NFO } from '../lib/nfo.js'
 import { dispatchRemove } from '../torrent-clients/index.js'
+import { readRequests, deleteRequest } from '../requests.js'
 
 const router = Router()
 
@@ -280,6 +281,14 @@ router.delete('/organized/:serieId', requireAuth, async (req, res) => {
             dispatchRemove(hash, false).catch(err => logger.warn('api', `Impossible de retirer le torrent ${hash.slice(0, 8)}… du client : ${err instanceof Error ? err.message : err}`))
         }
     }
+    // Supprimer les demandes "disponible" liées à cette série
+    const completedRequests = readRequests().filter(r => r.serieId === Number(serieId) && r.status === 'completed')
+    for (const r of completedRequests) {
+        try { deleteRequest(r.id) } catch {}
+    }
+    if (completedRequests.length > 0)
+        logger.info('api', `Désimport série ${serieId} — ${completedRequests.length} demande(s) "disponible" supprimée(s)`)
+
     logger.info('api', `Désimport série ${serieId} — ${removed} épisode(s) retirés${deleteFile && emptyHashes.length ? `, ${emptyHashes.length} torrent(s) retirés du client` : ''}`)
     res.json({ ok: true, removed, errors })
 })

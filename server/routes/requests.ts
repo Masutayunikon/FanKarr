@@ -208,6 +208,16 @@ export async function autoDownloadRequest(req: SerieRequest, override?: { season
     logger.info('requests', `Auto-dl "${req.serieName}" — ${sent}/${toDownload.length} torrent(s) envoyé(s)`)
 }
 
+// DELETE /api/requests — admin : supprimer toutes les demandes
+router.delete('/requests', requireAdmin, (_req, res) => {
+    const all = readRequests()
+    for (const r of all) {
+        try { deleteRequest(r.id) } catch {}
+    }
+    logger.info('requests', `Toutes les demandes supprimées (${all.length})`)
+    res.json({ deleted: all.length })
+})
+
 // DELETE /api/requests/:id — admin seulement
 router.delete('/requests/:id', requireAdmin, (req, res) => {
     try {
