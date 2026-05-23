@@ -152,6 +152,28 @@ server.listen(PORT, async () => {
         }
     } catch {}
 
+    // Migration organized.json : backfill dest_dir manquant sur les anciennes entrées
+    try {
+        if (fs.existsSync(ORGANIZED_PATH)) {
+            const raw: Record<string, Record<string, any>> = JSON.parse(fs.readFileSync(ORGANIZED_PATH, 'utf-8'))
+            let patched = 0
+            for (const episodes of Object.values(raw)) {
+                for (const entry of Object.values(episodes)) {
+                    if (!entry.dest_dir && entry.dest_path) {
+                        entry.dest_dir = path.dirname(entry.dest_path)
+                        patched++
+                    }
+                }
+            }
+            if (patched > 0) {
+                fs.writeFileSync(ORGANIZED_PATH, JSON.stringify(raw, null, 2))
+                logger.info('api', `Migration organized.json : ${patched} entrée(s) backfillées avec dest_dir`)
+            }
+        }
+    } catch (err) {
+        logger.warn('api', `Migration dest_dir échouée : ${err instanceof Error ? err.message : err}`)
+    }
+
     loadEnrichedSeriesData()
         .then(async seriesData => {
             await migrateOrganizedEpisodeIds(ORGANIZED_PATH, seriesData)

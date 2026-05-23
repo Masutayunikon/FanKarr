@@ -262,10 +262,15 @@ router.delete('/organized/:serieId', requireAuth, async (req, res) => {
     let removed = 0
     const errors: string[] = []
     const emptyHashes: string[] = []
+    let serieFolder: string | null = null
     for (const [hash, episodes] of Object.entries(organized)) {
         for (const epId of Object.keys(episodes)) {
             if (!episodeIds.has(epId)) continue
             const entry = episodes[epId]
+            if (!serieFolder && entry) {
+                const dir = entry.dest_dir ?? path.dirname(entry.dest_path)
+                serieFolder = path.dirname(dir)
+            }
             if (deleteFile && entry?.dest_path && fs.existsSync(entry.dest_path)) {
                 try { fs.unlinkSync(entry.dest_path) } catch { errors.push(entry.dest_path) }
             }
@@ -279,6 +284,15 @@ router.delete('/organized/:serieId', requireAuth, async (req, res) => {
         for (const hash of emptyHashes) {
             if (hash === 'manual') continue
             dispatchRemove(hash, false).catch(err => logger.warn('api', `Impossible de retirer le torrent ${hash.slice(0, 8)}… du client : ${err instanceof Error ? err.message : err}`))
+        }
+        // Supprimer le dossier de la série s'il existe encore
+        if (serieFolder && fs.existsSync(serieFolder)) {
+            try {
+                fs.rmSync(serieFolder, { recursive: true, force: true })
+                logger.info('api', `Dossier série supprimé : ${serieFolder}`)
+            } catch (err) {
+                logger.warn('api', `Impossible de supprimer le dossier série "${serieFolder}" : ${err instanceof Error ? err.message : err}`)
+            }
         }
     }
     // Supprimer les demandes "disponible" liées à cette série

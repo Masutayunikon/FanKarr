@@ -28,6 +28,7 @@ export interface OrgEntry {
     src_filename : string
     dest_filename: string
     dest_path    : string
+    dest_dir     : string
 }
 
 // organized.json : Record<hash, Record<episode_id_string, OrgEntry>>
@@ -386,7 +387,7 @@ async function organizeTorrent(
                 markOrganized(hash, ep.id, {
                     at: new Date().toISOString(), season: season.season_number ?? 1,
                     episode: ep.episode_number, episode_id: ep.id,
-                    src_filename: filename, dest_filename: destName, dest_path: dest,
+                    src_filename: filename, dest_filename: destName, dest_path: dest, dest_dir: destDir,
                 })
                 await unlinkWithRetry(src)
                 log(`${destName} → Saison ${season.season_number}`)
@@ -397,7 +398,7 @@ async function organizeTorrent(
         markOrganized(hash, ep.id, {
             at: new Date().toISOString(), season: season.season_number ?? 1,
             episode: ep.episode_number, episode_id: ep.id,
-            src_filename: filename, dest_filename: destName, dest_path: dest,
+            src_filename: filename, dest_filename: destName, dest_path: dest, dest_dir: destDir,
         })
         log(`${destName} → Saison ${season.season_number}`)
         return { ...result, total: 1, done: 1 }
@@ -448,7 +449,7 @@ async function organizeTorrent(
             markOrganized(hash, episode_id, {
                 at: new Date().toISOString(), season: season_number,
                 episode: episode_number, episode_id,
-                src_filename: filename, dest_filename: nfo_filename, dest_path: dest,
+                src_filename: filename, dest_filename: nfo_filename, dest_path: dest, dest_dir: destDir,
             })
             result.skipped++
             continue
@@ -463,14 +464,14 @@ async function organizeTorrent(
                 markOrganized(hash, episode_id, {
                     at: new Date().toISOString(), season: season_number,
                     episode: episode_number, episode_id,
-                    src_filename: filename, dest_filename: nfo_filename, dest_path: dest,
+                    src_filename: filename, dest_filename: nfo_filename, dest_path: dest, dest_dir: destDir,
                 })
             } else {
                 await fsp.copyFile(src, dest)
                 markOrganized(hash, episode_id, {
                     at: new Date().toISOString(), season: season_number,
                     episode: episode_number, episode_id,
-                    src_filename: filename, dest_filename: nfo_filename, dest_path: dest,
+                    src_filename: filename, dest_filename: nfo_filename, dest_path: dest, dest_dir: destDir,
                 })
                 await unlinkWithRetry(src)
             }

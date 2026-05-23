@@ -38,6 +38,7 @@ interface OrgEntry {
     src_filename : string
     dest_filename: string
     dest_path    : string
+    dest_dir?    : string   // absent dans les anciennes entrées — backfillé au démarrage
 }
 
 type Organized = Record<string, Record<string, OrgEntry>>
