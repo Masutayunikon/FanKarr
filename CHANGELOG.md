@@ -1,5 +1,52 @@
 # Changelog
 
+## [3.17.0](https://github.com/Masutayunikon/FanKarr/compare/v3.16.0...v3.17.0) (2026-05-23)
+
+
+### Features
+
+* ajout du parametre auto download ([0ac4812](https://github.com/Masutayunikon/FanKarr/commit/0ac48126aa3f69ded8ad0b7e83b1324360b25def))
+* **auth:** migration multi-utilisateurs, rôles admin/user et token API par compte ([dabd1d4](https://github.com/Masutayunikon/FanKarr/commit/dabd1d429ee78b597d1e403c45645f0c89cb7ccc))
+* **client:** ajour de alldebrid client ([6ce59b9](https://github.com/Masutayunikon/FanKarr/commit/6ce59b9e0458ecf5b3bc55d703c132a4ac39db66))
+* **client:** ajout de alldebrid dans le tableau de comparatif ([f3d535d](https://github.com/Masutayunikon/FanKarr/commit/f3d535d5774ac7b25da6e948c481e32dcf63a5db))
+* **demande:** ajout des routes pour recuperer les saisons et episodes depuis le plugin jellyfin ([1176523](https://github.com/Masutayunikon/FanKarr/commit/1176523d6165465a1f07fcc6251e35c239c896f7))
+* **demandes:** ajout d'un bouton supprimé pour les admin et supprime les demandes "disponible" si la serie a été supprimé apres ([858a5b3](https://github.com/Masutayunikon/FanKarr/commit/858a5b34bf36bbeec3b18e87623e9b009e69ebcd))
+* **demandes:** ajout des demandes par épisodes ([473d97e](https://github.com/Masutayunikon/FanKarr/commit/473d97e39283d5a0f28dd674ca837d3b61673831))
+* **demandes:** telechargement auto lors de l'aprobation ([473d97e](https://github.com/Masutayunikon/FanKarr/commit/473d97e39283d5a0f28dd674ca837d3b61673831))
+* **jellyfin:** synchronisation des comptes, SSO token exchange et API publique v1 ([dabd1d4](https://github.com/Masutayunikon/FanKarr/commit/dabd1d429ee78b597d1e403c45645f0c89cb7ccc))
+* passer les demandes en disponible une fois l'import fait ([423ba6a](https://github.com/Masutayunikon/FanKarr/commit/423ba6a777322077257839ddc39ea03430846517))
+* **requests:** demandes de séries avec fusion des saisons, vue admin et widget dashboard ([dabd1d4](https://github.com/Masutayunikon/FanKarr/commit/dabd1d429ee78b597d1e403c45645f0c89cb7ccc))
+* **search:** ajout des requetes deja demandé si existante sur la serie ([4a6510a](https://github.com/Masutayunikon/FanKarr/commit/4a6510adde991bba85d20d7bb420a9f7ad6a2f0c))
+* **search:** ajout des requetes deja demandé si existante sur la serie ([b7c7e9d](https://github.com/Masutayunikon/FanKarr/commit/b7c7e9d33dd6190cb97a82a685d414601c353e6e))
+* **search:** ajout des requetes deja demandé si existante sur la serie ([ec1d170](https://github.com/Masutayunikon/FanKarr/commit/ec1d1705e76934d149a1a4afce5b36613cf0e22d))
+* **search:** ajout description ([16b3f74](https://github.com/Masutayunikon/FanKarr/commit/16b3f741e7dbf10daff2f1bb8b1785ff67594515))
+* **search:** retourne maintenant l'année et le rating ([99c8d86](https://github.com/Masutayunikon/FanKarr/commit/99c8d86c6e63d362067e18a3a5135ccfa49aff34))
+* **users:** gestion des comptes et système d'invitations avec page d'administration ([dabd1d4](https://github.com/Masutayunikon/FanKarr/commit/dabd1d429ee78b597d1e403c45645f0c89cb7ccc))
+
+
+### Bug Fixes
+
+* ajout cors type ([0bac6da](https://github.com/Masutayunikon/FanKarr/commit/0bac6da9686edc45d79cde48387d5e3f89772646))
+* ajout du parametre auto download ([921f6eb](https://github.com/Masutayunikon/FanKarr/commit/921f6eb8d28bbeb6cc4f5f72a6c1c79a14da03ba))
+* argument type ([5d06a23](https://github.com/Masutayunikon/FanKarr/commit/5d06a231985f540bb66014c5ac8726f8740b3fde))
+* button contrast and font size on card overlay ([bd5b16e](https://github.com/Masutayunikon/FanKarr/commit/bd5b16e17c3a4f2005c058399b2c30038f350f55))
+* copy ([0544a51](https://github.com/Masutayunikon/FanKarr/commit/0544a515b654f9bb9183e2fb9d6a4b99de5af87d))
+* cors, alldebrid ([911ca86](https://github.com/Masutayunikon/FanKarr/commit/911ca86a0d1025d41870fd1e9cb39ca038df28cb))
+* demandes d'épisode qui demande toutes la serie ([62c5b2e](https://github.com/Masutayunikon/FanKarr/commit/62c5b2e622aa872236cf7d620a811c90606222bd))
+* demandes d'épisode qui demande toutes la serie ([73678be](https://github.com/Masutayunikon/FanKarr/commit/73678be2c895a3487081b4e811810c8ac36cf1fb))
+* **demandes:** multiples torrent et fix episode qui ne s'ajoute pas ([85a2180](https://github.com/Masutayunikon/FanKarr/commit/85a218042de55ae72efab2ce6f36084e14efa108))
+* **demandes:** titres torrent ([e6b0bea](https://github.com/Masutayunikon/FanKarr/commit/e6b0bea455413e99155c11003bf055ac244c259a))
+* **import:** supprime les entrees organiser quand on supprime un fichier ([6ce59b9](https://github.com/Masutayunikon/FanKarr/commit/6ce59b9e0458ecf5b3bc55d703c132a4ac39db66))
+* **log:** changement pour une notification plus explicit lors du test client ([6ce59b9](https://github.com/Masutayunikon/FanKarr/commit/6ce59b9e0458ecf5b3bc55d703c132a4ac39db66))
+* search retourne une image mtn ([5478fa6](https://github.com/Masutayunikon/FanKarr/commit/5478fa6d80314e2b0aaf745ef2d667b42e083d26))
+* **serie:** 403 pour les non admin ([f3d535d](https://github.com/Masutayunikon/FanKarr/commit/f3d535d5774ac7b25da6e948c481e32dcf63a5db))
+* **settings:** bug ou les parametre se sauvegarder en rentrant sur lla page avancé ([f3d535d](https://github.com/Masutayunikon/FanKarr/commit/f3d535d5774ac7b25da6e948c481e32dcf63a5db))
+* **settings:** la clé api n'apparait que dans un menu pour les admin ([f3d535d](https://github.com/Masutayunikon/FanKarr/commit/f3d535d5774ac7b25da6e948c481e32dcf63a5db))
+* **start:** url cliquable au demarrage dans le terminal ([6ce59b9](https://github.com/Masutayunikon/FanKarr/commit/6ce59b9e0458ecf5b3bc55d703c132a4ac39db66))
+* **supression:** supprime maintenant le dossier de la serie et l'ajoute a organized.json ([161f4f5](https://github.com/Masutayunikon/FanKarr/commit/161f4f5051a327421cede35b1d714286588e4f5b))
+* telechargement depuis les demandes de saison et integral ([7f4121d](https://github.com/Masutayunikon/FanKarr/commit/7f4121d9e4aab53a5baf105b46c987d69d4909a8))
+* update request state after submit + override theme hover on modal buttons ([41addf9](https://github.com/Masutayunikon/FanKarr/commit/41addf9e4fa437f31c478d7074ce86b05d79c689))
+
 ## [3.16.0](https://github.com/Masutayunikon/FanKarr/compare/v3.15.0...v3.16.0) (2026-05-11)
 
 
