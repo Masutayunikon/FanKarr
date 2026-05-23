@@ -97,6 +97,9 @@ const adDriver: TorrentClientDriver = {
     },
 
     async add(config, url, options?: DownloadOptions) {
+        if (options?.file_index != null)
+            logger.warn('alldebrid', `Sélection de fichier (index ${options.file_index}) non supportée par AllDebrid — pack complet téléchargé`)
+
         const isMagnet = url.startsWith('magnet:')
         const hash = (options?.infohash?.toLowerCase() ?? null)
             || url.match(/xt=urn:btih:([a-fA-F0-9]{40,})/i)?.[1]?.toLowerCase()

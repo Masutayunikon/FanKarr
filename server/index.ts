@@ -21,6 +21,7 @@ import { readAvailable, readInfohashMap, loadEnrichedSeriesData } from './lib/gi
 import { pushNotif } from './lib/notifs.js'
 import { readRequests, completeRequest } from './requests.js'
 import { checkNfoUpdates } from './lib/nfo.js'
+import cors from 'cors';
 
 import usersRouter         from './routes/users.js'
 import invitesRouter       from './routes/invites.js'
@@ -52,6 +53,13 @@ const PORT = Number(process.env.PORT) || 9898
 
 app.use(express.json())
 app.use(cookieParser())
+
+
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+}));
 
 const PUBLIC_PATH = path.join(BASE_DIR, 'public')
 if (fs.existsSync(PUBLIC_PATH)) {

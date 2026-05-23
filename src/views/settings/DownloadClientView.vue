@@ -257,7 +257,7 @@ const clientMatrix = [
   },
   {
     id: 'alldebrid',    label: 'AllDebrid',                version: 'API v4',
-    auth: 'Clé API',          fileSelect: true,  fileProgress: true,  torrentUpload: 'proxy', categories: false, deleteFiles: true,
+    auth: 'Clé API',          fileSelect: false, fileProgress: true,  torrentUpload: 'proxy', categories: false, deleteFiles: true,
   },
 ]
 

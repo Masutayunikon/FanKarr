@@ -20,6 +20,7 @@
     "@vueuse/core": "^14.2.1",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
     "lucide-vue-next": "^1.0.0",
