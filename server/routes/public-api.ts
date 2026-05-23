@@ -81,6 +81,21 @@ router.get('/v1/series/search', requireApiToken, async (req, res) => {
         const availableSet = new Set<number>(availableIds)
         const all: any[]   = (Array.isArray(apiData) ? apiData : (apiData.series ?? [])).map(normalizeSerie)
 
+        // Demandes actives de cet utilisateur, indexées par serieId
+        const activeRequests = getRequestsForUser(req.user!.id)
+            .filter(r => r.status !== 'rejected' && r.status !== 'completed')
+        const requestMap = new Map<number, { id: string; status: string; seasons: number[]; episodes: number[] }>()
+        for (const r of activeRequests) {
+            const me = r.requesters.find(rq => rq.userId === req.user!.id)
+            if (!me) continue
+            requestMap.set(r.serieId, {
+                id      : r.id,
+                status  : r.status,
+                seasons : me.seasons,
+                episodes: me.episodes ?? [],
+            })
+        }
+
         const results = all
             .filter(s => !q || s.title?.toLowerCase().includes(q) || s.original_title?.toLowerCase().includes(q))
             .slice(0, 50)
@@ -93,6 +108,7 @@ router.get('/v1/series/search', requireApiToken, async (req, res) => {
                 year          : s.year ?? null,
                 rating        : s.rating?.value ?? null,
                 description   : s.plot ?? null,
+                request       : requestMap.get(s.id) ?? null,
             }))
 
         res.json(results)
