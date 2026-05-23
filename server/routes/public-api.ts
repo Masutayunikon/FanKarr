@@ -86,7 +86,7 @@ router.get('/v1/series/search', requireApiToken, async (req, res) => {
                 id            : s.id,
                 title         : s.title,
                 original_title: s.original_title ?? null,
-                image         : s.image ?? null,
+                image         : s.poster_image ?? null,
                 available     : availableSet.has(s.id),
             }))
 
