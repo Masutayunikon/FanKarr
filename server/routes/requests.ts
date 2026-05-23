@@ -91,17 +91,10 @@ router.patch('/requests/:id', requireAdmin, async (req, res) => {
         const id = String(req.params.id)
         if (action === 'approve') {
             request = approveRequest(id)
-            // Lancer le(s) téléchargement(s) si au moins un requester est autorisé
-            const { requestAutoDownloadUsers } = readSettings()
-            const enabled = requestAutoDownloadUsers === 'all'
-                ? true
-                : Array.isArray(requestAutoDownloadUsers) && requestAutoDownloadUsers.length > 0
-                  && request.requesters.some(r => (requestAutoDownloadUsers as string[]).includes(r.userId))
-            if (enabled) {
-                autoDownloadRequest(request).catch(err =>
-                    logger.warn('requests', `Auto-dl échoué pour "${request.serieName}" : ${err instanceof Error ? err.message : err}`)
-                )
-            }
+            // Approbation manuelle par l'admin → toujours lancer le téléchargement
+            autoDownloadRequest(request).catch(err =>
+                logger.warn('requests', `Auto-dl échoué pour "${request.serieName}" : ${err instanceof Error ? err.message : err}`)
+            )
         } else if (action === 'reject')   request = rejectRequest(id, rejectionMessage)
         else if (action === 'complete')   request = completeRequest(id)
         else { res.status(400).json({ error: 'Action invalide (approve | reject | complete)' }); return }
@@ -116,7 +109,7 @@ router.patch('/requests/:id', requireAdmin, async (req, res) => {
  * @param override - si fourni, utilise ces saisons/épisodes au lieu du merged de la demande
  *                   (utile pour ne télécharger que ce qui vient d'être ajouté)
  */
-async function autoDownloadRequest(req: SerieRequest, override?: { seasons: number[]; episodes: number[] }): Promise<void> {
+export async function autoDownloadRequest(req: SerieRequest, override?: { seasons: number[]; episodes: number[] }): Promise<void> {
     const serieData = await readSerieData(req.serieId)
     if (!serieData) {
         logger.warn('requests', `Auto-dl : aucune donnée torrent pour série ${req.serieId}`)

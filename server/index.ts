@@ -21,6 +21,7 @@ import { readAvailable, readInfohashMap, loadEnrichedSeriesData } from './lib/gi
 import { pushNotif } from './lib/notifs.js'
 import { readRequests, completeRequest } from './requests.js'
 import { checkNfoUpdates } from './lib/nfo.js'
+import { runJellyfinSync } from './routes/jellyfin.js'
 import cors from 'cors';
 
 import usersRouter         from './routes/users.js'
@@ -237,4 +238,12 @@ server.listen(PORT, async () => {
             runRssSync().catch(err => logger.error('rss-sync', `Sync périodique échoué : ${err instanceof Error ? err.message : err}`))
         }, 6 * 60 * 60_000)
     }, 60_000) // premier cycle 1 min après le démarrage
+
+    // Jellyfin sync — toutes les heures (no-op si Jellyfin non configuré)
+    setTimeout(() => {
+        runJellyfinSync().catch(err => logger.error('jellyfin', `Sync initiale échouée : ${err instanceof Error ? err.message : err}`))
+        setInterval(() => {
+            runJellyfinSync().catch(err => logger.error('jellyfin', `Sync périodique échouée : ${err instanceof Error ? err.message : err}`))
+        }, 60 * 60_000)
+    }, 2 * 60_000) // premier cycle 2 min après le démarrage
 })

@@ -36,34 +36,38 @@ router.post('/jellyfin/test', async (_req, res) => {
     res.json(result)
 })
 
+export async function runJellyfinSync(): Promise<{ created: number; skipped: number; users: string[] }> {
+    const { jellyfinUrl, jellyfinAdminToken } = readSettings()
+    if (!jellyfinUrl || !jellyfinAdminToken) return { created: 0, skipped: 0, users: [] }
+
+    const jellyfinUsers = await fetchJellyfinUsers()
+    const fankarrUsers  = readUsers()
+    const results = { created: 0, skipped: 0, users: [] as string[] }
+
+    for (const jUser of jellyfinUsers) {
+        if (jUser.Policy?.IsDisabled) { results.skipped++; continue }
+
+        const exists = fankarrUsers.some(u =>
+            u.username.toLowerCase() === jUser.Name.toLowerCase()
+        )
+        if (exists) { results.skipped++; continue }
+
+        const randomPass = Math.random().toString(36).slice(2, 10) +
+                           Math.random().toString(36).slice(2, 10)
+        createUser(jUser.Name, randomPass, 'user')
+        results.created++
+        results.users.push(jUser.Name)
+        logger.info('jellyfin', `Compte créé pour "${jUser.Name}" (sync Jellyfin)`)
+    }
+
+    logger.info('jellyfin', `Sync terminée — ${results.created} créés, ${results.skipped} ignorés`)
+    return results
+}
+
 // POST /api/jellyfin/sync
 router.post('/jellyfin/sync', async (_req, res) => {
     try {
-        const jellyfinUsers = await fetchJellyfinUsers()
-        const fankarrUsers  = readUsers()
-
-        const results = { created: 0, skipped: 0, users: [] as string[] }
-
-        for (const jUser of jellyfinUsers) {
-            // Ignorer les comptes désactivés
-            if (jUser.Policy?.IsDisabled) { results.skipped++; continue }
-
-            const exists = fankarrUsers.some(u =>
-                u.username.toLowerCase() === jUser.Name.toLowerCase()
-            )
-
-            if (exists) { results.skipped++; continue }
-
-            // Créer le compte avec un mot de passe aléatoire (auth via SSO uniquement)
-            const randomPass = Math.random().toString(36).slice(2, 10) +
-                               Math.random().toString(36).slice(2, 10)
-            createUser(jUser.Name, randomPass, 'user')
-            results.created++
-            results.users.push(jUser.Name)
-            logger.info('jellyfin', `Compte créé pour "${jUser.Name}" (sync Jellyfin)`)
-        }
-
-        logger.info('jellyfin', `Sync terminée — ${results.created} créés, ${results.skipped} ignorés`)
+        const results = await runJellyfinSync()
         res.json(results)
     } catch (err) {
         res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur sync Jellyfin' })

@@ -7,9 +7,11 @@ import { Router }                from 'express'
 import { findByApiToken }        from '../users.js'
 import { validateJellyfinToken } from '../lib/jellyfin.js'
 import { readUsers, safeUser }   from '../users.js'
-import { upsertRequest, getRequestsForUser } from '../requests.js'
+import { upsertRequest, approveRequest, getRequestsForUser } from '../requests.js'
+import { autoDownloadRequest } from './requests.js'
+import { readSettings }        from '../settings.js'
 import { readAvailable }         from '../lib/github-cache.js'
-import { fankaiGet, normalizeSerie } from '../lib/serie-helpers.js'
+import { fankaiGet, normalizeSerie, normalizeSeason, normalizeEpisode } from '../lib/serie-helpers.js'
 import { logger }                from '../logger.js'
 import type { Request, Response, NextFunction } from 'express'
 
@@ -96,20 +98,83 @@ router.get('/v1/series/search', requireApiToken, async (req, res) => {
     }
 })
 
+// ── GET /api/v1/series/:id ────────────────────────────────────
+// Détail d'une série : saisons + épisodes (proxy FanKai)
+router.get('/v1/series/:id', requireApiToken, async (req, res) => {
+    const id = Number(req.params.id)
+    if (isNaN(id)) { res.status(400).json({ error: 'id invalide' }); return }
+    try {
+        const [serieRaw, seasonsData] = await Promise.all([
+            fankaiGet(`/series/${id}`),
+            fankaiGet(`/series/${id}/seasons`),
+        ])
+        const serie   = normalizeSerie(serieRaw)
+        const seasons = Array.isArray(seasonsData) ? seasonsData : (seasonsData.seasons ?? [])
+
+        const seasonsWithEpisodes = await Promise.all(
+            seasons.map(async (season: any) => {
+                const epsData  = await fankaiGet(`/seasons/${season.id}/episodes`)
+                const episodes = (Array.isArray(epsData) ? epsData : (epsData.episodes ?? []))
+                    .map((ep: any) => ({
+                        id            : ep.id,
+                        episode_number: ep.episode_number,
+                        title         : ep.title ?? null,
+                        image         : normalizeEpisode(ep).thumb_image ?? null,
+                    }))
+                return {
+                    ...normalizeSeason(season),
+                    season_number: season.season_number,
+                    episodes,
+                }
+            })
+        )
+
+        res.json({
+            id            : serie.id,
+            title         : serie.title,
+            original_title: serie.original_title ?? null,
+            image         : serie.poster_image ?? null,
+            seasons       : seasonsWithEpisodes,
+        })
+    } catch (err) {
+        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur' })
+    }
+})
+
 // ── POST /api/v1/requests ─────────────────────────────────────
 // Créer ou mettre à jour une demande
 router.post('/v1/requests', requireApiToken, (req, res) => {
-    const { serieId, serieName, seasons } = req.body
+    const { serieId, serieName, seasons, episodes } = req.body
     if (!serieId || !serieName) {
         res.status(400).json({ error: 'serieId et serieName requis' }); return
     }
     try {
-        const request = upsertRequest(
+        const submittedSeasons  = Array.isArray(seasons)  ? seasons.map(Number)  : []
+        const submittedEpisodes = Array.isArray(episodes) ? episodes.map(Number) : []
+
+        let request = upsertRequest(
             req.user!.id,
             Number(serieId),
             String(serieName),
-            Array.isArray(seasons) ? seasons.map(Number) : [],
+            submittedSeasons,
+            submittedEpisodes,
         )
+
+        // Auto-approbation + téléchargement si l'utilisateur est autorisé
+        const { requestAutoDownloadUsers } = readSettings()
+        const userId  = req.user!.id
+        const allowed = requestAutoDownloadUsers === 'all'
+            || (Array.isArray(requestAutoDownloadUsers) && requestAutoDownloadUsers.includes(userId))
+
+        if (allowed) {
+            const isNew     = request.status === 'pending'
+            if (isNew) request = approveRequest(request.id)
+            const dlOverride = isNew ? undefined : { seasons: submittedSeasons, episodes: submittedEpisodes }
+            autoDownloadRequest(request, dlOverride).catch(err =>
+                logger.warn('public-api', `Auto-dl échoué pour "${request.serieName}" : ${err instanceof Error ? err.message : err}`)
+            )
+        }
+
         res.json(request)
     } catch (err) {
         res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur' })
