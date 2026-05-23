@@ -222,6 +222,16 @@ Le **scan médiathèque** permet de référencer des fichiers déjà présents s
 
 ---
 
+## Plugin Jellyfin — FanKarr Search
+
+Un plugin Jellyfin est disponible pour intégrer la recherche FanKarr directement dans l'interface de votre serveur. Vos utilisateurs peuvent parcourir le catalogue et demander des séries sans quitter Jellyfin.
+
+👉 **[jellyfin-plugin-fankarr-search](https://github.com/Masutayunikon/jellyfin-plugin-fankarr-search)**
+
+Le plugin nécessite **[Jellyfin JavaScript Injector](https://github.com/n00bcodr/Jellyfin-JavaScript-Injector)** — consultez le README du plugin pour les instructions d'installation.
+
+---
+
 ## Runtipi
 
 FanKarr est disponible dans l'appstore personnalisé. Pour l'installer :
@@ -248,6 +258,7 @@ FanKarr est disponible dans l'appstore personnalisé. Pour l'installer :
 ## Liens
 
 - [fankai.fr](https://fankai.fr) — Le projet Fankai
+- [Plugin Jellyfin FanKarr Search](https://github.com/Masutayunikon/jellyfin-plugin-fankarr-search) — Recherche et demandes FanKarr dans Jellyfin
 - [Plugin Jellyfin Fankai](https://github.com/Nackophilz/fankai_jellyfin) — Reconnaissance des métadonnées dans Jellyfin
 - [fankarr-scraper](https://github.com/masutayunikon/fankarr-scraper) — Pipeline de collecte des torrents
 - [runtipi-appstore](https://github.com/Masutayunikon/runtipi-appstore) — Appstore Runtipi personnel
