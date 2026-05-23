@@ -92,6 +92,7 @@ router.get('/v1/series/search', requireApiToken, async (req, res) => {
                 available     : availableSet.has(s.id),
                 year          : s.year ?? null,
                 rating        : s.rating?.value ?? null,
+                description   : s.plot ?? null,
             }))
 
         res.json(results)
