@@ -50,22 +50,37 @@ Inspiré de Radarr/Sonarr — interface dédiée aux éditions Kai & Yabai
 - **Dropdown intelligent** sur chaque bouton quand plusieurs sources sont disponibles (qualités différentes, packs différents)
 - **"Tout télécharger"** unifié — sélectionne automatiquement les épisodes non couverts par l'intégrale choisie et complète avec les packs individuels
 - **Progression par fichier** — barre de téléchargement au niveau de l'épisode, même pour les fichiers dans un pack intégrale
+- **RSS Sync** — surveillance automatique des nouvelles sorties toutes les 6 heures pour les séries abonnées, téléchargement sans intervention
 
 ### 🗂️ Organisation
 - **Import automatique** des fichiers terminés vers votre médiathèque, déclenché dès la fin d'un téléchargement ou toutes les 5 minutes en arrière-plan
 - **Scan de médiathèque** — détecte les fichiers déjà présents sur le disque et les référence sans les déplacer
 - **Mode hardlink** (recommandé), **déplacement** ou **copie** — le hardlink préserve le seeding du client torrent
 - **Désimport automatique** optionnel quand un fichier est supprimé du disque
+- **Suppression du dossier série** automatique lors d'un désimport complet avec suppression des fichiers
+
+### 📋 Demandes
+- **Système de demandes** — les utilisateurs peuvent demander des séries, saisons ou épisodes spécifiques depuis l'interface ou le plugin Jellyfin
+- **Workflow admin** — approbation / refus avec message / marquage disponible depuis la page dédiée
+- **Auto-téléchargement** configurable par utilisateur — les demandes sont approuvées et lancées automatiquement pour les utilisateurs autorisés
+- **Suppression en masse** pour les admins (bouton "Tout supprimer")
+- **Nettoyage automatique** — les demandes marquées "disponible" sont supprimées lors du désimport de la série concernée
 
 ### 🏷️ Métadonnées & Affichage
 - **Badges de langue** VOSTFR et MULTI avec drapeaux sur chaque épisode (détectés automatiquement)
 - **Support NFO** — nommage compatible avec les plugins Jellyfin/Plex utilisant les fichiers `.nfo`
 - **Intégration Plex** — connexion à votre serveur Plex pour déclencher le scan médiathèque après import
 
+### 👥 Utilisateurs & Jellyfin
+- **Multi-utilisateurs** avec rôles (`admin` / `user`) et système d'invitations
+- **SSO Jellyfin** — les utilisateurs se connectent avec leur compte Jellyfin, aucun mot de passe FanKarr requis
+- **Synchronisation Jellyfin** — création automatique des comptes FanKarr pour les utilisateurs Jellyfin, toutes les heures en arrière-plan ou manuellement depuis les paramètres
+- **Token API personnel** — chaque utilisateur dispose d'un token pour accéder à l'API publique
+
 ### ⚙️ Système
 - **Logs centralisés** — filtre par niveau et source, rotation automatique, clear depuis l'UI
 - **Authentification** par mot de passe avec session JWT
-- **Multi-client torrent** — architecture extensible (qBittorrent supporté)
+- **Multi-client torrent** — qBittorrent, Transmission, Synology Download Station, µTorrent, rTorrent, Real-Debrid, AllDebrid
 - **Compatible Docker / Runtipi / Binaire autonome**
 
 ---
@@ -229,6 +244,108 @@ Un plugin Jellyfin est disponible pour intégrer la recherche FanKarr directemen
 👉 **[jellyfin-plugin-fankarr-search](https://github.com/Masutayunikon/jellyfin-plugin-fankarr-search)**
 
 Le plugin nécessite **[Jellyfin JavaScript Injector](https://github.com/n00bcodr/Jellyfin-JavaScript-Injector)** — consultez le README du plugin pour les instructions d'installation.
+
+### Synchronisation des utilisateurs
+
+FanKarr peut créer automatiquement un compte pour chaque utilisateur Jellyfin actif. La synchronisation se fait :
+- **Automatiquement** toutes les heures en arrière-plan (si Jellyfin est configuré)
+- **Manuellement** depuis **Paramètres → Jellyfin → Synchroniser**
+
+Les comptes créés n'ont pas de mot de passe FanKarr — l'authentification se fait uniquement via SSO Jellyfin.
+
+---
+
+## API Publique
+
+FanKarr expose une API publique `v1` utilisée par le plugin Jellyfin et toute intégration tierce.
+
+**Auth** : `Authorization: Bearer <token>` (token visible dans **Profil → Token API**)
+
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| `POST` | `/api/v1/auth/jellyfin` | Échange un token Jellyfin contre un token FanKarr |
+| `GET` | `/api/v1/auth/me` | Informations de l'utilisateur connecté |
+| `GET` | `/api/v1/series/search?q=` | Recherche dans le catalogue (titre, note, année, description, demande en cours) |
+| `GET` | `/api/v1/series/:id` | Détail d'une série — saisons et épisodes (proxy FanKai) |
+| `POST` | `/api/v1/requests` | Créer ou mettre à jour une demande |
+| `GET` | `/api/v1/requests` | Demandes de l'utilisateur authentifié |
+
+### SSO Jellyfin
+
+```http
+POST /api/v1/auth/jellyfin
+Content-Type: application/json
+
+{ "jellyfinUserId": "...", "jellyfinToken": "..." }
+```
+
+Retourne `{ token, username, role }`. Le `token` est ensuite utilisé comme Bearer pour tous les autres appels.
+
+### Recherche
+
+```http
+GET /api/v1/series/search?q=dragon+ball
+Authorization: Bearer <token>
+```
+
+```json
+[
+  {
+    "id": 42,
+    "title": "Dragon Ball Z Kai",
+    "original_title": "DRAGON BALL Z KAI",
+    "image": "https://...",
+    "available": true,
+    "year": 2009,
+    "rating": 8.5,
+    "description": "Suite de Dragon Ball...",
+    "request": {
+      "id": "uuid",
+      "status": "pending",
+      "seasons": [1, 2],
+      "episodes": []
+    }
+  }
+]
+```
+
+Le champ `request` est `null` si aucune demande active n'existe pour cette série.
+
+### Détail série (saisons & épisodes)
+
+```http
+GET /api/v1/series/42
+Authorization: Bearer <token>
+```
+
+```json
+{
+  "id": 42,
+  "title": "Dragon Ball Z Kai",
+  "seasons": [
+    {
+      "season_number": 1,
+      "episodes": [
+        { "id": 101, "episode_number": 1, "title": "...", "image": "https://..." }
+      ]
+    }
+  ]
+}
+```
+
+### Créer une demande
+
+```http
+POST /api/v1/requests
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{ "serieId": 42, "serieName": "Dragon Ball Z Kai", "seasons": [1, 2] }
+```
+
+- `seasons` : numéros de saison (`season_number`). Tableau vide = toutes les saisons.
+- `episodes` : IDs d'épisodes (`episode.id`). Prend le dessus sur `seasons` si renseigné.
+- Si une demande active existe déjà, les saisons/épisodes sont **fusionnés**.
 
 ---
 
