@@ -1,12 +1,13 @@
 import type { TorrentClientDriver, TorrentInfo, TorrentFileProgress, DownloadOptions } from './index.js'
 import { logger } from '../logger.js'
 
-const AD_BASE  = 'https://api.alldebrid.com/v4'
-const AD_AGENT = 'FanKarr'
+const AD_BASE    = 'https://api.alldebrid.com/v4.1'
+const AD_BASE_V4 = 'https://api.alldebrid.com/v4'
+const AD_AGENT   = 'FanKarr'
 
-function adUrl(config: Record<string, string | number>, path: string): string {
+function adUrl(config: Record<string, string | number>, path: string, base = AD_BASE): string {
     const sep = path.includes('?') ? '&' : '?'
-    return `${AD_BASE}${path}${sep}agent=${AD_AGENT}&apikey=${config.apiKey}`
+    return `${base}${path}${sep}agent=${AD_AGENT}&apikey=${config.apiKey}`
 }
 
 async function adFetch(
@@ -14,8 +15,9 @@ async function adFetch(
     method: 'GET' | 'POST' | 'DELETE',
     path  : string,
     body ?: URLSearchParams | FormData,
+    base  = AD_BASE,
 ): Promise<any> {
-    const res = await fetch(adUrl(config, path), { method, body })
+    const res = await fetch(adUrl(config, path, base), { method, body })
     if (!res.ok) {
         const text = await res.text().catch(() => '')
         throw new Error(`AllDebrid HTTP ${res.status} : ${text}`)
@@ -101,21 +103,6 @@ const adDriver: TorrentClientDriver = {
             logger.warn('alldebrid', `Sélection de fichier (index ${options.file_index}) non supportée par AllDebrid — pack complet téléchargé`)
 
         const isMagnet = url.startsWith('magnet:')
-        const hash = (options?.infohash?.toLowerCase() ?? null)
-            || url.match(/xt=urn:btih:([a-fA-F0-9]{40,})/i)?.[1]?.toLowerCase()
-            || null
-
-        if (hash) {
-            try {
-                const data     = await adFetch(config, 'GET', '/magnet/status')
-                const magnets: any[] = data.magnets ?? []
-                const existing = magnets.find((m: any) => m.hash?.toLowerCase() === hash)
-                if (existing) {
-                    logger.info('alldebrid', `Torrent ${hash.slice(0, 8)}… déjà présent sur AllDebrid`)
-                    return
-                }
-            } catch {}
-        }
 
         if (isMagnet) {
             const body = new URLSearchParams()
@@ -149,6 +136,10 @@ const adDriver: TorrentClientDriver = {
                 : (statusCode === 4 ? 100 : 0)
             const save_path  = localBase ? `${localBase}/${m.filename ?? m.id}` : ''
 
+            const eta = (typeof m.completionDate === 'number' && m.completionDate > 0)
+                ? Math.max(0, m.completionDate - Math.floor(Date.now() / 1000))
+                : -1
+
             return {
                 hash      : String(m.hash ?? m.id ?? '').toLowerCase(),
                 name      : String(m.filename ?? m.id ?? ''),
@@ -156,11 +147,11 @@ const adDriver: TorrentClientDriver = {
                 progress,
                 size,
                 downloaded,
-                uploaded  : 0,
+                uploaded  : typeof m.uploaded      === 'number' ? m.uploaded      : 0,
                 ratio     : 0,
-                speed     : typeof m.speed === 'number' ? m.speed : 0,
-                upspeed   : 0,
-                eta       : typeof m.eta   === 'number' ? m.eta   : -1,
+                speed     : typeof m.downloadSpeed === 'number' ? m.downloadSpeed : 0,
+                upspeed   : typeof m.uploadSpeed   === 'number' ? m.uploadSpeed   : 0,
+                eta,
                 save_path,
                 category  : '',
             }
@@ -182,17 +173,19 @@ const adDriver: TorrentClientDriver = {
         const target   = magnets.find((m: any) => String(m.hash ?? m.id ?? '').toLowerCase() === hash.toLowerCase())
         if (!target) return []
 
-        const detail = await adFetch(config, 'GET', `/magnet/status?id=${target.id}`)
-        const magnet = Array.isArray(detail.magnets) ? detail.magnets[0] : detail
-
-        const statusCode = typeof magnet.statusCode === 'number' ? magnet.statusCode : 0
-        const size       = typeof magnet.size       === 'number' ? magnet.size       : 0
-        const downloaded = typeof magnet.downloaded === 'number' ? magnet.downloaded : 0
+        const statusCode      = typeof target.statusCode === 'number' ? target.statusCode : 0
+        const size            = typeof target.size       === 'number' ? target.size       : 0
+        const downloaded      = typeof target.downloaded === 'number' ? target.downloaded : 0
         const overallProgress = size > 0 ? downloaded / size : (statusCode === 4 ? 1 : 0)
 
-        if (!Array.isArray(magnet.files)) return []
+        const body = new URLSearchParams()
+        body.append('id[]', String(target.id))
+        const filesData   = await adFetch(config, 'POST', '/magnet/files', body, AD_BASE_V4)
+        const magnetEntry = (filesData.magnets ?? [])[0]
 
-        return flattenFiles(magnet.files).map(f => ({ ...f, progress: overallProgress }))
+        if (!Array.isArray(magnetEntry?.files)) return []
+
+        return flattenFiles(magnetEntry.files).map(f => ({ ...f, progress: overallProgress }))
     },
 }
 

@@ -295,7 +295,6 @@ Authorization: Bearer <token>
     "title": "Dragon Ball Z Kai",
     "original_title": "DRAGON BALL Z KAI",
     "image": "https://...",
-    "available": true,
     "year": 2009,
     "rating": 8.5,
     "description": "Suite de Dragon Ball...",

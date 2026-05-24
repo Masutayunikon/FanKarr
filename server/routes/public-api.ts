@@ -97,6 +97,7 @@ router.get('/v1/series/search', requireApiToken, async (req, res) => {
         }
 
         const results = all
+            .filter(s => availableSet.has(s.id))
             .filter(s => !q || s.title?.toLowerCase().includes(q) || s.original_title?.toLowerCase().includes(q))
             .slice(0, 50)
             .map(s => ({
@@ -104,7 +105,6 @@ router.get('/v1/series/search', requireApiToken, async (req, res) => {
                 title         : s.title,
                 original_title: s.original_title ?? null,
                 image         : s.poster_image ?? null,
-                available     : availableSet.has(s.id),
                 year          : s.year ?? null,
                 rating        : s.rating?.value ?? null,
                 description   : s.plot ?? null,
