@@ -1,5 +1,15 @@
 # Changelog
 
+## [3.17.1](https://github.com/Masutayunikon/FanKarr/compare/v3.17.0...v3.17.1) (2026-05-24)
+
+
+### Bug Fixes
+
+* **api:** la recherche ne retourne plus les series sans torrents ([7b18631](https://github.com/Masutayunikon/FanKarr/commit/7b1863180f28cfaaccff69cb949fa6116a2c8cc6))
+* **client:** alldebrid utilise maintenant les routes 4.1 ([7b18631](https://github.com/Masutayunikon/FanKarr/commit/7b1863180f28cfaaccff69cb949fa6116a2c8cc6))
+* **readme:** update ([edec048](https://github.com/Masutayunikon/FanKarr/commit/edec048e30e1a5a528f1b2888f3db1708eeb15f9))
+* **readme:** update ([bf9b18e](https://github.com/Masutayunikon/FanKarr/commit/bf9b18ec0002e84b040738f7229ed4570f5dcd32))
+
 ## [3.17.0](https://github.com/Masutayunikon/FanKarr/compare/v3.16.0...v3.17.0) (2026-05-23)
 
 
