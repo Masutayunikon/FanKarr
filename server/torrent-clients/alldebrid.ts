@@ -32,9 +32,12 @@ async function adFetch(
 // statusCode : 0=Processing, 1=Downloading, 2=Compressing, 3=Uploading, 4=Ready,
 //              5=Upload Fail, 6=Internal Error, 7=Not Downloaded, 8=File Not Available,
 //              9=Banned BitTorrent, 10=Awaiting Slot, 11=Free Trial Limit Reached
-function mapStatus(statusCode: number): TorrentInfo['state'] {
+// hasLocalMount : true si un chemin local (FUSE/WebDAV) est configuré.
+// Sans montage local, statusCode 4 ("prêt sur les serveurs AD") ne doit pas
+// déclencher l'import FanKarr — les fichiers ne sont pas encore sur le disque.
+function mapStatus(statusCode: number, hasLocalMount: boolean): TorrentInfo['state'] {
     switch (statusCode) {
-        case 4:  return 'seeding'
+        case 4:  return hasLocalMount ? 'seeding' : 'downloading'
         case 1:
         case 0:
         case 2:
@@ -134,7 +137,9 @@ const adDriver: TorrentClientDriver = {
             const progress   = size > 0
                 ? Math.round((downloaded / size) * 100)
                 : (statusCode === 4 ? 100 : 0)
-            const save_path  = localBase ? `${localBase}/${m.filename ?? m.id}` : ''
+            // save_path = dossier PARENT (comme qBittorrent), sans le nom du torrent.
+            // Le worker construit lui-même le chemin complet via getFiles().
+            const save_path  = localBase
 
             const eta = (typeof m.completionDate === 'number' && m.completionDate > 0)
                 ? Math.max(0, m.completionDate - Math.floor(Date.now() / 1000))
@@ -143,7 +148,7 @@ const adDriver: TorrentClientDriver = {
             return {
                 hash      : String(m.hash ?? m.id ?? '').toLowerCase(),
                 name      : String(m.filename ?? m.id ?? ''),
-                state     : mapStatus(statusCode),
+                state     : mapStatus(statusCode, Boolean(localBase)),
                 progress,
                 size,
                 downloaded,
