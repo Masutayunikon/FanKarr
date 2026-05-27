@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.18.2](https://github.com/Masutayunikon/FanKarr/compare/v3.18.1...v3.18.2) (2026-05-27)
+
+
+### Bug Fixes
+
+* **client:** synology use default savepath when 403 ([63f6c12](https://github.com/Masutayunikon/FanKarr/commit/63f6c1276bd48a14e5806ff997b6be63c458d94c))
+
 ## [3.18.1](https://github.com/Masutayunikon/FanKarr/compare/v3.18.0...v3.18.1) (2026-05-27)
 
 
