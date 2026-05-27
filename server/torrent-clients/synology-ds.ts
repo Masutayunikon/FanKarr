@@ -144,22 +144,36 @@ const DS: TorrentClientDriver = {
         if (options?.file_index != null) logger.warn('synology-ds', 'Sélection de fichier non supportée — téléchargement complet')
         const sid = await dsLogin(config)
 
-        const body = new URLSearchParams({
-            api    : 'SYNO.DownloadStation.Task',
-            version: '1',
-            method : 'create',
-            _sid   : sid,
-            uri    : url,
-        })
-        if (config.savePath) body.append('destination', String(config.savePath))
+        const makeBody = (withDestination: boolean) => {
+            const body = new URLSearchParams({
+                api    : 'SYNO.DownloadStation.Task',
+                version: '1',
+                method : 'create',
+                _sid   : sid,
+                uri    : url,
+            })
+            if (withDestination && config.savePath) body.append('destination', String(config.savePath))
+            return body
+        }
 
-        const res = await fetch(`${config.url}/webapi/DownloadStation/task.cgi`, {
-            method : 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body   : body.toString(),
-        })
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = await res.json()
+        const doRequest = async (body: URLSearchParams) => {
+            const res = await fetch(`${config.url}/webapi/DownloadStation/task.cgi`, {
+                method : 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body   : body.toString(),
+            })
+            if (!res.ok) throw new Error(`HTTP ${res.status}`)
+            return res.json()
+        }
+
+        let data = await doRequest(makeBody(true))
+
+        // Code 403 = destination inexistante sur le NAS → réessai sans destination
+        if (!data.success && data.error?.code === 403 && config.savePath) {
+            logger.warn('synology-ds', `Dossier cible "${config.savePath}" introuvable (code 403) — ajout sans destination`)
+            data = await doRequest(makeBody(false))
+        }
+
         if (!data.success) throw new Error(`Ajout échoué : ${JSON.stringify(data.error)}`)
 
         logger.info('synology-ds', `Torrent ajouté avec succès${config.savePath ? ` (dossier: ${config.savePath})` : ''}`)
