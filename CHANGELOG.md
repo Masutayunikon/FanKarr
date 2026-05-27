@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.18.1](https://github.com/Masutayunikon/FanKarr/compare/v3.18.0...v3.18.1) (2026-05-27)
+
+
+### Bug Fixes
+
+* **client:** suppresion de alldebrid ([8b4b198](https://github.com/Masutayunikon/FanKarr/commit/8b4b198697ba3296444759c522bb0139be69e364))
+
 ## [3.18.0](https://github.com/Masutayunikon/FanKarr/compare/v3.17.1...v3.18.0) (2026-05-25)
 
 
