@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.18.0](https://github.com/Masutayunikon/FanKarr/compare/v3.17.1...v3.18.0) (2026-05-25)
+
+
+### Features
+
+* **client:** ajout deluge ([045213d](https://github.com/Masutayunikon/FanKarr/commit/045213d363a75bf56bdb5a05e3965a040ead2893))
+
+
+### Bug Fixes
+
+* **client:** alldebrid ([045213d](https://github.com/Masutayunikon/FanKarr/commit/045213d363a75bf56bdb5a05e3965a040ead2893))
+
 ## [3.17.1](https://github.com/Masutayunikon/FanKarr/compare/v3.17.0...v3.17.1) (2026-05-24)
 
 
