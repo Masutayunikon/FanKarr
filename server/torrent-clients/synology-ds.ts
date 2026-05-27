@@ -116,11 +116,13 @@ const DS: TorrentClientDriver = {
                 const dl       = transfer.size_downloaded ?? 0
 
                 // Synology expose le hash BT dans additional.detail.hash
-                // Fallback sur dbid_ pour les tâches non-BT (DDL, etc.)
-                const rawHash  = detail.hash
-                const hash     = (typeof rawHash === 'string' && rawHash.length > 0)
+                // Fallback sur l'ID Synology natif (déjà au format "dbid_X")
+                const rawHash = String(detail.hash ?? '').trim()
+                const hash    = rawHash.length > 0
                     ? rawHash.toLowerCase()
-                    : `dbid_${t.id}`
+                    : String(t.id ?? '').toLowerCase()
+
+                if (!rawHash) logger.debug('synology-ds', `Hash BT absent pour "${t.title}" — matching par titre (ID: ${t.id})`)
 
                 return {
                     hash,
