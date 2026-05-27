@@ -13,7 +13,6 @@ import synologyDsDriver   from './torrent-clients/synology-ds.js'
 import utorrentDriver     from './torrent-clients/utorrent.js'
 import rtorrentDriver     from './torrent-clients/rtorrent.js'
 import realDebridDriver   from './torrent-clients/real-debrid.js'
-import allDebridDriver    from './torrent-clients/alldebrid.js'
 import delugeDriver       from './torrent-clients/deluge.js'
 import { autoOrganizeAll, scanMediaPath, syncFilenameChanges, migrateOrganizedEpisodeIds } from './organize.js'
 import { logger } from './logger.js'
@@ -48,7 +47,6 @@ registerDriver(synologyDsDriver)
 registerDriver(utorrentDriver)
 registerDriver(rtorrentDriver)
 registerDriver(realDebridDriver)
-registerDriver(allDebridDriver)
 registerDriver(delugeDriver)
 
 const app  = express()

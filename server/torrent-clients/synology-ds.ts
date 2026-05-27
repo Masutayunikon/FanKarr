@@ -7,12 +7,13 @@ import { logger } from '../logger.js'
 
 // Synology Download Station task status codes
 function mapState(status: string): TorrentInfo['state'] {
-    if (status === 'downloading')                          return 'downloading'
-    if (status === 'seeding' || status === 'finished')    return 'seeding'
-    if (status === 'paused')                              return 'paused'
-    if (status === 'waiting' || status === 'filehosting_waiting') return 'downloading'
-    if (status === 'hash_checking')                       return 'checking'
-    if (status === 'error')                               return 'error'
+    if (status === 'downloading')                                       return 'downloading'
+    if (status === 'seeding' || status === 'finished')                  return 'seeding'
+    if (status === 'finishing' || status === 'extracting')              return 'seeding'
+    if (status === 'paused')                                            return 'paused'
+    if (status === 'waiting' || status === 'filehosting_waiting')       return 'downloading'
+    if (status === 'hash_checking')                                     return 'checking'
+    if (status === 'error')                                             return 'error'
     return 'unknown'
 }
 
@@ -110,10 +111,19 @@ const DS: TorrentClientDriver = {
         return tasks
             .map(t => {
                 const transfer = t.additional?.transfer ?? {}
+                const detail   = t.additional?.detail   ?? {}
                 const size     = t.size ?? 0
                 const dl       = transfer.size_downloaded ?? 0
+
+                // Synology expose le hash BT dans additional.detail.hash
+                // Fallback sur dbid_ pour les tâches non-BT (DDL, etc.)
+                const rawHash  = detail.hash
+                const hash     = (typeof rawHash === 'string' && rawHash.length > 0)
+                    ? rawHash.toLowerCase()
+                    : `dbid_${t.id}`
+
                 return {
-                    hash      : t.id,
+                    hash,
                     name      : t.title,
                     state     : mapState(t.status),
                     progress  : size > 0 ? Math.min(100, Math.round((dl / size) * 100)) : 0,
@@ -124,7 +134,7 @@ const DS: TorrentClientDriver = {
                     speed     : transfer.speed_download ?? 0,
                     upspeed   : transfer.speed_upload ?? 0,
                     eta       : -1,
-                    save_path : t.additional?.detail?.destination ?? '',
+                    save_path : detail.destination ?? '',
                     category  : category ?? '',
                 } satisfies TorrentInfo
             })
@@ -134,18 +144,20 @@ const DS: TorrentClientDriver = {
         if (options?.file_index != null) logger.warn('synology-ds', 'Sélection de fichier non supportée — téléchargement complet')
         const sid = await dsLogin(config)
 
-        const extra: Record<string, string> = { uri: url }
-        if (config.savePath) extra.destination = String(config.savePath)
-
-        const params = new URLSearchParams({
+        const body = new URLSearchParams({
             api    : 'SYNO.DownloadStation.Task',
             version: '1',
             method : 'create',
             _sid   : sid,
-            ...extra,
+            uri    : url,
         })
+        if (config.savePath) body.append('destination', String(config.savePath))
 
-        const res = await fetch(`${config.url}/webapi/DownloadStation/task.cgi?${params}`)
+        const res = await fetch(`${config.url}/webapi/DownloadStation/task.cgi`, {
+            method : 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body   : body.toString(),
+        })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
         if (!data.success) throw new Error(`Ajout échoué : ${JSON.stringify(data.error)}`)
@@ -153,20 +165,26 @@ const DS: TorrentClientDriver = {
         logger.info('synology-ds', `Torrent ajouté avec succès${config.savePath ? ` (dossier: ${config.savePath})` : ''}`)
     },
 
-    async remove(config, hash, deleteFiles = false) {
-        const sid = await dsLogin(config)
-        // Synology utilise son ID interne — on cherche via la liste
+    async remove(config, hash, _deleteFiles?) {
+        const sid  = await dsLogin(config)
         const data = await dsRequest(config, 'SYNO.DownloadStation.Task', 'list', '1', { additional: 'detail' }, sid)
         const tasks: any[] = data?.tasks ?? []
-        // Matcher par hash si résolu, sinon par id
-        const found = tasks.find(t => t.id?.toLowerCase() === hash.toLowerCase())
+
+        const h = hash.toLowerCase()
+        const found = tasks.find((t: any) => {
+            const detailHash = String(t.additional?.detail?.hash ?? '').toLowerCase()
+            const synoId     = String(t.id ?? '').toLowerCase()
+            return detailHash === h || synoId === h || `dbid_${synoId}` === h
+        })
+
         if (!found) throw new Error(`Torrent ${hash.slice(0, 8)}… introuvable`)
+
         const params = new URLSearchParams({
             api    : 'SYNO.DownloadStation.Task',
             version: '1',
             method : 'delete',
             id     : found.id,
-            force_complete: deleteFiles ? 'true' : 'false',
+            force_complete: 'false',
             _sid   : sid,
         })
         const res = await fetch(`${config.url}/webapi/DownloadStation/task.cgi?${params}`)
