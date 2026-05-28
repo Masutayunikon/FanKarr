@@ -161,13 +161,14 @@ const DS: TorrentClientDriver = {
     async list(config, category) {
         const sid  = await dsLogin(config)
         const data = await dsRequest(config, 'SYNO.DownloadStation.Task', 'list', '1',
-            { additional: 'transfer,detail' }, sid)
+            { additional: 'transfer,detail,file' }, sid)
 
         const tasks: any[] = data?.tasks ?? []
 
         return tasks.map(t => {
             const transfer  = t.additional?.transfer ?? {}
             const detail    = t.additional?.detail   ?? {}
+            const fileList: any[] = t.additional?.file ?? []
             const size      = t.size ?? 0
             const dl        = transfer.size_downloaded ?? 0
 
@@ -176,6 +177,19 @@ const DS: TorrentClientDriver = {
                 String(detail.uri  ?? '').trim(),
                 String(t.id        ?? ''),
             )
+
+            const files = fileList.length > 0
+                ? fileList.map((f: any, i: number) => {
+                    const fSize = typeof f.size            === 'number' ? f.size            : 0
+                    const fDl   = typeof f.size_downloaded === 'number' ? f.size_downloaded : 0
+                    return {
+                        index   : i,
+                        name    : String(f.filename ?? ''),
+                        progress: fSize > 0 ? fDl / fSize : 0,
+                        priority: String(f.priority ?? 'normal') === 'skip' ? 0 : 1,
+                    }
+                })
+                : undefined
 
             return {
                 hash,
@@ -191,6 +205,7 @@ const DS: TorrentClientDriver = {
                 eta       : -1,
                 save_path : detail.destination ?? '',
                 category  : category ?? '',
+                files,
             } satisfies TorrentInfo
         })
     },
@@ -239,6 +254,35 @@ const DS: TorrentClientDriver = {
 
         if (!data.success) throw new Error(`Ajout échoué : ${JSON.stringify(data.error)}`)
         logger.info('synology-ds', `Torrent ajouté avec succès${config.savePath ? ` (dossier: ${config.savePath})` : ''}`)
+    },
+
+    async getFiles(config, hash) {
+        const sid  = await dsLogin(config)
+        const data = await dsRequest(config, 'SYNO.DownloadStation.Task', 'list', '1',
+            { additional: 'detail,file' }, sid)
+        const tasks: any[] = data?.tasks ?? []
+
+        const h    = hash.toLowerCase()
+        const task = tasks.find((t: any) => {
+            const detailHash = String(t.additional?.detail?.hash ?? '').toLowerCase()
+            const detailUri  = String(t.additional?.detail?.uri  ?? '').toLowerCase()
+            const synoId     = String(t.id ?? '').toLowerCase()
+            const cached     = _uriToHash.get(detailUri) ?? ''
+            return detailHash === h || synoId === h || cached === h
+        })
+
+        if (!task) return []
+        const fileList: any[] = task.additional?.file ?? []
+        return fileList.map((f: any, i: number) => {
+            const fSize = typeof f.size            === 'number' ? f.size            : 0
+            const fDl   = typeof f.size_downloaded === 'number' ? f.size_downloaded : 0
+            return {
+                index   : i,
+                name    : String(f.filename ?? ''),
+                progress: fSize > 0 ? fDl / fSize : 0,
+                priority: String(f.priority ?? 'normal') === 'skip' ? 0 : 1,
+            }
+        })
     },
 
     async remove(config, hash, _deleteFiles?) {
