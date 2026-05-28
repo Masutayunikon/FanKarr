@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.18.3](https://github.com/Masutayunikon/FanKarr/compare/v3.18.2...v3.18.3) (2026-05-27)
+
+
+### Bug Fixes
+
+* **synology:** double prefix dbid_ et fallback hash ([2587768](https://github.com/Masutayunikon/FanKarr/commit/25877685eaf02b3b1c02ff06db618a37aebf0e6b))
+
 ## [3.18.2](https://github.com/Masutayunikon/FanKarr/compare/v3.18.1...v3.18.2) (2026-05-27)
 
 
