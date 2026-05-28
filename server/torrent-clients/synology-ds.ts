@@ -15,6 +15,13 @@ import { DATA_DIR } from '../config.js'
 
 const URI_HASH_PATH = path.join(DATA_DIR, 'synology_uri_hash.json')
 
+// ─── Cache hash BT → ID Synology (en mémoire) ─────────────────────────────────
+// Synology utilise des IDs internes (dbid_X), pas des infohash BT.
+// Quand list() réussit à résoudre le vrai hash BT, on mémorise l'association
+// infohash → dbid_X pour que remove() / getFiles() puissent retrouver la tâche
+// même quand detail.hash et detail.uri sont vides.
+const _hashToSynoId = new Map<string, string>()
+
 function loadUriHashMap(): Record<string, string> {
     try {
         if (fs.existsSync(URI_HASH_PATH)) return JSON.parse(fs.readFileSync(URI_HASH_PATH, 'utf-8'))
@@ -178,6 +185,12 @@ const DS: TorrentClientDriver = {
                 String(t.id        ?? ''),
             )
 
+            // Mémoriser l'association hash BT → ID Synology (pour remove/getFiles)
+            const synoIdStr = String(t.id ?? '').toLowerCase()
+            if (!hash.startsWith('dbid_') && synoIdStr) {
+                _hashToSynoId.set(hash, synoIdStr)
+            }
+
             const files = fileList.length > 0
                 ? fileList.map((f: any, i: number) => {
                     const fSize = typeof f.size            === 'number' ? f.size            : 0
@@ -262,13 +275,17 @@ const DS: TorrentClientDriver = {
             { additional: 'detail,file' }, sid)
         const tasks: any[] = data?.tasks ?? []
 
-        const h    = hash.toLowerCase()
+        const h              = hash.toLowerCase()
+        const synoIdFromHash = _hashToSynoId.get(h) ?? ''
         const task = tasks.find((t: any) => {
             const detailHash = String(t.additional?.detail?.hash ?? '').toLowerCase()
             const detailUri  = String(t.additional?.detail?.uri  ?? '').toLowerCase()
             const synoId     = String(t.id ?? '').toLowerCase()
             const cached     = _uriToHash.get(detailUri) ?? ''
-            return detailHash === h || synoId === h || cached === h
+            return detailHash === h
+                || synoId === h
+                || cached === h
+                || (synoIdFromHash && synoId === synoIdFromHash)
         })
 
         if (!task) return []
@@ -290,13 +307,17 @@ const DS: TorrentClientDriver = {
         const data = await dsRequest(config, 'SYNO.DownloadStation.Task', 'list', '1', { additional: 'detail' }, sid)
         const tasks: any[] = data?.tasks ?? []
 
-        const h     = hash.toLowerCase()
+        const h              = hash.toLowerCase()
+        const synoIdFromHash = _hashToSynoId.get(h) ?? ''
         const found = tasks.find((t: any) => {
             const detailHash = String(t.additional?.detail?.hash ?? '').toLowerCase()
             const detailUri  = String(t.additional?.detail?.uri  ?? '').toLowerCase()
             const synoId     = String(t.id ?? '').toLowerCase()
             const cachedHash = _uriToHash.get(detailUri) ?? ''
-            return detailHash === h || synoId === h || cachedHash === h
+            return detailHash === h
+                || synoId === h
+                || cachedHash === h
+                || (synoIdFromHash && synoId === synoIdFromHash)
         })
 
         if (!found) throw new Error(`Torrent ${hash.slice(0, 8)}… introuvable`)

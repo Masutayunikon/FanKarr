@@ -210,11 +210,11 @@ server.listen(PORT, async () => {
                     }
                     const { organizeMode, deleteTorrentOnMove } = readSettings()
                     if (organizeMode === 'move' && deleteTorrentOnMove && result.done > 0) {
-                        try {
-                            await dispatchRemove(result.hash, false)
+                        const removeResult = await dispatchRemove(result.hash, false)
+                        if (removeResult.ok) {
                             logger.info('api', `Torrent "${result.name}" supprimé après move`)
-                        } catch (err) {
-                            logger.warn('api', `Impossible de supprimer le torrent "${result.name}" : ${err instanceof Error ? err.message : err}`)
+                        } else {
+                            logger.warn('api', `Torrent "${result.name}" — suppression échouée après move : ${removeResult.error ?? 'aucun client n\'a pu supprimer'}`)
                         }
                     }
                 }
