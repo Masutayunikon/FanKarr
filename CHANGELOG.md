@@ -1,5 +1,19 @@
 # Changelog
 
+## [3.19.0](https://github.com/Masutayunikon/FanKarr/compare/v3.18.3...v3.19.0) (2026-05-28)
+
+
+### Features
+
+* **synology:** files par fichier + getFiles() comme qbittorrent ([c6c52a1](https://github.com/Masutayunikon/FanKarr/commit/c6c52a1ae742dcb02ee86f3de04831ac1f041940))
+
+
+### Bug Fixes
+
+* **organize:** markOrganized manquant en mode copy pour les packs ([98ed3c7](https://github.com/Masutayunikon/FanKarr/commit/98ed3c7199915d2aafbb7be87b41fb725bb0c1ee))
+* **synology:** resolution hash via cache URI + magnet + detail.hash ([ee1c7d5](https://github.com/Masutayunikon/FanKarr/commit/ee1c7d579c3795701158e39159511be3cc1789d7))
+* **torrent:** correction suppression torrent après déplacement ([ed556ac](https://github.com/Masutayunikon/FanKarr/commit/ed556acd1d2990a6375d4a60f745048a79854249))
+
 ## [3.18.3](https://github.com/Masutayunikon/FanKarr/compare/v3.18.2...v3.18.3) (2026-05-27)
 
 
