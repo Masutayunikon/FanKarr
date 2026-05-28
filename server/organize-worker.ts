@@ -458,7 +458,12 @@ async function organizeTorrent(
         try {
             fs.mkdirSync(destDir, { recursive: true })
             if (organizeMode === 'copy') {
-                await  fsp.copyFile(src, dest)
+                await fsp.copyFile(src, dest)
+                markOrganized(hash, episode_id, {
+                    at: new Date().toISOString(), season: season_number,
+                    episode: episode_number, episode_id,
+                    src_filename: filename, dest_filename: nfo_filename, dest_path: dest, dest_dir: destDir,
+                })
             } else if (organizeMode === 'hardlink') {
                 if (!tryHardlink(src, dest)) await fsp.copyFile(src, dest)
                 markOrganized(hash, episode_id, {
