@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.19.1](https://github.com/Masutayunikon/FanKarr/compare/v3.19.0...v3.19.1) (2026-05-28)
+
+
+### Bug Fixes
+
+* **ci:** rerun deployment ([099b088](https://github.com/Masutayunikon/FanKarr/commit/099b0889b069f0226b7cb2ec4fa3b1ca535a82a6))
+
 ## [3.19.0](https://github.com/Masutayunikon/FanKarr/compare/v3.18.3...v3.19.0) (2026-05-28)
 
 
