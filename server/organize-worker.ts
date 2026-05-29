@@ -63,6 +63,10 @@ function isOrganized(hash: string, episodeId: number): boolean {
 }
 
 // ─── Lookup torrent dans les seriesData ───────────────────────
+
+/**
+ * Recherche par infohash (méthode principale).
+ */
 function findTorrentByHash(hash: string, seriesData: any[]): { torrent: any; serieData: any } | null {
     const h = hash.toLowerCase()
     for (const sd of seriesData) {
@@ -95,6 +99,53 @@ function findTorrentByHash(hash: string, seriesData: any[]): { torrent: any; ser
             } else if (matchingEpisodes.length > 1) {
                 const t = matchingEpisodes[0].torrents.find((t: any) => t.infohash?.toLowerCase() === h)
                 return { torrent: { ...t, _season: season }, serieData: sd }
+            }
+        }
+    }
+    return null
+}
+
+/**
+ * Fallback quand le hash n'est pas résolu (ex: dbid_X Synology).
+ * Cherche par torrent_name (nom réel du dossier torrent) ou title dans le catalogue.
+ * Retourne aussi le vrai infohash BT pour que l'import soit correctement indexé.
+ */
+function findTorrentByName(
+    name      : string,
+    seriesData: any[],
+): { torrent: any; serieData: any; infohash: string } | null {
+    const n = name.toLowerCase().trim()
+    if (!n) return null
+
+    for (const sd of seriesData) {
+        // Pack intégral (torrents au niveau série)
+        for (const t of sd.torrents ?? []) {
+            if (!t.infohash) continue
+            if (
+                t.torrent_name?.toLowerCase().trim() === n ||
+                t.title?.toLowerCase().trim()        === n
+            ) return { torrent: t, serieData: sd, infohash: t.infohash.toLowerCase() }
+        }
+
+        for (const season of sd.seasons ?? []) {
+            // Pack saison
+            for (const t of season.torrents ?? []) {
+                if (!t.infohash) continue
+                if (
+                    t.torrent_name?.toLowerCase().trim() === n ||
+                    t.title?.toLowerCase().trim()        === n
+                ) return { torrent: { ...t, _season: season }, serieData: sd, infohash: t.infohash.toLowerCase() }
+            }
+
+            // Torrent épisode unique
+            for (const ep of season.episodes ?? []) {
+                for (const t of ep.torrents ?? []) {
+                    if (!t.infohash) continue
+                    if (
+                        t.torrent_name?.toLowerCase().trim() === n ||
+                        t.title?.toLowerCase().trim()        === n
+                    ) return { torrent: { ...t, _episode: ep, _season: season }, serieData: sd, infohash: t.infohash.toLowerCase() }
+                }
             }
         }
     }
@@ -504,7 +555,22 @@ parentPort?.on('message', async (msg: any) => {
     for (const t of torrents) {
         if (t.state !== 'seeding') continue
 
-        const found = findTorrentByHash(t.hash, seriesData)
+        // Résolution principale : par infohash
+        let found = findTorrentByHash(t.hash, seriesData)
+        let effectiveHash = t.hash
+
+        // Fallback : si le hash n'est pas résolu (ex: dbid_X Synology), on cherche
+        // par torrent_name — le nom du dossier racine tel que rapporté par le client,
+        // qui correspond au champ torrent_name dans les données série.
+        if (!found && t.name) {
+            const byName = findTorrentByName(t.name, seriesData)
+            if (byName) {
+                found         = byName
+                effectiveHash = byName.infohash
+                debug(`Hash résolu par torrent_name : "${t.name}" → ${effectiveHash.slice(0, 8)}…`)
+            }
+        }
+
         if (!found) {
             debug(`Torrent "${t.name}" (${t.hash.slice(0, 8)}…) non trouvé dans les données série — catalogue peut-être pas à jour`)
             continue
@@ -512,8 +578,8 @@ parentPort?.on('message', async (msg: any) => {
 
         const { torrent, serieData } = found
         const seasonFilter = torrent._season?.season_number
-        const fileMap      = buildFileMap(serieData, t.hash, nfoSupport, seasonFilter)
-        const orgHash      = organized[t.hash] ?? {}
+        const fileMap      = buildFileMap(serieData, effectiveHash, nfoSupport, seasonFilter)
+        const orgHash      = organized[effectiveHash] ?? {}
         const allDone      = fileMap.size > 0
             ? [...fileMap.values()].every(f => orgHash[String(f.episode_id)])
             : Object.keys(orgHash).length > 0
@@ -546,8 +612,8 @@ parentPort?.on('message', async (msg: any) => {
                 }
             }
 
-            const result = await organizeTorrent(t.hash, t.name, t.save_path, seriesData, completedFileNames)
-            parentPort?.postMessage({ type: 'result', hash: t.hash, name: t.name, serieId: serieData.id ?? null, ...result })
+            const result = await organizeTorrent(effectiveHash, t.name, t.save_path, seriesData, completedFileNames)
+            parentPort?.postMessage({ type: 'result', hash: effectiveHash, name: t.name, serieId: serieData.id ?? null, ...result })
         } catch (err) {
             error(`Erreur lors de l'import de "${t.name}" : ${err instanceof Error ? err.message : err}`)
         }
