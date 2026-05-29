@@ -120,9 +120,10 @@ async function dsRequest(
 
 const DS: TorrentClientDriver = {
     definition: {
-        id    : 'synology-ds',
-        label : 'Synology Download Station',
-        fields: [
+        id                   : 'synology-ds',
+        label                : 'Synology Download Station',
+        filterByManagedHashes: true,
+        fields               : [
             { key: 'url',        label: 'URL DSM',                  type: 'url',      placeholder: 'http://192.168.1.x:5000',   required: true },
             { key: 'username',   label: 'Identifiant',              type: 'text',     placeholder: 'admin',                     required: true },
             { key: 'password',   label: 'Mot de passe',             type: 'password', placeholder: '••••••••',                 required: true },
@@ -245,6 +246,13 @@ const DS: TorrentClientDriver = {
 
         const sid = await dsLogin(config)
 
+        // Snapshot des IDs existants avant l'ajout — pour identifier la nouvelle tâche Synology
+        const beforeIds = new Set<string>()
+        try {
+            const before = await dsRequest(config, 'SYNO.DownloadStation.Task', 'list', '1', {}, sid)
+            for (const t of before?.tasks ?? []) beforeIds.add(String(t.id))
+        } catch {}
+
         const doAdd = async (withDestination: boolean) => {
             const params = new URLSearchParams({
                 api    : 'SYNO.DownloadStation.Task',
@@ -268,6 +276,21 @@ const DS: TorrentClientDriver = {
         }
 
         if (!data.success) throw new Error(`Ajout échoué : ${JSON.stringify(data.error)}`)
+
+        // Snapshot après ajout — identifier l'ID natif Synology (dbid_X) de la tâche créée
+        // et le stocker dans _hashToSynoId pour remove/getFiles sans attendre le prochain list()
+        if (options?.infohash) {
+            try {
+                const after   = await dsRequest(config, 'SYNO.DownloadStation.Task', 'list', '1', {}, sid)
+                const newTask = (after?.tasks ?? []).find((t: any) => !beforeIds.has(String(t.id)))
+                if (newTask) {
+                    const synoId = String(newTask.id).toLowerCase()
+                    _hashToSynoId.set(options.infohash.toLowerCase(), synoId)
+                    logger.debug('synology-ds', `ID Synology capturé : ${synoId} → ${options.infohash.slice(0, 8)}…`)
+                }
+            } catch {}
+        }
+
         logger.info('synology-ds', `Torrent ajouté avec succès${config.savePath ? ` (dossier: ${config.savePath})` : ''}`)
     },
 

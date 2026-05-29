@@ -22,9 +22,12 @@ export interface FieldDef {
 }
 
 export interface TorrentClientDefinition {
-    id     : string
-    label  : string
-    fields : FieldDef[]
+    id                    : string
+    label                 : string
+    fields                : FieldDef[]
+    /** Si true, dispatchList filtre les résultats pour n'inclure que les
+     *  torrents ajoutés via FanKarr (clients sans catégories natives). */
+    filterByManagedHashes?: boolean
 }
 
 export interface SavedClient {
@@ -94,7 +97,64 @@ export function getAvailableClients(): TorrentClientDefinition[] {
 
 // ─── Persistence ──────────────────────────────────────────────────────────────
 
-const CLIENTS_PATH = path.join(DATA_DIR, 'torrent_clients.json')
+const CLIENTS_PATH  = path.join(DATA_DIR, 'torrent_clients.json')
+
+// ─── Managed tasks ─────────────────────────────────────────────────────────────
+// Stocke les infohashes des torrents ajoutés via FanKarr, par UUID client.
+// Utilisé par dispatchList pour filtrer les résultats des clients sans
+// catégories natives (ex: Synology Download Station).
+// Structure : { clientUuid: [infohash, ...] }
+
+const MANAGED_PATH = path.join(DATA_DIR, 'managed_tasks.json')
+
+function loadManagedMap(): Record<string, string[]> {
+    try {
+        if (!fs.existsSync(MANAGED_PATH)) return {}
+        return JSON.parse(fs.readFileSync(MANAGED_PATH, 'utf-8'))
+    } catch { return {} }
+}
+
+function saveManagedMap(data: Record<string, string[]>) {
+    try {
+        fs.mkdirSync(path.dirname(MANAGED_PATH), { recursive: true })
+        fs.writeFileSync(MANAGED_PATH, JSON.stringify(data, null, 2), 'utf-8')
+    } catch {}
+}
+
+/** Retourne le Set des infohashes gérés pour un client, ou null si vide. */
+function getManagedSet(clientUuid: string): Set<string> | null {
+    const list = loadManagedMap()[clientUuid]
+    if (!list || list.length === 0) return null
+    return new Set(list)
+}
+
+/** Enregistre un infohash comme géré pour un client (idempotent). */
+export function trackManagedHash(clientUuid: string, infohash: string) {
+    const data = loadManagedMap()
+    if (!data[clientUuid]) data[clientUuid] = []
+    const h = infohash.toLowerCase()
+    if (!data[clientUuid].includes(h)) {
+        data[clientUuid].push(h)
+        saveManagedMap(data)
+    }
+}
+
+/** Retire un infohash de la liste gérée pour un client. */
+export function untrackManagedHash(clientUuid: string, infohash: string) {
+    const data = loadManagedMap()
+    if (!data[clientUuid]) return
+    data[clientUuid] = data[clientUuid].filter(h => h !== infohash.toLowerCase())
+    if (data[clientUuid].length === 0) delete data[clientUuid]
+    saveManagedMap(data)
+}
+
+/** Supprime toutes les tâches gérées d'un client (appelé lors de la suppression du client). */
+function clearManagedHashes(clientUuid: string) {
+    const data = loadManagedMap()
+    if (!data[clientUuid]) return
+    delete data[clientUuid]
+    saveManagedMap(data)
+}
 
 function loadClients(): SavedClient[] {
     try {
@@ -129,6 +189,7 @@ export function removeClient(uuid: string): boolean {
     const filtered = clients.filter(c => c.uuid !== uuid)
     if (filtered.length === clients.length) return false
     saveClients(filtered)
+    clearManagedHashes(uuid)
     logger.info('torrent-clients', `Client supprimé : "${target?.name}" (${target?.type})`)
     return true
 }
@@ -243,6 +304,10 @@ export async function dispatchDownload(url: string, options?: DownloadOptions): 
         }
         try {
             await driver.add(client.config, url, options)
+            if (options?.infohash) {
+                trackManagedHash(client.uuid, options.infohash)
+                logger.debug('torrent-clients', `Tâche ${options.infohash.slice(0, 8)}… suivie pour "${client.name}"`)
+            }
             logger.info('torrent-clients', `Téléchargement envoyé à "${client.name}"`)
             results.push({ uuid: client.uuid, name: client.name, ok: true })
         } catch (err) {
@@ -266,6 +331,7 @@ export async function dispatchRemove(hash: string, deleteFiles = false): Promise
         try {
             await driver.remove(client.config, hash, deleteFiles)
             logger.info('torrent-clients', `Torrent ${hash.slice(0, 8)}… supprimé de "${client.name}"${deleteFiles ? ' (avec fichiers)' : ''}`)
+            untrackManagedHash(client.uuid, hash)
             found = true
         } catch (err) {
             const msg = err instanceof Error ? err.message : 'Erreur inconnue'
@@ -326,6 +392,14 @@ export async function dispatchList(
                         logger.debug('torrent-clients', `Synology hash résolu : "${t.name}" → ${resolved.slice(0, 8)}…`)
                         hash = resolved
                     }
+                }
+
+                // Filtre par hashes gérés pour les clients sans catégories natives.
+                // Si le Set de tâches suivies est non-vide et que ce hash n'y figure pas,
+                // on ignore ce torrent (il n'a pas été ajouté via FanKarr).
+                if (driver.definition.filterByManagedHashes) {
+                    const managed = getManagedSet(client.uuid)
+                    if (managed && !managed.has(hash)) continue
                 }
 
                 results.push({ ...t, hash, save_path, client_uuid: client.uuid, client_name: client.name })
