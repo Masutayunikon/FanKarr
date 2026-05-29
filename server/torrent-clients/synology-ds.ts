@@ -172,7 +172,17 @@ const DS: TorrentClientDriver = {
 
         const tasks: any[] = data?.tasks ?? []
 
-        return tasks.map(t => {
+        // Filtrage par dossier cible — Synology n'a pas de système de labels/catégories.
+        // Si savePath est configuré, on ne garde que les tâches dont la destination correspond.
+        const normalizedSavePath = String(config.savePath ?? '').replace(/\/+$/, '').toLowerCase()
+        const filtered = normalizedSavePath
+            ? tasks.filter(t => {
+                const dest = String(t.additional?.detail?.destination ?? '').replace(/\/+$/, '').toLowerCase()
+                return dest === normalizedSavePath || dest.startsWith(normalizedSavePath + '/')
+            })
+            : tasks
+
+        return filtered.map(t => {
             const transfer  = t.additional?.transfer ?? {}
             const detail    = t.additional?.detail   ?? {}
             const fileList: any[] = t.additional?.file ?? []
@@ -235,34 +245,26 @@ const DS: TorrentClientDriver = {
 
         const sid = await dsLogin(config)
 
-        const makeBody = (withDestination: boolean) => {
-            const body = new URLSearchParams({
+        const doAdd = async (withDestination: boolean) => {
+            const params = new URLSearchParams({
                 api    : 'SYNO.DownloadStation.Task',
                 version: '1',
                 method : 'create',
                 _sid   : sid,
                 uri    : url,
             })
-            if (withDestination && config.savePath) body.append('destination', String(config.savePath))
-            return body
-        }
-
-        const doRequest = async (body: URLSearchParams) => {
-            const res = await fetch(`${config.url}/webapi/DownloadStation/task.cgi`, {
-                method : 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body   : body.toString(),
-            })
+            if (withDestination && config.savePath) params.append('destination', String(config.savePath))
+            const res = await fetch(`${config.url}/webapi/DownloadStation/task.cgi?${params}`)
             if (!res.ok) throw new Error(`HTTP ${res.status}`)
             return res.json()
         }
 
-        let data = await doRequest(makeBody(true))
+        let data = await doAdd(true)
 
-        // Code 403 = destination inexistante sur le NAS → réessai sans destination
+        // Code 403 = dossier cible introuvable sur le NAS → réessai sans destination
         if (!data.success && data.error?.code === 403 && config.savePath) {
             logger.warn('synology-ds', `Dossier cible "${config.savePath}" introuvable (code 403) — ajout sans destination`)
-            data = await doRequest(makeBody(false))
+            data = await doAdd(false)
         }
 
         if (!data.success) throw new Error(`Ajout échoué : ${JSON.stringify(data.error)}`)
