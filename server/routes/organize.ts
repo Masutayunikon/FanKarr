@@ -4,6 +4,7 @@ import { logger } from '../logger.js'
 import { organizeTorrent, migrateOrganizedEpisodeIds } from '../organize.js'
 import { loadEnrichedSeriesData } from '../lib/github-cache.js'
 import { recentOrganized, pushNotif } from '../lib/notifs.js'
+import { dispatchGetFiles } from '../torrent-clients/index.js'
 import { DATA_DIR } from '../config.js'
 import path from 'path'
 
@@ -36,7 +37,13 @@ router.post('/organize', requireAuth, async (req, res) => {
     if (!hash || !name || !save_path) { res.status(400).json({ error: 'hash, name et save_path requis' }); return }
     try {
         const seriesData = await loadEnrichedSeriesData()
-        const result     = await organizeTorrent(hash, name, save_path, seriesData)
+
+        // Récupère la progression par fichier depuis le client torrent.
+        // Permet au worker de sauter les fichiers encore en téléchargement (EBUSY sur Windows).
+        // En cas d'échec (client injoignable, hash non trouvé), on continue sans filtre.
+        const files = await dispatchGetFiles(hash).catch(() => [])
+
+        const result = await organizeTorrent(hash, name, save_path, seriesData, files)
         if (result.done > 0 || result.errors.length > 0) {
             pushNotif({ hash, name, done: result.done, skipped: result.skipped, errors: result.errors.length, errorFiles: result.errors, at: new Date().toISOString() })
         }

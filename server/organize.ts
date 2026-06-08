@@ -520,13 +520,17 @@ export async function organizeTorrent(
     hash      : string,
     name      : string,
     savePath  : string,
-    seriesData: any[]
+    seriesData: any[],
+    files?    : { name?: string; progress: number; priority?: number }[],
 ): Promise<OrganizeResult> {
     logger.info('organize', `Import manuel lancé pour "${name}" (${hash})`)
 
     return new Promise((resolve, reject) => {
         const worker      = new Worker(resolveWorkerPath())
-        const fakeTorrent = { hash, name, save_path: savePath, state: 'seeding' }
+        // files : progression par fichier récupérée depuis le client torrent.
+        // Permet au worker de ne traiter que les fichiers à 100% et d'éviter
+        // les EBUSY sur Windows quand qBit est encore en train d'écrire les autres.
+        const fakeTorrent = { hash, name, save_path: savePath, state: 'seeding', files: files ?? [] }
         const result: OrganizeResult = { total: 0, skipped: 0, done: 0, errors: [] }
 
         worker.on('message', (msg: any) => {
