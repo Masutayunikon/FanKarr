@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.20.1](https://github.com/Masutayunikon/FanKarr/compare/v3.20.0...v3.20.1) (2026-06-08)
+
+
+### Bug Fixes
+
+* **organize:** import manuel ne traite que les fichiers 100% complets ([f311c8e](https://github.com/Masutayunikon/FanKarr/commit/f311c8e2f3b9f53b6d03a327cf1b5bfd69cc6424))
+
 ## [3.20.0](https://github.com/Masutayunikon/FanKarr/compare/v3.19.1...v3.20.0) (2026-05-29)
 
 
