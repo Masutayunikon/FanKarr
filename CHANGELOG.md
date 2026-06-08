@@ -1,5 +1,18 @@
 # Changelog
 
+## [3.20.0](https://github.com/Masutayunikon/FanKarr/compare/v3.19.1...v3.20.0) (2026-05-29)
+
+
+### Features
+
+* **torrent:** système générique de suivi des tâches gérées ([a7250a5](https://github.com/Masutayunikon/FanKarr/commit/a7250a5f804189a7ddecef44193436cf6b324c31))
+
+
+### Bug Fixes
+
+* **organize:** fallback par torrent_name quand le hash n'est pas résolu ([f6f735a](https://github.com/Masutayunikon/FanKarr/commit/f6f735ad8838d0755472f739571684d75f9dc1b5))
+* **synology:** filtrage par savePath et retour au GET pour add() ([d326e08](https://github.com/Masutayunikon/FanKarr/commit/d326e0883477a7dbf453ab28a3fc619f759a8604))
+
 ## [3.19.1](https://github.com/Masutayunikon/FanKarr/compare/v3.19.0...v3.19.1) (2026-05-28)
 
 
