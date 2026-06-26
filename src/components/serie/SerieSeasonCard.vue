@@ -618,19 +618,21 @@ function _parseEpChap(plot: string | null | undefined): {
 
   const seasonMatch = text.match(/saison\s+(\d+)/i)
 
+  const season = epMatch?.[3] ?? seasonMatch?.[1] ?? null
+
   const chapMatch = text.match(
       /chapitres?\s+(\d+)(?:\s+[àa]\s+(\d+))?/i
   )
 
   const episodes = epMatch
-      ? (epMatch[2] ? `Ép. ${epMatch[1]}–${epMatch[2]}` : `Ép. ${epMatch[1]}`)
+      ? `${season ? `S${season} · ` : ''}${
+          epMatch[2]
+              ? `Ép. ${epMatch[1]}–${epMatch[2]}`
+              : `Ép. ${epMatch[1]}`
+      }`
       : null
 
-  const season = epMatch?.[3]
-      ? Number(epMatch[3])
-      : seasonMatch
-          ? Number(seasonMatch[1])
-          : null
+
 
   const chapters = chapMatch
       ? (chapMatch[2] ? `Ch. ${chapMatch[1]}–${chapMatch[2]}` : `Ch. ${chapMatch[1]}`)
