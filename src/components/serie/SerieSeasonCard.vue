@@ -606,33 +606,47 @@ const _epChapCache = new Map<string | null | undefined, ReturnType<typeof _parse
  */
 function _parseEpChap(plot: string | null | undefined): {
   episodes: string | null
-  chapters: string | null
+  season: number | null
+  chapters: string |null
   cleanPlot: string
 } {
   const text = plot ?? ''
 
-  const epMatch   = text.match(/[éeÉE]pisodes?\s+(\d+)(?:\s+[àa]\s+(\d+))?/i)
-  const chapMatch = text.match(/chapitres?\s+(\d+)(?:\s+[àa]\s+(\d+))?/i)
+  const epMatch = text.match(
+      /[éeÉE]pisodes?\s+(\d+)(?:\s+[àa]\s+(\d+))?(?:\s+de\s+la\s+saison\s+(\d+))?/i
+  )
+
+  const seasonMatch = text.match(/saison\s+(\d+)/i)
+
+  const chapMatch = text.match(
+      /chapitres?\s+(\d+)(?:\s+[àa]\s+(\d+))?/i
+  )
 
   const episodes = epMatch
-    ? (epMatch[2] ? `Ép. ${epMatch[1]}–${epMatch[2]}` : `Ép. ${epMatch[1]}`)
-    : null
-  const chapters = chapMatch
-    ? (chapMatch[2] ? `Ch. ${chapMatch[1]}–${chapMatch[2]}` : `Ch. ${chapMatch[1]}`)
-    : null
+      ? (epMatch[2] ? `Ép. ${epMatch[1]}–${epMatch[2]}` : `Ép. ${epMatch[1]}`)
+      : null
 
-  // Retirer les lignes contenant les références d'épisodes ou chapitres
+  const season = epMatch?.[3]
+      ? Number(epMatch[3])
+      : seasonMatch
+          ? Number(seasonMatch[1])
+          : null
+
+  const chapters = chapMatch
+      ? (chapMatch[2] ? `Ch. ${chapMatch[1]}–${chapMatch[2]}` : `Ch. ${chapMatch[1]}`)
+      : null
+
   let cleanPlot = text
-  if (episodes || chapters) {
+  if (episodes || chapters || season) {
     cleanPlot = text
-      .split(/\r?\n/)
-      .filter(line => !/[éeÉE]pisodes?\s+\d+|chapitres?\s+\d+/i.test(line))
-      .join('\n')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim()
+        .split(/\r?\n/)
+        .filter(line => !/(?:[éeÉE]pisodes?\s+\d+|chapitres?\s+\d+|saison\s+\d+)/i.test(line))
+        .join('\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim()
   }
 
-  return { episodes, chapters, cleanPlot }
+  return { episodes, season, chapters, cleanPlot }
 }
 function parseEpChap(plot: string | null | undefined) {
   if (_epChapCache.has(plot)) return _epChapCache.get(plot)!
