@@ -182,7 +182,7 @@
                     <input
                         v-model="modal.config[field.key]"
                         :type="field.type === 'password' ? 'password' : 'text'"
-                        placeholder=""
+                        :placeholder="field.placeholder ?? ''"
                         class="settings-input"
                     />
                   </div>
@@ -254,11 +254,7 @@ const clientMatrix = [
   {
     id: 'real-debrid',  label: 'Real-Debrid',              version: 'API v1',
     auth: 'Clé API',          fileSelect: true,  fileProgress: true,  torrentUpload: 'proxy', categories: false, deleteFiles: true,
-  },
-  {
-    id: 'alldebrid',    label: 'AllDebrid',                version: 'API v4',
-    auth: 'Clé API',          fileSelect: false, fileProgress: true,  torrentUpload: 'proxy', categories: false, deleteFiles: true,
-  },
+  }
 ]
 
 const modal = ref({

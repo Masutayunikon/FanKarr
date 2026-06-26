@@ -2,8 +2,9 @@ import { DATA_DIR } from '../config.js'
 import path from 'path'
 import fs from 'fs'
 
-const GITHUB_BASE = process.env.GITHUB_BASE
-    ?? 'https://raw.githubusercontent.com/masutayunikon/fankarr-scraper/main'
+const GITHUB_BASE =
+  process.env.GITHUB_BASE?.trim() ||
+  'https://raw.githubusercontent.com/masutayunikon/fankarr-scraper/main'
 
 const CACHE_TTL_MS = 1 * 60 * 60 * 1000
 
