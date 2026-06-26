@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.20.3](https://github.com/Masutayunikon/FanKarr/compare/v3.20.2...v3.20.3) (2026-06-26)
+
+
+### Bug Fixes
+
+* **serie:** ajout du label de saisons avec les episodes ([63146fd](https://github.com/Masutayunikon/FanKarr/commit/63146fdc27d98acb70cf86c7890ea1236388d717))
+
 ## [3.20.2](https://github.com/Masutayunikon/FanKarr/compare/v3.20.1...v3.20.2) (2026-06-26)
 
 
