@@ -1,5 +1,15 @@
 # Changelog
 
+## [3.20.2](https://github.com/Masutayunikon/FanKarr/compare/v3.20.1...v3.20.2) (2026-06-26)
+
+
+### Bug Fixes
+
+* **client:** add placeholder from config ([3799d33](https://github.com/Masutayunikon/FanKarr/commit/3799d33c625fe28eab4b46917ff32b1266cda1e3))
+* **client:** remove alldebrid ([3799d33](https://github.com/Masutayunikon/FanKarr/commit/3799d33c625fe28eab4b46917ff32b1266cda1e3))
+* **label:** add season of episodes ([98b317d](https://github.com/Masutayunikon/FanKarr/commit/98b317d493b7742c330d49ca816c0fecd983e82a))
+* **scraper:** fallback on empty env for GITHUB_BASE ([3799d33](https://github.com/Masutayunikon/FanKarr/commit/3799d33c625fe28eab4b46917ff32b1266cda1e3))
+
 ## [3.20.1](https://github.com/Masutayunikon/FanKarr/compare/v3.20.0...v3.20.1) (2026-06-08)
 
 
