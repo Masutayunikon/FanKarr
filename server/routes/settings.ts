@@ -10,7 +10,7 @@ router.get('/settings', requireAuth, (_req, res) => {
 })
 
 router.post('/settings', requireAuth, (req, res) => {
-    const { mediaPath, completePath, organizeMode, category, nfoSupport, autoImport, devMode, deleteTorrentOnMove, autoUnimportMissing, requestAutoDownloadUsers } = req.body
+    const { mediaPath, completePath, organizeMode, category, nfoSupport, autoImport, devMode, deleteTorrentOnMove, autoUnimportMissing, requestAutoDownloadUsers, englishDirectory } = req.body
     const patch: Record<string, any> = {}
     if (mediaPath                    !== undefined) patch.mediaPath                    = mediaPath
     if (completePath                 !== undefined) patch.completePath                 = completePath
@@ -22,6 +22,7 @@ router.post('/settings', requireAuth, (req, res) => {
     if (deleteTorrentOnMove          !== undefined) patch.deleteTorrentOnMove          = deleteTorrentOnMove
     if (autoUnimportMissing          !== undefined) patch.autoUnimportMissing          = autoUnimportMissing
     if (requestAutoDownloadUsers     !== undefined) patch.requestAutoDownloadUsers     = requestAutoDownloadUsers
+    if (englishDirectory             !== undefined) patch.englishDirectory             = englishDirectory
     const updated = writeSettings(patch)
     logger.info('api', 'Paramètres mis à jour')
     res.json(updated)

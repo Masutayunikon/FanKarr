@@ -16,6 +16,7 @@ export interface Settings {
     requestAutoDownloadUsers: 'all' | string[]  // IDs users autorisés au dl auto sur approbation ; [] = désactivé
     jellyfinUrl         : string   // URL du serveur Jellyfin (ex: http://jellyfin:8096)
     jellyfinAdminToken  : string   // Token admin Jellyfin pour la sync
+    englishDirectory    : boolean  // Si true, les dossiers de séries sont en anglais (ex: "Season 1" au lieu de "Saison 1")
 }
 
 const defaults: Settings = {
@@ -30,6 +31,7 @@ const defaults: Settings = {
     requestAutoDownloadUsers: [],
     jellyfinUrl        : '',
     jellyfinAdminToken : '',
+    englishDirectory   : false,
 }
 
 export function readSettings(): Settings {

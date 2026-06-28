@@ -35,12 +35,12 @@ export interface OrgEntry {
 type Organized = Record<string, Record<string, OrgEntry>>
 
 // ─── Settings ─────────────────────────────────────────────────
-function readSettings(): { mediaPath: string; completePath: string; organizeMode: string; nfoSupport: boolean } {
+function readSettings(): { mediaPath: string; completePath: string; organizeMode: string; nfoSupport: boolean, englishDirectory: boolean } {
     try {
         const p = path.join(DATA_DIR, 'settings.json')
-        if (!fs.existsSync(p)) return { mediaPath: '', completePath: '', organizeMode: 'hardlink', nfoSupport: false }
+        if (!fs.existsSync(p)) return { mediaPath: '', completePath: '', organizeMode: 'hardlink', nfoSupport: false, englishDirectory: false }
         return JSON.parse(fs.readFileSync(p, 'utf-8'))
-    } catch { return { mediaPath: '', completePath: '', organizeMode: 'hardlink', nfoSupport: false } }
+    } catch { return { mediaPath: '', completePath: '', organizeMode: 'hardlink', nfoSupport: false , englishDirectory: false } }
 }
 
 // ─── Organized log ────────────────────────────────────────────
@@ -302,7 +302,8 @@ function swapExtension(filename: string, ext: string): string {
 }
 
 function seasonFolder(n: number): string {
-    return n === 0 ? 'Specials' : `Saison ${n}`
+    const { englishDirectory } = readSettings()
+    return n === 0 ? 'Specials' : (englishDirectory ? `Season ${String(n).padStart(2, '0')}` : `Saison ${n}`)
 }
 
 /**

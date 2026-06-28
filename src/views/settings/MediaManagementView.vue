@@ -103,6 +103,11 @@
             label="Désimporter si fichier manquant"
             description="Si un fichier importé n'est plus trouvé sur le disque lors du scan, il est automatiquement retiré de la bibliothèque."
         />
+        <SettingsToggle
+            v-model="form.englishDirectory"
+            label="Utilise 'Season' au lieu de 'Saison' dans les dossiers"
+            description="Si activé, les dossiers de saisons seront nommés 'Season 01' au lieu de 'Saison 01'."
+        />
       </div>
 
       <!-- Plex -->
@@ -215,6 +220,7 @@ const form = ref({
   autoImport          : true,
   deleteTorrentOnMove : false,
   autoUnimportMissing : false,
+  englishDirectory    : false,
 })
 
 const picker = ref<{ open: boolean; field: 'completePath' | 'mediaPath'; currentPath: string }>({
