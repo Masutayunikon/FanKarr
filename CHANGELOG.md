@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.21.0](https://github.com/Masutayunikon/FanKarr/compare/v3.20.3...v3.21.0) (2026-06-28)
+
+
+### Features
+
+* **settings:** ajout de englishDirectory qui permet d'avoir Season XX au lieu de Saison X ([6f1e0dc](https://github.com/Masutayunikon/FanKarr/commit/6f1e0dc844e8f97b0966b223d558c09ab498ddc9))
+
 ## [3.20.3](https://github.com/Masutayunikon/FanKarr/compare/v3.20.2...v3.20.3) (2026-06-26)
 
 
