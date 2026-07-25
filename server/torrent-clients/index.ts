@@ -7,18 +7,22 @@
 import { randomUUID } from 'crypto'
 import fs from 'fs'
 import path from 'path'
+import { Agent, fetch as undiciFetch } from 'undici'
 import { DATA_DIR } from '../config.js'
 import { logger } from '../logger.js'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+/** Config d'un client torrent (les champs `boolean` sont stockés en booléens). */
+export type ClientConfig = Record<string, string | number | boolean>
+
 export interface FieldDef {
     key         : string
     label       : string
-    type        : 'text' | 'password' | 'number' | 'url'
+    type        : 'text' | 'password' | 'number' | 'url' | 'boolean'
     placeholder?: string
     required    : boolean
-    default?    : string | number
+    default?    : string | number | boolean
 }
 
 export interface TorrentClientDefinition {
@@ -34,7 +38,7 @@ export interface SavedClient {
     uuid  : string
     name  : string
     type  : string
-    config: Record<string, string | number>
+    config: ClientConfig
 }
 
 export interface TorrentFileProgress {
@@ -70,12 +74,50 @@ export interface DownloadOptions {
 
 export interface TorrentClientDriver {
     definition  : TorrentClientDefinition
-    test        : (config: Record<string, string | number>) => Promise<{ ok: boolean; message: string }>
-    healthcheck : (config: Record<string, string | number>) => Promise<{ online: boolean; version?: string }>
-    add         : (config: Record<string, string | number>, url: string, options?: DownloadOptions) => Promise<void>
-    list        : (config: Record<string, string | number>, category?: string) => Promise<TorrentInfo[]>
-    remove      : (config: Record<string, string | number>, hash: string, deleteFiles?: boolean) => Promise<void>
-    getFiles   ?: (config: Record<string, string | number>, hash: string) => Promise<TorrentFileProgress[]>
+    test        : (config: ClientConfig) => Promise<{ ok: boolean; message: string }>
+    healthcheck : (config: ClientConfig) => Promise<{ online: boolean; version?: string }>
+    add         : (config: ClientConfig, url: string, options?: DownloadOptions) => Promise<void>
+    list        : (config: ClientConfig, category?: string) => Promise<TorrentInfo[]>
+    remove      : (config: ClientConfig, hash: string, deleteFiles?: boolean) => Promise<void>
+    getFiles   ?: (config: ClientConfig, hash: string) => Promise<TorrentFileProgress[]>
+}
+
+// ─── Certificats TLS ──────────────────────────────────────────────────────────
+// Option "ignoreCertificateErrors" (par client) : accepte les certificats
+// auto-signés/invalides. Node → Agent undici (cf. plex.ts) ; Bun → option
+// `tls` de son fetch natif (l'Agent undici n'y est pas honoré).
+
+let _insecureAgent: Agent | null = null
+
+function insecureAgent(): Agent {
+    if (!_insecureAgent) _insecureAgent = new Agent({ connect: { rejectUnauthorized: false } })
+    return _insecureAgent
+}
+
+export function ignoreCertificateErrors(config: ClientConfig): boolean {
+    const v = config.ignoreCertificateErrors
+    return v === true || v === 'true' || v === 1
+}
+
+// Option `tls` propre au fetch de Bun, absente des types standards.
+interface BunRequestInit extends RequestInit {
+    tls?: { rejectUnauthorized?: boolean }
+}
+
+const isBun = 'bun' in process.versions
+
+/** fetch du client : accepte les certificats invalides si l'option est active. */
+export function clientFetch(
+    config : ClientConfig,
+    url    : string,
+    init   : RequestInit = {},
+): Promise<Response> {
+    if (!ignoreCertificateErrors(config)) return fetch(url, init)
+    if (isBun) {
+        const bunInit: BunRequestInit = { ...init, tls: { rejectUnauthorized: false } }
+        return fetch(url, bunInit)
+    }
+    return undiciFetch(url, { ...init, dispatcher: insecureAgent() } as Parameters<typeof undiciFetch>[1]) as unknown as Promise<Response>
 }
 
 // ─── Registry ─────────────────────────────────────────────────────────────────
@@ -174,7 +216,7 @@ export function listClients(): SavedClient[] {
     return loadClients()
 }
 
-export function addClient(name: string, type: string, config: Record<string, string | number>): SavedClient {
+export function addClient(name: string, type: string, config: ClientConfig): SavedClient {
     const clients = loadClients()
     const client: SavedClient = { uuid: randomUUID(), name, type, config }
     clients.push(client)
@@ -198,7 +240,7 @@ export function getClient(uuid: string): SavedClient | undefined {
     return loadClients().find(c => c.uuid === uuid)
 }
 
-export function updateClient(uuid: string, name: string, type: string, config: Record<string, string | number>): SavedClient | null {
+export function updateClient(uuid: string, name: string, type: string, config: ClientConfig): SavedClient | null {
     const clients = loadClients()
     const index   = clients.findIndex(c => c.uuid === uuid)
     if (index === -1) return null

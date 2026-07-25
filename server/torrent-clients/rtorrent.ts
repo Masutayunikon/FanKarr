@@ -5,7 +5,8 @@
  * Compatible ruTorrent (via /RPC2) et rTorrent standalone (via /RPC2 ou /XMLRPC).
  */
 
-import type { TorrentClientDriver, TorrentInfo, DownloadOptions } from './index.js'
+import type { TorrentClientDriver, TorrentInfo, DownloadOptions, ClientConfig } from './index.js'
+import { clientFetch } from './index.js'
 import { logger } from '../logger.js'
 
 // ─── XML-RPC helpers ──────────────────────────────────────────
@@ -55,7 +56,7 @@ function parseXmlValue(node: Element): any {
 }
 
 async function rpcCall(
-    config : Record<string, string | number>,
+    config : ClientConfig,
     method : string,
     params : any[] = [],
 ): Promise<any> {
@@ -69,7 +70,7 @@ async function rpcCall(
     const rpcPath = String(config.rpcPath || '/RPC2')
     const url     = `${String(config.url).replace(/\/+$/, '')}${rpcPath}`
 
-    const res = await fetch(url, { method: 'POST', headers, body })
+    const res = await clientFetch(config, url, { method: 'POST', headers, body })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
     const text = await res.text()
@@ -109,7 +110,7 @@ function parseInnerValue(inner: string): any {
 
 // multicall pour récupérer plusieurs champs en une requête
 async function d_multicall(
-    config : Record<string, string | number>,
+    config : ClientConfig,
     view   : string,
     methods: string[],
 ): Promise<any[][]> {
@@ -118,7 +119,7 @@ async function d_multicall(
     return Array.isArray(result) ? result : []
 }
 
-async function rtTorrentExists(config: Record<string, string | number>, hash: string): Promise<boolean> {
+async function rtTorrentExists(config: ClientConfig, hash: string): Promise<boolean> {
     try {
         const rows = await d_multicall(config, 'main', ['d.hash'])
         return rows.some(r => String(r[0]).toLowerCase() === hash.toLowerCase())
@@ -134,7 +135,7 @@ async function rtTorrentExists(config: Record<string, string | number>, hash: st
  * On set les priorités dès que les fichiers sont disponibles, avant que le download réel commence.
  */
 async function rtApplyFilePriority(
-    config   : Record<string, string | number>,
+    config   : ClientConfig,
     hash     : string,
     fileIndex: number,
 ): Promise<void> {
@@ -192,6 +193,7 @@ const RT: TorrentClientDriver = {
             { key: 'savePath', label: 'Dossier cible',          type: 'text',     placeholder: '/downloads/fankai',      required: false },
             { key: 'remotePath', label: 'Chemin distant (client)', type: 'text',  placeholder: '/downloads',             required: false },
             { key: 'localPath',  label: 'Chemin local (FanKarr)',  type: 'text',  placeholder: '/mnt/nas/downloads',     required: false },
+            { key: 'ignoreCertificateErrors', label: 'Ignorer les erreurs de certificat SSL', type: 'boolean', required: false },
         ],
     },
 

@@ -13,12 +13,12 @@
  * (dossier où l'utilisateur télécharge ses fichiers RD via FUSE, WebDAV ou autre).
  */
 
-import type { TorrentClientDriver, TorrentInfo, TorrentFileProgress, DownloadOptions } from './index.js'
+import type { TorrentClientDriver, TorrentInfo, TorrentFileProgress, DownloadOptions, ClientConfig } from './index.js'
 import { logger } from '../logger.js'
 
 const RD_BASE = 'https://api.real-debrid.com/rest/1.0'
 
-function rdHeaders(config: Record<string, string | number>) {
+function rdHeaders(config: ClientConfig) {
     return {
         Authorization: `Bearer ${config.apiKey}`,
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -26,7 +26,7 @@ function rdHeaders(config: Record<string, string | number>) {
 }
 
 async function rdFetch(
-    config : Record<string, string | number>,
+    config : ClientConfig,
     method : 'GET' | 'POST' | 'DELETE',
     path   : string,
     body  ?: URLSearchParams,

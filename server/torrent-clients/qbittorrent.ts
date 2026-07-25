@@ -3,7 +3,8 @@
  * Supports qBittorrent 4.x and 5.x (including 5.2.0+ API key authentication)
  */
 
-import type { TorrentClientDriver, TorrentInfo, DownloadOptions } from './index.js'
+import type { TorrentClientDriver, TorrentInfo, DownloadOptions, ClientConfig } from './index.js'
+import { clientFetch } from './index.js'
 import { logger } from '../logger.js'
 
 // qBittorrent répond normalement "Ok." mais certains setups (reverse proxy, etc.)
@@ -27,7 +28,7 @@ function mapState(state: string): TorrentInfo['state'] {
 }
 
 // Retourne les headers d'authentification : Bearer (≥5.2.0) ou cookie SID
-async function qbAuth(config: Record<string, string | number>): Promise<Record<string, string>> {
+async function qbAuth(config: ClientConfig): Promise<Record<string, string>> {
     if (config.apiKey) {
         return { Authorization: `Bearer ${config.apiKey}` }
     }
@@ -35,12 +36,12 @@ async function qbAuth(config: Record<string, string | number>): Promise<Record<s
     return { Cookie: cookie }
 }
 
-async function qbLogin(config: Record<string, string | number>): Promise<string> {
+async function qbLogin(config: ClientConfig): Promise<string> {
     const form = new URLSearchParams()
     form.append('username', String(config.username ?? ''))
     form.append('password', String(config.password ?? ''))
 
-    const res = await fetch(`${config.url}/api/v2/auth/login`, {
+    const res = await clientFetch(config, `${config.url}/api/v2/auth/login`, {
         method : 'POST',
         body   : form,
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -55,9 +56,9 @@ async function qbLogin(config: Record<string, string | number>): Promise<string>
     return cookie
 }
 
-async function qbTorrentExists(config: Record<string, string | number>, authHeaders: Record<string, string>, hash: string): Promise<boolean> {
+async function qbTorrentExists(config: ClientConfig, authHeaders: Record<string, string>, hash: string): Promise<boolean> {
     try {
-        const res = await fetch(`${config.url}/api/v2/torrents/info?hashes=${hash}`, {
+        const res = await clientFetch(config, `${config.url}/api/v2/torrents/info?hashes=${hash}`, {
             headers: authHeaders,
         })
         if (!res.ok) return false
@@ -73,7 +74,7 @@ async function qbTorrentExists(config: Record<string, string | number>, authHead
  * puis applique les priorités (désactive tout sauf la cible).
  */
 async function qbApplyFilePriority(
-    config   : Record<string, string | number>,
+    config   : ClientConfig,
     hash     : string,
     fileIndex: number,
 ): Promise<void> {
@@ -82,7 +83,7 @@ async function qbApplyFilePriority(
         await new Promise(r => setTimeout(r, attempt === 0 ? 100 : 500))
         try {
             const authH = await qbAuth(config)
-            const res = await fetch(`${config.url}/api/v2/torrents/files?hash=${hash}`, {
+            const res = await clientFetch(config, `${config.url}/api/v2/torrents/files?hash=${hash}`, {
                 headers: authH,
             })
             if (!res.ok) continue
@@ -105,13 +106,13 @@ async function qbApplyFilePriority(
                 const unwanted = files.map((_, i) => i).filter(i => i !== fileIndex)
                 if (unwanted.length > 0) {
                     const body = new URLSearchParams({ hash, id: unwanted.join('|'), priority: '0' })
-                    const r = await fetch(`${config.url}/api/v2/torrents/filePrio`, { method: 'POST', body, headers })
+                    const r = await clientFetch(config, `${config.url}/api/v2/torrents/filePrio`, { method: 'POST', body, headers })
                     if (!r.ok) { logger.warn('qbittorrent', `filePrio désactivation échouée (${r.status}) — retry`); continue }
                 }
             }
 
             // Activer le fichier cible (dans tous les cas)
-            const r2 = await fetch(`${config.url}/api/v2/torrents/filePrio`, {
+            const r2 = await clientFetch(config, `${config.url}/api/v2/torrents/filePrio`, {
                 method: 'POST',
                 body   : new URLSearchParams({ hash, id: String(fileIndex), priority: '1' }),
                 headers,
@@ -119,7 +120,7 @@ async function qbApplyFilePriority(
             if (!r2.ok) { logger.warn('qbittorrent', `filePrio activation échouée (${r2.status}) — retry`); continue }
 
             // Vérification : le fichier cible est bien à priorité > 0
-            const verif = await fetch(`${config.url}/api/v2/torrents/files?hash=${hash}`, { headers: authH })
+            const verif = await clientFetch(config, `${config.url}/api/v2/torrents/files?hash=${hash}`, { headers: authH })
             if (verif.ok) {
                 const verifiedFiles: any[] = await verif.json()
                 const target = verifiedFiles[fileIndex]
@@ -152,13 +153,14 @@ const QB: TorrentClientDriver = {
             { key: 'savePath',   label: 'Dossier cible',          type: 'text', placeholder: '/downloads/fankai',     required: false },
             { key: 'remotePath', label: 'Chemin distant (client)', type: 'text', placeholder: '/downloads',           required: false },
             { key: 'localPath',  label: 'Chemin local (FanKarr)',  type: 'text', placeholder: '/mnt/nas/downloads',   required: false },
+            { key: 'ignoreCertificateErrors', label: 'Ignorer les erreurs de certificat SSL', type: 'boolean', required: false },
         ],
     },
 
     async test(config) {
         try {
             const authH = await qbAuth(config)
-            const res = await fetch(`${config.url}/api/v2/app/version`, { headers: authH })
+            const res = await clientFetch(config, `${config.url}/api/v2/app/version`, { headers: authH })
             if (!res.ok) throw new Error(`HTTP ${res.status}`)
             logger.info('qbittorrent', `Test de connexion réussi sur ${config.url}`)
             return { ok: true, message: 'Connexion réussie' }
@@ -172,7 +174,7 @@ const QB: TorrentClientDriver = {
     async healthcheck(config) {
         try {
             const authH = await qbAuth(config)
-            const res = await fetch(`${config.url}/api/v2/app/version`, {
+            const res = await clientFetch(config, `${config.url}/api/v2/app/version`, {
                 headers: authH,
             })
             if (!res.ok) return { online: false }
@@ -190,7 +192,7 @@ const QB: TorrentClientDriver = {
         const authH  = await qbAuth(config)
         const params = new URLSearchParams()
         if (category) params.set('category', category)
-        const res = await fetch(`${config.url}/api/v2/torrents/info?${params}`, {
+        const res = await clientFetch(config, `${config.url}/api/v2/torrents/info?${params}`, {
             headers: authH,
         })
         if (!res.ok) throw new Error(`qB list échoué : ${res.status}`)
@@ -200,7 +202,7 @@ const QB: TorrentClientDriver = {
         const fileMap = new Map<string, any[]>()
         await Promise.all(data.map(async (t: any) => {
             try {
-                const r = await fetch(`${config.url}/api/v2/torrents/files?hash=${t.hash}`, {
+                const r = await clientFetch(config, `${config.url}/api/v2/torrents/files?hash=${t.hash}`, {
                     headers: authH,
                 })
                 if (r.ok) fileMap.set(t.hash, await r.json())
@@ -237,7 +239,7 @@ const QB: TorrentClientDriver = {
 
     async getFiles(config, hash) {
         const authH = await qbAuth(config)
-        const res = await fetch(`${config.url}/api/v2/torrents/files?hash=${hash}`, {
+        const res = await clientFetch(config, `${config.url}/api/v2/torrents/files?hash=${hash}`, {
             headers: authH,
         })
         if (!res.ok) return []
@@ -275,7 +277,7 @@ const QB: TorrentClientDriver = {
             let knownHashes: Set<string> = new Set()
             if (!hash) {
                 try {
-                    const lr = await fetch(`${config.url}/api/v2/torrents/info`, { headers: authH })
+                    const lr = await clientFetch(config, `${config.url}/api/v2/torrents/info`, { headers: authH })
                     if (lr.ok) knownHashes = new Set((await lr.json()).map((t: any) => String(t.hash).toLowerCase()))
                 } catch {}
             }
@@ -292,7 +294,7 @@ const QB: TorrentClientDriver = {
                 params.set('urls', url)
                 if (config.category) params.set('category', String(config.category))
                 if (config.savePath)  params.set('savepath', String(config.savePath))
-                res = await fetch(`${config.url}/api/v2/torrents/add`, {
+                res = await clientFetch(config, `${config.url}/api/v2/torrents/add`, {
                     method: 'POST', body: params,
                     headers: { ...authH, 'Content-Type': 'application/x-www-form-urlencoded' },
                 })
@@ -306,7 +308,7 @@ const QB: TorrentClientDriver = {
                 if (config.category) form.append('category', String(config.category))
                 if (config.savePath)  form.append('savepath', String(config.savePath))
                 form.append('torrents', new Blob([torrentBytes], { type: 'application/x-bittorrent' }), 'torrent.torrent')
-                res = await fetch(`${config.url}/api/v2/torrents/add`, { method: 'POST', body: form, headers: authH })
+                res = await clientFetch(config, `${config.url}/api/v2/torrents/add`, { method: 'POST', body: form, headers: authH })
             }
             const text = await res.text()
             if (!isQbAddSuccess(text)) throw new Error(`Ajout échoué : ${text}`)
@@ -325,7 +327,7 @@ const QB: TorrentClientDriver = {
                         await new Promise(r => setTimeout(r, 500))
                         try {
                             const ah = await qbAuth(config)
-                            const lr = await fetch(`${config.url}/api/v2/torrents/info`, { headers: ah })
+                            const lr = await clientFetch(config, `${config.url}/api/v2/torrents/info`, { headers: ah })
                             if (!lr.ok) continue
                             const newT = (await lr.json()).find((t: any) => !knownHashes.has(String(t.hash).toLowerCase()))
                             if (!newT) continue
@@ -347,7 +349,7 @@ const QB: TorrentClientDriver = {
         if (config.category) params.set('category', String(config.category))
         if (config.savePath)  params.set('savepath', String(config.savePath))
 
-        const res  = await fetch(`${config.url}/api/v2/torrents/add`, {
+        const res  = await clientFetch(config, `${config.url}/api/v2/torrents/add`, {
             method: 'POST', body: params,
             headers: { ...authH, 'Content-Type': 'application/x-www-form-urlencoded' },
         })
@@ -359,7 +361,7 @@ const QB: TorrentClientDriver = {
     async remove(config, hash, deleteFiles = false) {
         const authH = await qbAuth(config)
         const params = new URLSearchParams({ hashes: hash, deleteFiles: deleteFiles ? 'true' : 'false' })
-        const res = await fetch(`${config.url}/api/v2/torrents/delete`, {
+        const res = await clientFetch(config, `${config.url}/api/v2/torrents/delete`, {
             method : 'POST',
             body   : params,
             headers: { ...authH, 'Content-Type': 'application/x-www-form-urlencoded' },
