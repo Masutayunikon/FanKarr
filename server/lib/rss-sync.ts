@@ -11,7 +11,8 @@ import path from 'path'
 import fs   from 'fs'
 import { DATA_DIR } from '../config.js'
 import { logger }   from '../logger.js'
-import { loadEnrichedSeriesData, readInfohashMap } from './github-cache.js'
+import { readInfohashMap } from './github-cache.js'
+import { buildSerieDetail } from './serie-detail.js'
 import { dispatchDownload, dispatchList }          from '../torrent-clients/index.js'
 import { readSettings }                            from '../settings.js'
 
@@ -68,51 +69,6 @@ export function getSync(serieId: number): SyncedSerie | null {
 
 // ── Helpers ───────────────────────────────────────────────────
 
-function readOrganized(): Record<string, Record<string, any>> {
-    try {
-        const p = path.join(DATA_DIR, 'organized.json')
-        if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf-8'))
-    } catch {}
-    return {}
-}
-
-function getOrganizedEpisodeIds(sd: any, organized: Record<string, Record<string, any>>): Set<number> {
-    const ids = new Set<number>()
-
-    const manual = organized['manual'] ?? {}
-    for (const season of sd.seasons ?? [])
-        for (const ep of season.episodes ?? [])
-            if (manual[String(ep.id)]) ids.add(ep.id)
-
-    for (const t of sd.torrents ?? []) {
-        const orgFiles = organized[t.infohash?.toLowerCase()] ?? {}
-        for (const season of sd.seasons ?? [])
-            for (const ep of season.episodes ?? [])
-                if (orgFiles[String(ep.id)] !== undefined) ids.add(ep.id)
-    }
-
-    for (const season of sd.seasons ?? []) {
-        for (const t of season.torrents ?? []) {
-            const orgFiles = organized[t.infohash?.toLowerCase()] ?? {}
-            for (const ep of season.episodes ?? [])
-                if (orgFiles[String(ep.id)] !== undefined) ids.add(ep.id)
-        }
-        for (const ep of season.episodes ?? []) {
-            for (const t of ep.torrents ?? []) {
-                const orgFiles = organized[t.infohash?.toLowerCase()] ?? {}
-                if (orgFiles[String(ep.id)] !== undefined) ids.add(ep.id)
-                const pathEntry = (ep.paths ?? []).find((p: any) => typeof p === 'object' && p.infohash?.toLowerCase() === t.infohash?.toLowerCase())
-                if (pathEntry) {
-                    const fname = pathEntry.path?.split('/').pop()
-                    if (fname && orgFiles[fname] !== undefined) ids.add(ep.id)
-                }
-            }
-        }
-    }
-
-    return ids
-}
-
 // ── Détection langue ──────────────────────────────────────────
 // Miroir de la détection frontend (SerieSeasonCard.vue) : on cherche
 // MULTI ou VOSTFR dans les noms de torrents / noms formatés.
@@ -162,9 +118,6 @@ async function runRssSyncInner(): Promise<{ sent: number; skipped: number; error
 
     logger.info('rss-sync', `Démarrage sync — ${ids.length} série(s) surveillée(s)`)
 
-    const organized  = readOrganized()
-    const seriesData = await loadEnrichedSeriesData()
-
     const activeHashes = new Set<string>()
     try {
         const { category } = readSettings()
@@ -181,32 +134,39 @@ async function runRssSyncInner(): Promise<{ sent: number; skipped: number; error
 
     for (const serieId of ids) {
         const syncedEntry = synced[serieId]
-        const sd          = seriesData.find((s: any) => s.id === serieId)
-        if (!sd) {
-            logger.warn('rss-sync', `Série ${serieId} introuvable dans le cache`)
+
+        // Vue enrichie — la même que l'UI (episodes API + torrents GitLab fusionnés,
+        // états available/organized calculés). Les données GitLab brutes n'ont pas
+        // toujours date_added/torrents au niveau épisode.
+        let detail: { serie: any; seasons: any[] }
+        try {
+            detail = await buildSerieDetail(serieId)
+        } catch (err) {
+            logger.warn('rss-sync', `Série ${serieId} : détail indisponible (${err instanceof Error ? err.message : err})`)
             continue
         }
 
-        const title      = sd.title ?? sd.show_title ?? String(serieId)
+        const title       = detail.serie?.title ?? syncedEntry.serieName ?? String(serieId)
         const activatedAt = new Date(syncedEntry.addedAt)
-        const organizedIds = getOrganizedEpisodeIds(sd, organized)
-        const multiOnly    = !!syncedEntry.multiOnly
+        const multiOnly   = !!syncedEntry.multiOnly
+        // Activation à l'époque zéro = rattrapage : les épisodes sans date_added restent éligibles.
+        const isCatchup   = activatedAt.getTime() <= 0
 
         logger.info('rss-sync', `Vérification : ${title} (sync activé le ${activatedAt.toLocaleDateString('fr-FR')}${multiOnly ? ', MULTI uniquement' : ''})`)
 
-        // Épisodes candidats : date_added > date d'activation ET pas encore organisés
+        const usableTorrent = (t: any): boolean =>
+            (t.fankai ?? true) && (t.torrent_url || t.magnet) && (!multiOnly || torrentIsMulti(t))
+
+        // Épisodes candidats
         const candidateIds = new Set<number>()
-        for (const season of sd.seasons ?? []) {
+        for (const season of detail.seasons ?? []) {
             for (const ep of season.episodes ?? []) {
-                if (!ep.date_added) continue
-                const epDate = new Date(ep.date_added)
-                if (epDate <= activatedAt) continue
-                if (organizedIds.has(ep.id)) continue
-                // Doit avoir au moins un torrent fankai (MULTI si le mode multiOnly est actif)
-                const hasTorrent = (ep.torrents ?? []).some((t: any) =>
-                    t.fankai && (t.torrent_url || t.magnet) && (!multiOnly || torrentIsMulti(t, ep))
-                )
-                if (!hasTorrent) continue
+                if (!ep.available || ep.organized) continue
+                if (!isCatchup) {
+                    if (!ep.date_added) continue
+                    if (new Date(ep.date_added) <= activatedAt) continue
+                }
+                if (!(ep.torrents ?? []).some((t: any) => usableTorrent({ ...t, formatted_name: t.formatted_name ?? ep.formatted_name }))) continue
                 candidateIds.add(ep.id)
             }
         }
@@ -216,21 +176,20 @@ async function runRssSyncInner(): Promise<{ sent: number; skipped: number; error
             continue
         }
 
-        logger.info('rss-sync', `${title} — ${candidateIds.size} nouvel(s) épisode(s) à télécharger`)
+        logger.info('rss-sync', `${title} — ${candidateIds.size} épisode(s) à télécharger`)
 
-        // Construire les téléchargements : pack saison si couvre des candidats, sinon épisode par épisode
         const toDownload: { url: string; file_index?: number | null; file_path?: string | null; infohash?: string | null; label: string }[] = []
-        const coveredIds  = new Set<number>()
+        const coveredIds      = new Set<number>()
+        const dispatchedFull  = new Set<string>()   // packs envoyés en entier ce cycle
 
         // 1. Packs saison couvrant au moins un candidat
-        for (const season of sd.seasons ?? []) {
+        for (const season of detail.seasons ?? []) {
             for (const t of season.torrents ?? []) {
-                if (!t.fankai) continue
                 if (multiOnly && !torrentIsMulti(t)) { skipped++; continue }
                 const url  = t.torrent_url ?? t.magnet
                 if (!url)  continue
                 const hash = t.infohash?.toLowerCase()
-                if (hash && activeHashes.has(hash)) { skipped++; continue }
+                if (hash && (activeHashes.has(hash) || dispatchedFull.has(hash))) { skipped++; continue }
 
                 const coversSomeCandidate = (season.episodes ?? []).some((ep: any) =>
                     candidateIds.has(ep.id) && !coveredIds.has(ep.id)
@@ -238,29 +197,28 @@ async function runRssSyncInner(): Promise<{ sent: number; skipped: number; error
                 if (!coversSomeCandidate) { skipped++; continue }
 
                 toDownload.push({ url, infohash: hash ?? null, label: `S${season.season_number} ${title}` })
+                if (hash) dispatchedFull.add(hash)
                 for (const ep of season.episodes ?? []) coveredIds.add(ep.id)
             }
         }
 
         // 2. Épisodes individuels candidats non couverts par un pack
-        for (const season of sd.seasons ?? []) {
+        for (const season of detail.seasons ?? []) {
             for (const ep of season.episodes ?? []) {
                 if (!candidateIds.has(ep.id) || coveredIds.has(ep.id)) continue
 
                 for (const t of ep.torrents ?? []) {
-                    if (!t.fankai) continue
-                    if (multiOnly && !torrentIsMulti(t, ep)) { skipped++; continue }
+                    if (!usableTorrent({ ...t, formatted_name: t.formatted_name ?? ep.formatted_name })) continue
                     const url  = t.torrent_url ?? t.magnet
                     if (!url)  continue
                     const hash = t.infohash?.toLowerCase()
-                    if (hash && activeHashes.has(hash)) { skipped++; continue }
+                    if (hash && (activeHashes.has(hash) || dispatchedFull.has(hash))) { skipped++; continue }
 
-                    const pathEntry = (ep.paths ?? []).find((p: any) => typeof p === 'object' && p.infohash?.toLowerCase() === hash)
                     toDownload.push({
                         url,
                         infohash  : hash ?? null,
-                        file_index: pathEntry?.file_index ?? null,
-                        file_path : pathEntry?.path ?? null,
+                        file_index: t.file_index ?? null,
+                        file_path : t.file_path ?? null,
                         label     : `S${season.season_number}E${ep.episode_number} ${title}`,
                     })
                     coveredIds.add(ep.id)
