@@ -44,10 +44,13 @@ function saveSynced(map: SyncedMap): void {
     fs.writeFileSync(SYNC_FILE, JSON.stringify(map, null, 2), 'utf-8')
 }
 
-export function setSync(serieId: number, serieName: string, enabled: boolean, multiOnly = false): SyncedMap {
+export function setSync(serieId: number, serieName: string, enabled: boolean, multiOnly = false, includeExisting = false): SyncedMap {
     const map = loadSynced()
     if (enabled) {
-        map[serieId] = { serieId, serieName, addedAt: new Date().toISOString(), multiOnly }
+        // includeExisting : date d'activation à l'époque zéro → les épisodes déjà
+        // sortis deviennent éligibles au prochain cycle de sync (rattrapage).
+        const addedAt = includeExisting ? new Date(0).toISOString() : new Date().toISOString()
+        map[serieId] = { serieId, serieName, addedAt, multiOnly }
     } else {
         delete map[serieId]
     }
@@ -135,7 +138,24 @@ function torrentIsMulti(t: any, ep?: any): boolean {
 
 // ── Logique de sync ───────────────────────────────────────────
 
+let syncRunning = false
+
 export async function runRssSync(): Promise<{ sent: number; skipped: number; errors: number }> {
+    // Garde anti-chevauchement : un cycle peut être déclenché à la fois par le
+    // timer et par une activation avec rattrapage — on n'en exécute qu'un.
+    if (syncRunning) {
+        logger.info('rss-sync', 'Cycle déjà en cours — nouvel appel ignoré')
+        return { sent: 0, skipped: 0, errors: 0 }
+    }
+    syncRunning = true
+    try {
+        return await runRssSyncInner()
+    } finally {
+        syncRunning = false
+    }
+}
+
+async function runRssSyncInner(): Promise<{ sent: number; skipped: number; errors: number }> {
     const synced = loadSynced()
     const ids    = Object.keys(synced).map(Number)
     if (ids.length === 0) return { sent: 0, skipped: 0, errors: 0 }

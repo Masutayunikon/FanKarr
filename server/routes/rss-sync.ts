@@ -28,15 +28,22 @@ router.get('/rss-sync/:id', requireAuth, (req, res) => {
     res.json({ synced: !!entry, multiOnly: !!entry?.multiOnly })
 })
 
-/** POST /api/rss-sync/:id → activer la surveillance (body: { serieName, multiOnly? }) */
+/** POST /api/rss-sync/:id → activer la surveillance (body: { serieName, multiOnly?, includeExisting? }) */
 router.post('/rss-sync/:id', requireAuth, (req, res) => {
-    const serieId   = Number(req.params.id)
-    const serieName = String(req.body.serieName ?? '')
-    const multiOnly = !!req.body.multiOnly
+    const serieId         = Number(req.params.id)
+    const serieName       = String(req.body.serieName ?? '')
+    const multiOnly       = !!req.body.multiOnly
+    const includeExisting = !!req.body.includeExisting
     if (!serieId || !serieName) { res.status(400).json({ error: 'serieId et serieName requis' }); return }
-    const map = setSync(serieId, serieName, true, multiOnly)
-    logger.info('rss-sync', `Surveillance activée pour "${serieName}" (id ${serieId})${multiOnly ? ' — MULTI uniquement' : ''}`)
-    res.json({ synced: true, multiOnly, total: Object.keys(map).length })
+    const map = setSync(serieId, serieName, true, multiOnly, includeExisting)
+    logger.info('rss-sync', `Surveillance activée pour "${serieName}" (id ${serieId})${multiOnly ? ' — MULTI uniquement' : ''}${includeExisting ? ' — avec rattrapage de l\'existant' : ''}`)
+    res.json({ synced: true, multiOnly, includeExisting, total: Object.keys(map).length })
+
+    // Rattrapage : lancer un cycle de sync tout de suite (sans bloquer la réponse)
+    if (includeExisting) {
+        runRssSync().catch(err =>
+            logger.error('rss-sync', `Cycle de rattrapage échoué : ${err instanceof Error ? err.message : err}`))
+    }
 })
 
 /** DELETE /api/rss-sync/:id → désactiver la surveillance */
