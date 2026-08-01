@@ -51,22 +51,44 @@
         <!-- Droite : téléchargements -->
         <div class="flex flex-wrap items-center gap-2">
           <!-- Bouton RSS sync -->
-          <button
-              @click="toggleRssSync"
-              :title="rssSync ? 'Surveillance activée — cliquer pour désactiver' : 'Surveiller les nouveaux épisodes'"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition"
-              :class="rssSync
-                ? 'bg-green-500/10 text-green-400 border-green-500/20 hover:bg-green-500/20'
-                : 'bg-shell text-muted border-border hover:text-primary hover:bg-hover'"
-          >
-            <!-- Icône antenne RSS -->
-            <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
-              <path d="M4 11a9 9 0 0 1 9 9"/>
-              <path d="M4 4a16 16 0 0 1 16 16"/>
-              <circle cx="5" cy="19" r="1" fill="currentColor" stroke="none"/>
-            </svg>
-            {{ rssSync ? 'Surveillé' : 'Surveiller' }}
-          </button>
+          <div class="relative" @click.stop>
+            <button
+                @click="rssSync ? disableRssSync() : (rssMenuOpen = !rssMenuOpen)"
+                :title="rssSync ? 'Surveillance activée — cliquer pour désactiver' : 'Surveiller les nouveaux épisodes'"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition"
+                :class="rssSync
+                  ? 'bg-green-500/10 text-green-400 border-green-500/20 hover:bg-green-500/20'
+                  : 'bg-shell text-muted border-border hover:text-primary hover:bg-hover'"
+            >
+              <!-- Icône antenne RSS -->
+              <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
+                <path d="M4 11a9 9 0 0 1 9 9"/>
+                <path d="M4 4a16 16 0 0 1 16 16"/>
+                <circle cx="5" cy="19" r="1" fill="currentColor" stroke="none"/>
+              </svg>
+              {{ rssSync ? (rssSyncMultiOnly ? 'Surveillé · MULTI' : 'Surveillé') : 'Surveiller' }}
+              <span v-if="!rssSync" class="opacity-70">▾</span>
+            </button>
+
+            <!-- Dropdown choix de langue pour la surveillance -->
+            <div v-if="rssMenuOpen && !rssSync"
+                 class="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl p-1 z-20 w-64 shadow-xl flex flex-col gap-0.5">
+              <button
+                  class="flex flex-col items-start gap-0.5 px-3 py-2 rounded-lg text-xs text-primary hover:bg-hover transition-colors text-left"
+                  @click="enableRssSync(false); rssMenuOpen = false"
+              >
+                <span class="font-medium">Toutes les releases</span>
+                <span class="text-muted">VOSTFR et MULTI, dès leur sortie</span>
+              </button>
+              <button
+                  class="flex flex-col items-start gap-0.5 px-3 py-2 rounded-lg text-xs text-primary hover:bg-hover transition-colors text-left"
+                  @click="enableRssSync(true); rssMenuOpen = false"
+              >
+                <span class="font-medium">MULTI (VF) uniquement 🇫🇷</span>
+                <span class="text-muted">Attendre la version avec doublage français</span>
+              </button>
+            </div>
+          </div>
 
           <!-- Bouton unique "Tout télécharger" — dropdown si plusieurs intégrales -->
           <div v-if="hasSomethingToDownload" class="relative" @click.stop>
@@ -377,6 +399,8 @@ const downloadMenuOpen   = ref(false)
 const downloadingAll     = ref(false)
 const downloadingSeason  = ref<Record<number, boolean>>({})
 const rssSync            = ref(false)
+const rssSyncMultiOnly   = ref(false)
+const rssMenuOpen        = ref(false)
 
 export interface ActiveTorrent { hash: string; progress: number; state: string; files?: { index: number; progress: number }[]; save_path?: string; name?: string }
 const activeTorrents = ref<ActiveTorrent[]>([])
@@ -475,23 +499,32 @@ async function fetchSettings() {
 async function fetchRssSync() {
   try {
     const res = await fetch(`/api/rss-sync/${route.params.id}`, { credentials: 'include' })
-    if (res.ok) { const d = await res.json(); rssSync.value = !!d.synced }
+    if (res.ok) { const d = await res.json(); rssSync.value = !!d.synced; rssSyncMultiOnly.value = !!d.multiOnly }
   } catch {}
 }
 
-async function toggleRssSync() {
+async function disableRssSync() {
+  const serieId = Number(route.params.id)
+  try {
+    const res = await fetch(`/api/rss-sync/${serieId}`, { method: 'DELETE', credentials: 'include' })
+    if (res.ok) { rssSync.value = false; rssSyncMultiOnly.value = false; toast('Surveillance désactivée', 'success') }
+  } catch { toast('Erreur lors de la mise à jour de la surveillance', 'error') }
+}
+
+async function enableRssSync(multiOnly: boolean) {
   const serieId   = Number(route.params.id)
   const serieName = data.value?.serie?.title ?? String(serieId)
   try {
-    if (rssSync.value) {
-      const res = await fetch(`/api/rss-sync/${serieId}`, { method: 'DELETE', credentials: 'include' })
-      if (res.ok) { rssSync.value = false; toast('Surveillance désactivée', 'success') }
-    } else {
-      const res = await fetch(`/api/rss-sync/${serieId}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-        body: JSON.stringify({ serieName }),
-      })
-      if (res.ok) { rssSync.value = true; toast('Surveillance activée — les nouveaux épisodes seront téléchargés automatiquement ✓', 'success') }
+    const res = await fetch(`/api/rss-sync/${serieId}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ serieName, multiOnly }),
+    })
+    if (res.ok) {
+      rssSync.value = true
+      rssSyncMultiOnly.value = multiOnly
+      toast(multiOnly
+        ? 'Surveillance activée — seules les releases MULTI (VF) seront téléchargées ✓'
+        : 'Surveillance activée — les nouveaux épisodes seront téléchargés automatiquement ✓', 'success')
     }
   } catch { toast('Erreur lors de la mise à jour de la surveillance', 'error') }
 }
@@ -739,7 +772,7 @@ async function unimportEpisode(ep: any, _season: any, deleteFile: boolean) {
   finally { epActionLoading.value[ep.id] = false }
 }
 
-const closeMenus = () => { downloadMenuOpen.value = false }
+const closeMenus = () => { downloadMenuOpen.value = false; rssMenuOpen.value = false }
 
 onMounted(() => {
   load()

@@ -21,6 +21,8 @@ export interface SyncedSerie {
     serieId  : number
     serieName: string
     addedAt  : string   // ISO — date d'activation de la surveillance
+    /** Si true, seules les releases MULTI (VF incluse) sont téléchargées automatiquement. */
+    multiOnly?: boolean
 }
 
 type SyncedMap = Record<number, SyncedSerie>
@@ -42,10 +44,10 @@ function saveSynced(map: SyncedMap): void {
     fs.writeFileSync(SYNC_FILE, JSON.stringify(map, null, 2), 'utf-8')
 }
 
-export function setSync(serieId: number, serieName: string, enabled: boolean): SyncedMap {
+export function setSync(serieId: number, serieName: string, enabled: boolean, multiOnly = false): SyncedMap {
     const map = loadSynced()
     if (enabled) {
-        map[serieId] = { serieId, serieName, addedAt: new Date().toISOString() }
+        map[serieId] = { serieId, serieName, addedAt: new Date().toISOString(), multiOnly }
     } else {
         delete map[serieId]
     }
@@ -55,6 +57,10 @@ export function setSync(serieId: number, serieName: string, enabled: boolean): S
 
 export function isSynced(serieId: number): boolean {
     return !!loadSynced()[serieId]
+}
+
+export function getSync(serieId: number): SyncedSerie | null {
+    return loadSynced()[serieId] ?? null
 }
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -104,6 +110,29 @@ function getOrganizedEpisodeIds(sd: any, organized: Record<string, Record<string
     return ids
 }
 
+// ── Détection langue ──────────────────────────────────────────
+// Miroir de la détection frontend (SerieSeasonCard.vue) : on cherche
+// MULTI ou VOSTFR dans les noms de torrents / noms formatés.
+
+export function langOf(...sources: (string | null | undefined)[]): 'MULTI' | 'VOSTFR' | null {
+    for (const s of sources) {
+        if (!s) continue
+        if (/\bMULTI\b/i.test(s)) return 'MULTI'
+        if (/\bVOSTFR\b/i.test(s)) return 'VOSTFR'
+    }
+    return null
+}
+
+/**
+ * true si le torrent est identifiable comme MULTI.
+ * Conservateur : si la langue est indéterminable (null), on considère
+ * que ce n'est PAS un MULTI — en mode multiOnly on préfère rater un
+ * téléchargement que d'importer du VOSTFR par surprise.
+ */
+function torrentIsMulti(t: any, ep?: any): boolean {
+    return langOf(t?.torrent_name, t?.raw, ep?.formatted_name) === 'MULTI'
+}
+
 // ── Logique de sync ───────────────────────────────────────────
 
 export async function runRssSync(): Promise<{ sent: number; skipped: number; errors: number }> {
@@ -141,8 +170,9 @@ export async function runRssSync(): Promise<{ sent: number; skipped: number; err
         const title      = sd.title ?? sd.show_title ?? String(serieId)
         const activatedAt = new Date(syncedEntry.addedAt)
         const organizedIds = getOrganizedEpisodeIds(sd, organized)
+        const multiOnly    = !!syncedEntry.multiOnly
 
-        logger.info('rss-sync', `Vérification : ${title} (sync activé le ${activatedAt.toLocaleDateString('fr-FR')})`)
+        logger.info('rss-sync', `Vérification : ${title} (sync activé le ${activatedAt.toLocaleDateString('fr-FR')}${multiOnly ? ', MULTI uniquement' : ''})`)
 
         // Épisodes candidats : date_added > date d'activation ET pas encore organisés
         const candidateIds = new Set<number>()
@@ -152,8 +182,10 @@ export async function runRssSync(): Promise<{ sent: number; skipped: number; err
                 const epDate = new Date(ep.date_added)
                 if (epDate <= activatedAt) continue
                 if (organizedIds.has(ep.id)) continue
-                // Doit avoir au moins un torrent fankai
-                const hasTorrent = (ep.torrents ?? []).some((t: any) => t.fankai && (t.torrent_url || t.magnet))
+                // Doit avoir au moins un torrent fankai (MULTI si le mode multiOnly est actif)
+                const hasTorrent = (ep.torrents ?? []).some((t: any) =>
+                    t.fankai && (t.torrent_url || t.magnet) && (!multiOnly || torrentIsMulti(t, ep))
+                )
                 if (!hasTorrent) continue
                 candidateIds.add(ep.id)
             }
@@ -174,6 +206,7 @@ export async function runRssSync(): Promise<{ sent: number; skipped: number; err
         for (const season of sd.seasons ?? []) {
             for (const t of season.torrents ?? []) {
                 if (!t.fankai) continue
+                if (multiOnly && !torrentIsMulti(t)) { skipped++; continue }
                 const url  = t.torrent_url ?? t.magnet
                 if (!url)  continue
                 const hash = t.infohash?.toLowerCase()
@@ -196,6 +229,7 @@ export async function runRssSync(): Promise<{ sent: number; skipped: number; err
 
                 for (const t of ep.torrents ?? []) {
                     if (!t.fankai) continue
+                    if (multiOnly && !torrentIsMulti(t, ep)) { skipped++; continue }
                     const url  = t.torrent_url ?? t.magnet
                     if (!url)  continue
                     const hash = t.infohash?.toLowerCase()
