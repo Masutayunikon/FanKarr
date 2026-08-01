@@ -172,50 +172,15 @@ function stateColor(state: string): string {
   } as Record<string, string>)[state] ?? 'transparent'
 }
 
-// ── Polling downloads + notifs import ────────────────────────
-let dlInterval: ReturnType<typeof setInterval> | null = null
-const seenNotifs = new Set<string>()
-
-async function fetchOrganizeNotifs() {
-  try {
-    const res = await fetch('/api/organize/recent', { credentials: 'include' })
-    if (!res.ok) return
-    const notifs: any[] = await res.json()
-    let hasNew = false
-    for (const n of notifs) {
-      const key = `${n.hash}-${n.at}`
-      if (seenNotifs.has(key)) continue
-      seenNotifs.add(key)
-      hasNew = true
-      if (n.done > 0) {
-        const msg = n.errors > 0
-            ? `${n.name} — ${n.done} fichier(s) importé(s), ${n.errors} erreur(s)`
-            : `${n.name} — ${n.done} fichier(s) importé(s) ✓`
-        toast(msg, n.errors > 0 ? 'error' : 'success')
-      }
-    }
-    if (hasNew) await store.fetchSeries()
-  } catch {}
-}
+// Le polling des notifications d'import + compteur téléchargements vit
+// désormais dans AppLayout (global) — les toasts apparaissent sur toutes
+// les pages, plus seulement sur le catalogue.
 
 onMounted(async () => {
   if (store.series.length === 0) await store.fetchSeries()
-  if (auth.isAdmin) {
-    dlStore.refresh()
-    fetchOrganizeNotifs()
-    dlInterval = setInterval(() => {
-      dlStore.refresh()
-      fetchOrganizeNotifs()
-    }, 10000)
-  }
 })
 
 onActivated(async () => {
-  store.fetchSeries()
-  if (auth.isAdmin) dlStore.refresh()
-})
-
-onUnmounted(() => {
-  if (dlInterval) clearInterval(dlInterval)
+  store.fetchSeries(true)
 })
 </script>

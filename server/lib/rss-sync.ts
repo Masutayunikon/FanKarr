@@ -11,7 +11,8 @@ import path from 'path'
 import fs   from 'fs'
 import { DATA_DIR } from '../config.js'
 import { logger }   from '../logger.js'
-import { loadEnrichedSeriesData, readInfohashMap } from './github-cache.js'
+import { readInfohashMap } from './github-cache.js'
+import { buildSerieDetail } from './serie-detail.js'
 import { dispatchDownload, dispatchList }          from '../torrent-clients/index.js'
 import { readSettings }                            from '../settings.js'
 
@@ -21,6 +22,8 @@ export interface SyncedSerie {
     serieId  : number
     serieName: string
     addedAt  : string   // ISO — date d'activation de la surveillance
+    /** Si true, seules les releases MULTI (VF incluse) sont téléchargées automatiquement. */
+    multiOnly?: boolean
 }
 
 type SyncedMap = Record<number, SyncedSerie>
@@ -42,10 +45,13 @@ function saveSynced(map: SyncedMap): void {
     fs.writeFileSync(SYNC_FILE, JSON.stringify(map, null, 2), 'utf-8')
 }
 
-export function setSync(serieId: number, serieName: string, enabled: boolean): SyncedMap {
+export function setSync(serieId: number, serieName: string, enabled: boolean, multiOnly = false, includeExisting = false): SyncedMap {
     const map = loadSynced()
     if (enabled) {
-        map[serieId] = { serieId, serieName, addedAt: new Date().toISOString() }
+        // includeExisting : date d'activation à l'époque zéro → les épisodes déjà
+        // sortis deviennent éligibles au prochain cycle de sync (rattrapage).
+        const addedAt = includeExisting ? new Date(0).toISOString() : new Date().toISOString()
+        map[serieId] = { serieId, serieName, addedAt, multiOnly }
     } else {
         delete map[serieId]
     }
@@ -57,64 +63,64 @@ export function isSynced(serieId: number): boolean {
     return !!loadSynced()[serieId]
 }
 
-// ── Helpers ───────────────────────────────────────────────────
-
-function readOrganized(): Record<string, Record<string, any>> {
-    try {
-        const p = path.join(DATA_DIR, 'organized.json')
-        if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf-8'))
-    } catch {}
-    return {}
+export function getSync(serieId: number): SyncedSerie | null {
+    return loadSynced()[serieId] ?? null
 }
 
-function getOrganizedEpisodeIds(sd: any, organized: Record<string, Record<string, any>>): Set<number> {
-    const ids = new Set<number>()
+// ── Helpers ───────────────────────────────────────────────────
 
-    const manual = organized['manual'] ?? {}
-    for (const season of sd.seasons ?? [])
-        for (const ep of season.episodes ?? [])
-            if (manual[String(ep.id)]) ids.add(ep.id)
+// ── Détection langue ──────────────────────────────────────────
+// Miroir de la détection frontend (SerieSeasonCard.vue) : on cherche
+// MULTI ou VOSTFR dans les noms de torrents / noms formatés.
 
-    for (const t of sd.torrents ?? []) {
-        const orgFiles = organized[t.infohash?.toLowerCase()] ?? {}
-        for (const season of sd.seasons ?? [])
-            for (const ep of season.episodes ?? [])
-                if (orgFiles[String(ep.id)] !== undefined) ids.add(ep.id)
+export function langOf(...sources: (string | null | undefined)[]): 'MULTI' | 'VOSTFR' | null {
+    for (const s of sources) {
+        if (!s) continue
+        if (/\bMULTI\b/i.test(s)) return 'MULTI'
+        if (/\bVOSTFR\b/i.test(s)) return 'VOSTFR'
     }
+    return null
+}
 
-    for (const season of sd.seasons ?? []) {
-        for (const t of season.torrents ?? []) {
-            const orgFiles = organized[t.infohash?.toLowerCase()] ?? {}
-            for (const ep of season.episodes ?? [])
-                if (orgFiles[String(ep.id)] !== undefined) ids.add(ep.id)
-        }
-        for (const ep of season.episodes ?? []) {
-            for (const t of ep.torrents ?? []) {
-                const orgFiles = organized[t.infohash?.toLowerCase()] ?? {}
-                if (orgFiles[String(ep.id)] !== undefined) ids.add(ep.id)
-                const pathEntry = (ep.paths ?? []).find((p: any) => typeof p === 'object' && p.infohash?.toLowerCase() === t.infohash?.toLowerCase())
-                if (pathEntry) {
-                    const fname = pathEntry.path?.split('/').pop()
-                    if (fname && orgFiles[fname] !== undefined) ids.add(ep.id)
-                }
-            }
-        }
-    }
-
-    return ids
+/**
+ * true si le torrent est identifiable comme MULTI.
+ * L'ordre des sources est crucial : le nom du FICHIER d'abord (un pack
+ * étiqueté MULTI peut contenir des épisodes VOSTFR — cas des intégrales
+ * de séries en cours de doublage), puis les noms du torrent.
+ * Conservateur : si la langue est indéterminable (null), on considère
+ * que ce n'est PAS un MULTI — en mode multiOnly on préfère rater un
+ * téléchargement que d'importer du VOSTFR par surprise.
+ */
+function torrentIsMulti(t: any, ep?: any): boolean {
+    const fileName = typeof t?.file_path === 'string' ? t.file_path.split('/').pop() : null
+    return langOf(fileName, t?.formatted_name, ep?.formatted_name, t?.torrent_name, t?.raw) === 'MULTI'
 }
 
 // ── Logique de sync ───────────────────────────────────────────
 
+let syncRunning = false
+
 export async function runRssSync(): Promise<{ sent: number; skipped: number; errors: number }> {
+    // Garde anti-chevauchement : un cycle peut être déclenché à la fois par le
+    // timer et par une activation avec rattrapage — on n'en exécute qu'un.
+    if (syncRunning) {
+        logger.info('rss-sync', 'Cycle déjà en cours — nouvel appel ignoré')
+        return { sent: 0, skipped: 0, errors: 0 }
+    }
+    syncRunning = true
+    try {
+        return await runRssSyncInner()
+    } finally {
+        syncRunning = false
+    }
+}
+
+async function runRssSyncInner(): Promise<{ sent: number; skipped: number; errors: number }> {
     const synced = loadSynced()
     const ids    = Object.keys(synced).map(Number)
     if (ids.length === 0) return { sent: 0, skipped: 0, errors: 0 }
 
     logger.info('rss-sync', `Démarrage sync — ${ids.length} série(s) surveillée(s)`)
-
-    const organized  = readOrganized()
-    const seriesData = await loadEnrichedSeriesData()
 
     const activeHashes = new Set<string>()
     try {
@@ -132,29 +138,39 @@ export async function runRssSync(): Promise<{ sent: number; skipped: number; err
 
     for (const serieId of ids) {
         const syncedEntry = synced[serieId]
-        const sd          = seriesData.find((s: any) => s.id === serieId)
-        if (!sd) {
-            logger.warn('rss-sync', `Série ${serieId} introuvable dans le cache`)
+
+        // Vue enrichie — la même que l'UI (episodes API + torrents GitLab fusionnés,
+        // états available/organized calculés). Les données GitLab brutes n'ont pas
+        // toujours date_added/torrents au niveau épisode.
+        let detail: { serie: any; seasons: any[] }
+        try {
+            detail = await buildSerieDetail(serieId)
+        } catch (err) {
+            logger.warn('rss-sync', `Série ${serieId} : détail indisponible (${err instanceof Error ? err.message : err})`)
             continue
         }
 
-        const title      = sd.title ?? sd.show_title ?? String(serieId)
+        const title       = detail.serie?.title ?? syncedEntry.serieName ?? String(serieId)
         const activatedAt = new Date(syncedEntry.addedAt)
-        const organizedIds = getOrganizedEpisodeIds(sd, organized)
+        const multiOnly   = !!syncedEntry.multiOnly
+        // Activation à l'époque zéro = rattrapage : les épisodes sans date_added restent éligibles.
+        const isCatchup   = activatedAt.getTime() <= 0
 
-        logger.info('rss-sync', `Vérification : ${title} (sync activé le ${activatedAt.toLocaleDateString('fr-FR')})`)
+        logger.info('rss-sync', `Vérification : ${title} (sync activé le ${activatedAt.toLocaleDateString('fr-FR')}${multiOnly ? ', MULTI uniquement' : ''})`)
 
-        // Épisodes candidats : date_added > date d'activation ET pas encore organisés
+        const usableTorrent = (t: any): boolean =>
+            (t.fankai ?? true) && (t.torrent_url || t.magnet) && (!multiOnly || torrentIsMulti(t))
+
+        // Épisodes candidats
         const candidateIds = new Set<number>()
-        for (const season of sd.seasons ?? []) {
+        for (const season of detail.seasons ?? []) {
             for (const ep of season.episodes ?? []) {
-                if (!ep.date_added) continue
-                const epDate = new Date(ep.date_added)
-                if (epDate <= activatedAt) continue
-                if (organizedIds.has(ep.id)) continue
-                // Doit avoir au moins un torrent fankai
-                const hasTorrent = (ep.torrents ?? []).some((t: any) => t.fankai && (t.torrent_url || t.magnet))
-                if (!hasTorrent) continue
+                if (!ep.available || ep.organized) continue
+                if (!isCatchup) {
+                    if (!ep.date_added) continue
+                    if (new Date(ep.date_added) <= activatedAt) continue
+                }
+                if (!(ep.torrents ?? []).some((t: any) => usableTorrent({ ...t, formatted_name: t.formatted_name ?? ep.formatted_name }))) continue
                 candidateIds.add(ep.id)
             }
         }
@@ -164,20 +180,20 @@ export async function runRssSync(): Promise<{ sent: number; skipped: number; err
             continue
         }
 
-        logger.info('rss-sync', `${title} — ${candidateIds.size} nouvel(s) épisode(s) à télécharger`)
+        logger.info('rss-sync', `${title} — ${candidateIds.size} épisode(s) à télécharger`)
 
-        // Construire les téléchargements : pack saison si couvre des candidats, sinon épisode par épisode
         const toDownload: { url: string; file_index?: number | null; file_path?: string | null; infohash?: string | null; label: string }[] = []
-        const coveredIds  = new Set<number>()
+        const coveredIds      = new Set<number>()
+        const dispatchedFull  = new Set<string>()   // packs envoyés en entier ce cycle
 
         // 1. Packs saison couvrant au moins un candidat
-        for (const season of sd.seasons ?? []) {
+        for (const season of detail.seasons ?? []) {
             for (const t of season.torrents ?? []) {
-                if (!t.fankai) continue
+                if (multiOnly && !torrentIsMulti(t)) { skipped++; continue }
                 const url  = t.torrent_url ?? t.magnet
                 if (!url)  continue
                 const hash = t.infohash?.toLowerCase()
-                if (hash && activeHashes.has(hash)) { skipped++; continue }
+                if (hash && (activeHashes.has(hash) || dispatchedFull.has(hash))) { skipped++; continue }
 
                 const coversSomeCandidate = (season.episodes ?? []).some((ep: any) =>
                     candidateIds.has(ep.id) && !coveredIds.has(ep.id)
@@ -185,28 +201,28 @@ export async function runRssSync(): Promise<{ sent: number; skipped: number; err
                 if (!coversSomeCandidate) { skipped++; continue }
 
                 toDownload.push({ url, infohash: hash ?? null, label: `S${season.season_number} ${title}` })
+                if (hash) dispatchedFull.add(hash)
                 for (const ep of season.episodes ?? []) coveredIds.add(ep.id)
             }
         }
 
         // 2. Épisodes individuels candidats non couverts par un pack
-        for (const season of sd.seasons ?? []) {
+        for (const season of detail.seasons ?? []) {
             for (const ep of season.episodes ?? []) {
                 if (!candidateIds.has(ep.id) || coveredIds.has(ep.id)) continue
 
                 for (const t of ep.torrents ?? []) {
-                    if (!t.fankai) continue
+                    if (!usableTorrent({ ...t, formatted_name: t.formatted_name ?? ep.formatted_name })) continue
                     const url  = t.torrent_url ?? t.magnet
                     if (!url)  continue
                     const hash = t.infohash?.toLowerCase()
-                    if (hash && activeHashes.has(hash)) { skipped++; continue }
+                    if (hash && (activeHashes.has(hash) || dispatchedFull.has(hash))) { skipped++; continue }
 
-                    const pathEntry = (ep.paths ?? []).find((p: any) => typeof p === 'object' && p.infohash?.toLowerCase() === hash)
                     toDownload.push({
                         url,
                         infohash  : hash ?? null,
-                        file_index: pathEntry?.file_index ?? null,
-                        file_path : pathEntry?.path ?? null,
+                        file_index: t.file_index ?? null,
+                        file_path : t.file_path ?? null,
                         label     : `S${season.season_number}E${ep.episode_number} ${title}`,
                     })
                     coveredIds.add(ep.id)

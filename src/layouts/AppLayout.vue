@@ -35,16 +35,67 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Menu } from 'lucide-vue-next'
 import SidebarNav from '@/components/nav/SidebarNav.vue'
 import { useDownloadsStore } from '@/stores/downloads'
 import { useAuthStore }      from '@/stores/auth'
+import { useSeriesStore }    from '@/stores/series'
+import { useToast }          from '@/composables/useToast'
 import type { NavItem } from '@/types/nav'
 
 const mobileOpen = ref(false)
 const dlStore    = useDownloadsStore()
 const auth       = useAuthStore()
+const seriesStore = useSeriesStore()
+const { toast }   = useToast()
+
+// ── Polling global : notifications d'import + compteur téléchargements ──
+// Vit dans le layout (et non dans une vue) pour que les toasts d'import
+// apparaissent sur toutes les pages, dès l'ouverture de l'application.
+let notifInterval: ReturnType<typeof setInterval> | null = null
+const seenNotifs = new Set<string>()
+let firstNotifPoll = true
+
+async function fetchOrganizeNotifs() {
+  try {
+    const res = await fetch('/api/organize/recent', { credentials: 'include' })
+    if (!res.ok) return
+    const notifs: any[] = await res.json()
+    let hasNew = false
+    for (const n of notifs) {
+      const key = `${n.hash}-${n.at}`
+      if (seenNotifs.has(key)) continue
+      seenNotifs.add(key)
+      // Au premier passage, on marque l'historique comme vu sans toaster :
+      // ce sont des imports passés, pas des événements en direct.
+      if (firstNotifPoll) continue
+      hasNew = true
+      if (n.done > 0) {
+        const msg = n.errors > 0
+            ? `${n.name} — ${n.done} fichier(s) importé(s), ${n.errors} erreur(s)`
+            : `${n.name} — ${n.done} fichier(s) importé(s) ✓`
+        toast(msg, n.errors > 0 ? 'error' : 'success')
+      }
+    }
+    firstNotifPoll = false
+    if (hasNew) await seriesStore.fetchSeries(true)
+  } catch {}
+}
+
+onMounted(() => {
+  if (!auth.isAdmin) return
+  dlStore.refresh()
+  fetchOrganizeNotifs()
+  notifInterval = setInterval(() => {
+    dlStore.refresh()
+    fetchOrganizeNotifs()
+  }, 10000)
+})
+
+onUnmounted(() => {
+  if (notifInterval) clearInterval(notifInterval)
+})
 
 const navItems = computed<NavItem[]>(() => {
   const items: NavItem[] = [

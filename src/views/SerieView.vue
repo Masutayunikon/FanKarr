@@ -51,22 +51,72 @@
         <!-- Droite : téléchargements -->
         <div class="flex flex-wrap items-center gap-2">
           <!-- Bouton RSS sync -->
-          <button
-              @click="toggleRssSync"
-              :title="rssSync ? 'Surveillance activée — cliquer pour désactiver' : 'Surveiller les nouveaux épisodes'"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition"
-              :class="rssSync
-                ? 'bg-green-500/10 text-green-400 border-green-500/20 hover:bg-green-500/20'
-                : 'bg-shell text-muted border-border hover:text-primary hover:bg-hover'"
-          >
-            <!-- Icône antenne RSS -->
-            <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
-              <path d="M4 11a9 9 0 0 1 9 9"/>
-              <path d="M4 4a16 16 0 0 1 16 16"/>
-              <circle cx="5" cy="19" r="1" fill="currentColor" stroke="none"/>
-            </svg>
-            {{ rssSync ? 'Surveillé' : 'Surveiller' }}
-          </button>
+          <div class="relative" @click.stop>
+            <button
+                @click="rssSync ? disableRssSync() : (rssMenuOpen = !rssMenuOpen)"
+                :title="rssSync ? 'Surveillance activée — cliquer pour désactiver' : 'Surveiller les nouveaux épisodes'"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition"
+                :class="rssSync
+                  ? 'bg-green-500/10 text-green-400 border-green-500/20 hover:bg-green-500/20'
+                  : 'bg-shell text-muted border-border hover:text-primary hover:bg-hover'"
+            >
+              <!-- Icône antenne RSS -->
+              <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
+                <path d="M4 11a9 9 0 0 1 9 9"/>
+                <path d="M4 4a16 16 0 0 1 16 16"/>
+                <circle cx="5" cy="19" r="1" fill="currentColor" stroke="none"/>
+              </svg>
+              {{ rssSync ? (rssSyncMultiOnly ? 'Surveillé · MULTI' : 'Surveillé') : 'Surveiller' }}
+              <span v-if="!rssSync" class="opacity-70">▾</span>
+            </button>
+
+            <!-- Dropdown choix de langue pour la surveillance -->
+            <div v-if="rssMenuOpen && !rssSync"
+                 class="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl p-1 z-20 w-64 shadow-xl flex flex-col gap-0.5">
+              <button
+                  class="flex flex-col items-start gap-0.5 px-3 py-2 rounded-lg text-xs text-primary hover:bg-hover transition-colors text-left"
+                  @click="chooseRssMode(false)"
+              >
+                <span class="font-medium">Toutes les releases</span>
+                <span class="text-muted">VOSTFR et MULTI, dès leur sortie</span>
+              </button>
+              <button
+                  class="flex flex-col items-start gap-0.5 px-3 py-2 rounded-lg text-xs text-primary hover:bg-hover transition-colors text-left"
+                  @click="chooseRssMode(true)"
+              >
+                <span class="font-medium">MULTI (VF) uniquement 🇫🇷</span>
+                <span class="text-muted">Attendre la version avec doublage français</span>
+              </button>
+            </div>
+
+            <!-- Popup rattrapage : épisodes déjà disponibles -->
+            <div v-if="rssCatchupModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4" @click.self="rssCatchupModal = false">
+              <div class="bg-card border border-border rounded-xl w-full max-w-sm p-6 flex flex-col gap-5">
+                <div>
+                  <p class="text-sm font-semibold text-primary">
+                    {{ rssCatchupCount }} épisode{{ rssCatchupCount > 1 ? 's' : '' }} déjà disponible{{ rssCatchupCount > 1 ? 's' : '' }}{{ rssPendingMulti ? ' en MULTI' : '' }}
+                  </p>
+                  <p class="text-xs text-muted mt-1">
+                    Veux-tu les télécharger maintenant, en plus des prochaines sorties{{ rssPendingMulti ? ' MULTI' : '' }} ?
+                  </p>
+                </div>
+                <div class="flex items-center justify-end gap-2">
+                  <button
+                      class="px-3 py-1.5 text-xs font-medium rounded-lg bg-shell text-muted border border-border hover:text-primary hover:bg-hover transition"
+                      @click="enableRssSync(rssPendingMulti, false); rssCatchupModal = false"
+                  >
+                    Non, juste les nouveautés
+                  </button>
+                  <button
+                      class="px-3 py-1.5 text-xs font-medium rounded-lg bg-accent text-white hover:bg-accent-hover transition"
+                      @click="enableRssSync(rssPendingMulti, true); rssCatchupModal = false"
+                  >
+                    Oui, télécharger
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
 
           <!-- Bouton unique "Tout télécharger" — dropdown si plusieurs intégrales -->
           <div v-if="hasSomethingToDownload" class="relative" @click.stop>
@@ -377,6 +427,11 @@ const downloadMenuOpen   = ref(false)
 const downloadingAll     = ref(false)
 const downloadingSeason  = ref<Record<number, boolean>>({})
 const rssSync            = ref(false)
+const rssSyncMultiOnly   = ref(false)
+const rssMenuOpen        = ref(false)
+const rssCatchupModal    = ref(false)
+const rssCatchupCount    = ref(0)
+const rssPendingMulti    = ref(false)
 
 export interface ActiveTorrent { hash: string; progress: number; state: string; files?: { index: number; progress: number }[]; save_path?: string; name?: string }
 const activeTorrents = ref<ActiveTorrent[]>([])
@@ -475,23 +530,75 @@ async function fetchSettings() {
 async function fetchRssSync() {
   try {
     const res = await fetch(`/api/rss-sync/${route.params.id}`, { credentials: 'include' })
-    if (res.ok) { const d = await res.json(); rssSync.value = !!d.synced }
+    if (res.ok) { const d = await res.json(); rssSync.value = !!d.synced; rssSyncMultiOnly.value = !!d.multiOnly }
   } catch {}
 }
 
-async function toggleRssSync() {
+async function disableRssSync() {
+  const serieId = Number(route.params.id)
+  try {
+    const res = await fetch(`/api/rss-sync/${serieId}`, { method: 'DELETE', credentials: 'include' })
+    if (res.ok) { rssSync.value = false; rssSyncMultiOnly.value = false; toast('Surveillance désactivée', 'success') }
+  } catch { toast('Erreur lors de la mise à jour de la surveillance', 'error') }
+}
+
+// Détection langue d'un épisode (miroir de SerieSeasonCard / server rss-sync)
+function langOfEp(ep: any): 'MULTI' | 'VOSTFR' | null {
+  const sources: string[] = [
+    ep.formatted_name ?? '',
+    ...((ep.torrents ?? []) as any[]).map((t: any) => `${t.torrent_name ?? ''} ${t.raw ?? ''}`),
+  ]
+  for (const s of sources) {
+    if (!s) continue
+    if (/\bMULTI\b/i.test(s)) return 'MULTI'
+    if (/\bVOSTFR\b/i.test(s)) return 'VOSTFR'
+  }
+  return null
+}
+
+// Épisodes déjà disponibles (non importés) correspondant au mode choisi
+function availableExistingCount(multiOnly: boolean): number {
+  if (!data.value) return 0
+  let n = 0
+  for (const season of data.value.seasons ?? [])
+    for (const ep of season.episodes ?? [])
+      if (ep.available && !ep.organized && (!multiOnly || langOfEp(ep) === 'MULTI')) n++
+  return n
+}
+
+// Choix du mode dans le menu Surveiller → popup de rattrapage si du contenu existe déjà
+function chooseRssMode(multiOnly: boolean) {
+  rssMenuOpen.value = false
+  const count = availableExistingCount(multiOnly)
+  if (count > 0) {
+    rssPendingMulti.value = multiOnly
+    rssCatchupCount.value = count
+    rssCatchupModal.value = true
+  } else {
+    enableRssSync(multiOnly, false)
+  }
+}
+
+async function enableRssSync(multiOnly: boolean, includeExisting: boolean) {
   const serieId   = Number(route.params.id)
   const serieName = data.value?.serie?.title ?? String(serieId)
   try {
-    if (rssSync.value) {
-      const res = await fetch(`/api/rss-sync/${serieId}`, { method: 'DELETE', credentials: 'include' })
-      if (res.ok) { rssSync.value = false; toast('Surveillance désactivée', 'success') }
-    } else {
-      const res = await fetch(`/api/rss-sync/${serieId}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-        body: JSON.stringify({ serieName }),
-      })
-      if (res.ok) { rssSync.value = true; toast('Surveillance activée — les nouveaux épisodes seront téléchargés automatiquement ✓', 'success') }
+    const res = await fetch(`/api/rss-sync/${serieId}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ serieName, multiOnly, includeExisting }),
+    })
+    if (res.ok) {
+      rssSync.value = true
+      rssSyncMultiOnly.value = multiOnly
+      if (includeExisting) {
+        toast(multiOnly
+          ? `Surveillance activée — téléchargement des ${rssCatchupCount.value} épisode(s) MULTI disponibles lancé ✓`
+          : `Surveillance activée — téléchargement des ${rssCatchupCount.value} épisode(s) disponibles lancé ✓`, 'success')
+      } else {
+        toast(multiOnly
+          ? 'Surveillance activée — seules les releases MULTI (VF) seront téléchargées ✓'
+          : 'Surveillance activée — les nouveaux épisodes seront téléchargés automatiquement ✓', 'success')
+      }
     }
   } catch { toast('Erreur lors de la mise à jour de la surveillance', 'error') }
 }
@@ -739,7 +846,7 @@ async function unimportEpisode(ep: any, _season: any, deleteFile: boolean) {
   finally { epActionLoading.value[ep.id] = false }
 }
 
-const closeMenus = () => { downloadMenuOpen.value = false }
+const closeMenus = () => { downloadMenuOpen.value = false; rssMenuOpen.value = false }
 
 onMounted(() => {
   load()
