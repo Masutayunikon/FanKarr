@@ -84,12 +84,16 @@ export function langOf(...sources: (string | null | undefined)[]): 'MULTI' | 'VO
 
 /**
  * true si le torrent est identifiable comme MULTI.
+ * L'ordre des sources est crucial : le nom du FICHIER d'abord (un pack
+ * étiqueté MULTI peut contenir des épisodes VOSTFR — cas des intégrales
+ * de séries en cours de doublage), puis les noms du torrent.
  * Conservateur : si la langue est indéterminable (null), on considère
  * que ce n'est PAS un MULTI — en mode multiOnly on préfère rater un
  * téléchargement que d'importer du VOSTFR par surprise.
  */
 function torrentIsMulti(t: any, ep?: any): boolean {
-    return langOf(t?.torrent_name, t?.raw, ep?.formatted_name) === 'MULTI'
+    const fileName = typeof t?.file_path === 'string' ? t.file_path.split('/').pop() : null
+    return langOf(fileName, t?.formatted_name, ep?.formatted_name, t?.torrent_name, t?.raw) === 'MULTI'
 }
 
 // ── Logique de sync ───────────────────────────────────────────
