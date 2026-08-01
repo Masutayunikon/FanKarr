@@ -194,7 +194,7 @@ async function fetchOrganizeNotifs() {
         toast(msg, n.errors > 0 ? 'error' : 'success')
       }
     }
-    if (hasNew) await store.fetchSeries()
+    if (hasNew) await store.fetchSeries(true)
   } catch {}
 }
 
@@ -211,7 +211,7 @@ onMounted(async () => {
 })
 
 onActivated(async () => {
-  store.fetchSeries()
+  store.fetchSeries(true)
   if (auth.isAdmin) dlStore.refresh()
 })
 

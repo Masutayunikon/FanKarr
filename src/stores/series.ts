@@ -63,8 +63,10 @@ export const useSeriesStore = defineStore('series', () => {
 
     const _imageCache = new Set<string>()
 
-    async function fetchSeries() {
-        loadingSeries.value = true
+    async function fetchSeries(background = false) {
+        // background : rafraîchissement silencieux — on ne montre le spinner
+        // (qui remplace toute la grille) que si le catalogue est encore vide.
+        if (!background || series.value.length === 0) loadingSeries.value = true
         error.value = null
         try {
             const res = await fetch('/api/series')
