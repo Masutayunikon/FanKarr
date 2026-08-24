@@ -138,16 +138,25 @@
             <!-- Champs principaux -->
             <template v-if="currentDefinition">
               <div v-for="field in basicFields" :key="field.key">
-                <label class="settings-label">
-                  {{ field.label }}
-                  <span v-if="field.required" class="text-red-400 ml-0.5">*</span>
-                </label>
-                <input
-                    v-model="modal.config[field.key]"
-                    :type="field.type === 'password' ? 'password' : 'text'"
-                    :placeholder="field.placeholder ?? ''"
-                    class="settings-input"
+                <SettingsToggle
+                    v-if="field.type === 'boolean'"
+                    :model-value="toBool(modal.config[field.key])"
+                    :label="field.label"
+                    :description="fieldTooltip(field.key)"
+                    @update:model-value="modal.config[field.key] = $event"
                 />
+                <template v-else>
+                  <label class="settings-label">
+                    {{ field.label }}
+                    <span v-if="field.required" class="text-red-400 ml-0.5">*</span>
+                  </label>
+                  <input
+                      v-model="modal.config[field.key]"
+                      :type="field.type === 'password' ? 'password' : 'text'"
+                      :placeholder="field.placeholder ?? ''"
+                      class="settings-input"
+                  />
+                </template>
               </div>
 
               <!-- Paramètres avancés -->
@@ -167,24 +176,33 @@
 
                 <div v-if="advancedOpen" class="flex flex-col gap-3 mt-2 pl-3 border-l border-border">
                   <div v-for="field in advancedFields" :key="field.key">
-                    <label class="settings-label flex items-center gap-1.5">
-                      {{ field.label }}
-                      <span
-                          class="inline-flex items-center justify-center w-4 h-4 rounded-full border border-border text-[10px] text-muted cursor-default leading-none shrink-0 relative group"
-                          tabindex="-1"
-                      >
-                        i
-                        <span class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-56 text-[11px] text-secondary bg-card border border-border rounded-lg px-2.5 py-1.5 shadow-lg pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-10 leading-relaxed">
-                          {{ fieldTooltip(field.key) }}
-                        </span>
-                      </span>
-                    </label>
-                    <input
-                        v-model="modal.config[field.key]"
-                        :type="field.type === 'password' ? 'password' : 'text'"
-                        :placeholder="field.placeholder ?? ''"
-                        class="settings-input"
+                    <SettingsToggle
+                        v-if="field.type === 'boolean'"
+                        :model-value="toBool(modal.config[field.key])"
+                        :label="field.label"
+                        :description="fieldTooltip(field.key)"
+                        @update:model-value="modal.config[field.key] = $event"
                     />
+                    <template v-else>
+                      <label class="settings-label flex items-center gap-1.5">
+                        {{ field.label }}
+                        <span
+                            class="inline-flex items-center justify-center w-4 h-4 rounded-full border border-border text-[10px] text-muted cursor-default leading-none shrink-0 relative group"
+                            tabindex="-1"
+                        >
+                          i
+                          <span class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-56 text-[11px] text-secondary bg-card border border-border rounded-lg px-2.5 py-1.5 shadow-lg pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-10 leading-relaxed">
+                            {{ fieldTooltip(field.key) }}
+                          </span>
+                        </span>
+                      </label>
+                      <input
+                          v-model="modal.config[field.key]"
+                          :type="field.type === 'password' ? 'password' : 'text'"
+                          :placeholder="field.placeholder ?? ''"
+                          class="settings-input"
+                      />
+                    </template>
                   </div>
                 </div>
               </div>
@@ -222,6 +240,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { ChevronDown } from 'lucide-vue-next'
+import SettingsToggle from '@/components/settings/SettingsToggle.vue'
 import { useToast } from '@/composables/useToast'
 
 const { add: toast } = useToast()
@@ -262,22 +281,28 @@ const modal = ref({
   uuid   : null as string | null,
   name   : '',
   type   : '',
-  config : {} as Record<string, string>,
+  config : {} as Record<string, string | number | boolean>,
   testing: false,
   saving : false,
   tested : false,
 })
 
-const ADVANCED_KEYS = ['savePath', 'remotePath', 'localPath']
+const ADVANCED_KEYS = ['savePath', 'remotePath', 'localPath', 'ignoreCertificateErrors']
 
 const FIELD_TOOLTIPS: Record<string, string> = {
   savePath   : 'Optionnel. Permet de placer les téléchargements dans un sous-dossier spécifique à l\'intérieur du dossier déjà configuré dans la gestion des médias.',
   remotePath : 'Si le client tourne sur une autre machine, indiquez ici le chemin qu\'il utilise (ex: /downloads). À associer avec le chemin local ci-dessous.',
   localPath  : 'Chemin équivalent au chemin distant, mais vu par FanKarr sur sa machine (ex: /mnt/nas/downloads). Les deux champs fonctionnent en binôme pour faire la correspondance.',
+  ignoreCertificateErrors: 'Accepte les certificats auto-signés ou invalides en HTTPS. À n\'utiliser que sur un réseau de confiance.',
 }
 
 function fieldTooltip(key: string): string {
   return FIELD_TOOLTIPS[key] ?? ''
+}
+
+// Tolère la forme string "true" en plus du booléen natif
+function toBool(v: unknown): boolean {
+  return v === true || v === 'true'
 }
 
 const advancedOpen = ref(false)
@@ -363,7 +388,8 @@ function onTypeChange() {
   const def = currentDefinition.value
   if (def) {
     for (const field of def.fields) {
-      if (field.default !== undefined) modal.value.config[field.key] = String(field.default)
+      if (field.default === undefined) continue
+      modal.value.config[field.key] = field.type === 'boolean' ? field.default : String(field.default)
     }
   }
 }

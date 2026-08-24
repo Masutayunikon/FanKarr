@@ -2,7 +2,8 @@
  * Transmission Driver
  */
 
-import type { TorrentClientDriver, TorrentInfo, DownloadOptions } from './index.js'
+import type { TorrentClientDriver, TorrentInfo, DownloadOptions, ClientConfig } from './index.js'
+import { clientFetch } from './index.js'
 import { logger } from '../logger.js'
 
 function mapState(status: number): TorrentInfo['state'] {
@@ -17,7 +18,7 @@ function mapState(status: number): TorrentInfo['state'] {
 }
 
 async function trRequest(
-    config: Record<string, string | number>,
+    config: ClientConfig,
     method: string,
     args: Record<string, unknown> = {},
     sessionId = ''
@@ -31,7 +32,7 @@ async function trRequest(
         headers['Authorization'] = 'Basic ' + btoa(`${config.username}:${config.password}`)
     }
 
-    const res = await fetch(`${config.url}/transmission/rpc`, {
+    const res = await clientFetch(config, `${config.url}/transmission/rpc`, {
         method : 'POST',
         headers,
         body   : JSON.stringify({ method, arguments: args }),
@@ -52,7 +53,7 @@ async function trRequest(
     return { ...data, sessionId }
 }
 
-async function trGetIdByHash(config: Record<string, string | number>, hash: string): Promise<number | null> {
+async function trGetIdByHash(config: ClientConfig, hash: string): Promise<number | null> {
     const data     = await trRequest(config, 'torrent-get', { fields: ['hashString', 'id'] })
     const torrents = data.arguments?.torrents ?? []
     return torrents.find((t: any) => t.hashString?.toLowerCase() === hash.toLowerCase())?.id ?? null
@@ -63,7 +64,7 @@ async function trGetIdByHash(config: Record<string, string | number>, hash: stri
  * puis applique les priorités : fichier cible voulu, tous les autres ignorés.
  */
 async function trApplyFilePriority(
-    config   : Record<string, string | number>,
+    config   : ClientConfig,
     hash     : string,
     fileIndex: number,
 ): Promise<void> {
@@ -102,6 +103,7 @@ const TR: TorrentClientDriver = {
             { key: 'savePath',   label: 'Dossier cible',          type: 'text', placeholder: '/downloads/fankai',     required: false },
             { key: 'remotePath', label: 'Chemin distant (client)', type: 'text', placeholder: '/downloads',           required: false },
             { key: 'localPath',  label: 'Chemin local (FanKarr)',  type: 'text', placeholder: '/mnt/nas/downloads',   required: false },
+            { key: 'ignoreCertificateErrors', label: 'Ignorer les erreurs de certificat SSL', type: 'boolean', required: false },
         ],
     },
 

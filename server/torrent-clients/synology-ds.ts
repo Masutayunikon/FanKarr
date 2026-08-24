@@ -4,7 +4,8 @@
 
 import fs   from 'fs'
 import path from 'path'
-import type { TorrentClientDriver, TorrentInfo, DownloadOptions } from './index.js'
+import type { TorrentClientDriver, TorrentInfo, DownloadOptions, ClientConfig } from './index.js'
+import { clientFetch } from './index.js'
 import { logger }   from '../logger.js'
 import { DATA_DIR } from '../config.js'
 
@@ -83,7 +84,7 @@ function mapState(status: string): TorrentInfo['state'] {
 
 // ─── Auth ──────────────────────────────────────────────────────────────────────
 
-async function dsLogin(config: Record<string, string | number>): Promise<string> {
+async function dsLogin(config: ClientConfig): Promise<string> {
     const params = new URLSearchParams({
         api    : 'SYNO.API.Auth',
         version: '3',
@@ -93,7 +94,7 @@ async function dsLogin(config: Record<string, string | number>): Promise<string>
         session: 'DownloadStation',
         format : 'sid',
     })
-    const res = await fetch(`${config.url}/webapi/auth.cgi?${params}`)
+    const res = await clientFetch(config, `${config.url}/webapi/auth.cgi?${params}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
     if (!data.success) throw new Error(`Auth échouée : ${JSON.stringify(data.error)}`)
@@ -101,7 +102,7 @@ async function dsLogin(config: Record<string, string | number>): Promise<string>
 }
 
 async function dsRequest(
-    config : Record<string, string | number>,
+    config : ClientConfig,
     api    : string,
     method : string,
     version: string,
@@ -109,7 +110,7 @@ async function dsRequest(
     sid    : string,
 ): Promise<any> {
     const params = new URLSearchParams({ api, version, method, _sid: sid, ...extra })
-    const res = await fetch(`${config.url}/webapi/DownloadStation/task.cgi?${params}`)
+    const res = await clientFetch(config, `${config.url}/webapi/DownloadStation/task.cgi?${params}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
     if (!data.success) throw new Error(`DS erreur : ${JSON.stringify(data.error)}`)
@@ -131,6 +132,7 @@ const DS: TorrentClientDriver = {
             { key: 'savePath',   label: 'Dossier cible',            type: 'text',     placeholder: '/volume1/downloads/fankai', required: false },
             { key: 'remotePath', label: 'Chemin distant (client)',  type: 'text',     placeholder: '/volume1/downloads',        required: false },
             { key: 'localPath',  label: 'Chemin local (FanKarr)',   type: 'text',     placeholder: '/mnt/nas/downloads',        required: false },
+            { key: 'ignoreCertificateErrors', label: 'Ignorer les erreurs de certificat SSL', type: 'boolean', required: false },
         ],
     },
 
@@ -155,7 +157,7 @@ const DS: TorrentClientDriver = {
                 method : 'getinfo',
                 _sid   : sid,
             })
-            const res = await fetch(`${config.url}/webapi/DownloadStation/info.cgi?${params}`)
+            const res = await clientFetch(config, `${config.url}/webapi/DownloadStation/info.cgi?${params}`)
             if (!res.ok) return { online: false }
             const data = await res.json()
             if (!data.success) return { online: false }
@@ -262,7 +264,7 @@ const DS: TorrentClientDriver = {
                 uri    : url,
             })
             if (withDestination && config.savePath) params.append('destination', String(config.savePath))
-            const res = await fetch(`${config.url}/webapi/DownloadStation/task.cgi?${params}`)
+            const res = await clientFetch(config, `${config.url}/webapi/DownloadStation/task.cgi?${params}`)
             if (!res.ok) throw new Error(`HTTP ${res.status}`)
             return res.json()
         }
@@ -355,7 +357,7 @@ const DS: TorrentClientDriver = {
             force_complete: 'false',
             _sid          : sid,
         })
-        const res = await fetch(`${config.url}/webapi/DownloadStation/task.cgi?${params}`)
+        const res = await clientFetch(config, `${config.url}/webapi/DownloadStation/task.cgi?${params}`)
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         logger.info('synology-ds', `Torrent ${found.id} supprimé`)
     },

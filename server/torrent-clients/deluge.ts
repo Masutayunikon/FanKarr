@@ -8,7 +8,8 @@
  * Progress : float 0–100 (déjà en pourcentage, pas 0–1)
  */
 
-import type { TorrentClientDriver, TorrentInfo, TorrentFileProgress, DownloadOptions } from './index.js'
+import type { TorrentClientDriver, TorrentInfo, TorrentFileProgress, DownloadOptions, ClientConfig } from './index.js'
+import { clientFetch } from './index.js'
 import { logger } from '../logger.js'
 
 // ─── Session cache ─────────────────────────────────────────────────────────────
@@ -18,13 +19,13 @@ import { logger } from '../logger.js'
 interface SessionEntry { cookie: string; expires: number }
 const _sessions = new Map<string, SessionEntry>()
 
-function sessionKey(config: Record<string, string | number>): string {
+function sessionKey(config: ClientConfig): string {
     return `${config.url}::${config.password}`
 }
 
 // ─── Helpers HTTP ──────────────────────────────────────────────────────────────
 
-function delugeUrl(config: Record<string, string | number>): string {
+function delugeUrl(config: ClientConfig): string {
     return String(config.url ?? '').replace(/\/+$/, '') + '/json'
 }
 
@@ -34,12 +35,13 @@ function parseCookie(raw: string): string {
 }
 
 async function delugeRPC(
+    config : ClientConfig,
     url    : string,
     method : string,
     params : unknown[],
     cookie : string,
 ): Promise<{ result: any; newCookie: string | null }> {
-    const res = await fetch(url, {
+    const res = await clientFetch(config, url, {
         method : 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -68,9 +70,9 @@ async function delugeRPC(
 
 // ─── Login ─────────────────────────────────────────────────────────────────────
 
-async function delugeLogin(config: Record<string, string | number>): Promise<string> {
+async function delugeLogin(config: ClientConfig): Promise<string> {
     const url = delugeUrl(config)
-    const res = await fetch(url, {
+    const res = await clientFetch(config, url, {
         method : 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
         body   : JSON.stringify({ method: 'auth.login', params: [String(config.password ?? '')], id: 1 }),
@@ -94,7 +96,7 @@ async function delugeLogin(config: Record<string, string | number>): Promise<str
 // ─── Call avec gestion de session ─────────────────────────────────────────────
 
 async function delugeCall(
-    config : Record<string, string | number>,
+    config : ClientConfig,
     method : string,
     params : unknown[] = [],
 ): Promise<any> {
@@ -110,7 +112,7 @@ async function delugeCall(
     }
 
     try {
-        const { result, newCookie } = await delugeRPC(url, method, params, entry.cookie)
+        const { result, newCookie } = await delugeRPC(config, url, method, params, entry.cookie)
         // Mise à jour du cookie si Deluge en renvoie un nouveau
         if (newCookie) {
             entry.cookie  = newCookie
@@ -125,7 +127,7 @@ async function delugeCall(
             const cookie = await delugeLogin(config)
             const fresh  = { cookie, expires: Date.now() + 30 * 60_000 }
             _sessions.set(key, fresh)
-            const { result } = await delugeRPC(url, method, params, cookie)
+            const { result } = await delugeRPC(config, url, method, params, cookie)
             return result
         }
         throw err
@@ -178,7 +180,7 @@ function flattenDelugeFiles(
 // les priorités : fichier voulu = 1 (normal), tous les autres = 0 (skip).
 
 async function applyFilePriority(
-    config   : Record<string, string | number>,
+    config   : ClientConfig,
     hash     : string,
     fileIndex: number,
 ): Promise<void> {
@@ -211,6 +213,7 @@ const delugeDriver: TorrentClientDriver = {
             { key: 'savePath',   label: 'Dossier cible',                 type: 'text',     placeholder: '/downloads/fankai',    required: false },
             { key: 'remotePath', label: 'Chemin distant (client)',        type: 'text',     placeholder: '/downloads',           required: false },
             { key: 'localPath',  label: 'Chemin local (FanKarr)',         type: 'text',     placeholder: '/mnt/nas/downloads',   required: false },
+            { key: 'ignoreCertificateErrors', label: 'Ignorer les erreurs de certificat SSL', type: 'boolean', required: false },
         ],
     },
 

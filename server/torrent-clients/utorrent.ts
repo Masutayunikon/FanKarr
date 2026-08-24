@@ -2,7 +2,8 @@
  * uTorrent Driver
  */
 
-import type { TorrentClientDriver, TorrentInfo, DownloadOptions } from './index.js'
+import type { TorrentClientDriver, TorrentInfo, DownloadOptions, ClientConfig } from './index.js'
+import { clientFetch } from './index.js'
 import { logger } from '../logger.js'
 
 // uTorrent status flags (bitmask) :
@@ -21,7 +22,7 @@ function mapState(status: number): TorrentInfo['state'] {
 // uTorrent nécessite un token CSRF + cookie à chaque session
 interface UTSession { token: string; cookie: string }
 
-async function utTorrentExists(config: Record<string, string | number>, hash: string): Promise<boolean> {
+async function utTorrentExists(config: ClientConfig, hash: string): Promise<boolean> {
     try {
         const session = await utGetSession(config)
         const data    = await utRequest(config, { action: 'getfiles', hash: hash.toUpperCase() }, session)
@@ -35,7 +36,7 @@ async function utTorrentExists(config: Record<string, string | number>, hash: st
  * tous les fichiers à 0 (skip), sauf le fichier cible à 2 (normal).
  */
 async function utApplyFilePriority(
-    config   : Record<string, string | number>,
+    config   : ClientConfig,
     hash     : string,
     fileIndex: number,
 ): Promise<void> {
@@ -54,13 +55,13 @@ async function utApplyFilePriority(
             // Passer tous les fichiers à priorité 0 (skip)
             const skipQs = new URLSearchParams({ token: session.token, action: 'setprio', hash: HASH, p: '0' })
             for (let i = 0; i < files.length; i++) skipQs.append('f', String(i))
-            await fetch(`${config.url}/gui/?${skipQs}`, {
+            await clientFetch(config, `${config.url}/gui/?${skipQs}`, {
                 headers: { Authorization: `Basic ${auth}`, Cookie: session.cookie },
             })
 
             // Activer le fichier cible (priorité 2 = normal)
             const selectQs = new URLSearchParams({ token: session.token, action: 'setprio', hash: HASH, p: '2', f: String(fileIndex) })
-            await fetch(`${config.url}/gui/?${selectQs}`, {
+            await clientFetch(config, `${config.url}/gui/?${selectQs}`, {
                 headers: { Authorization: `Basic ${auth}`, Cookie: session.cookie },
             })
 
@@ -71,13 +72,13 @@ async function utApplyFilePriority(
     throw new Error(`Timeout : fichiers non disponibles pour ${hash.slice(0, 8)}…`)
 }
 
-async function utGetSession(config: Record<string, string | number>): Promise<UTSession> {
+async function utGetSession(config: ClientConfig): Promise<UTSession> {
     const auth    = btoa(`${config.username ?? ''}:${config.password ?? ''}`)
     const headers : Record<string, string> = {
         'Authorization': `Basic ${auth}`,
     }
 
-    const res = await fetch(`${config.url}/gui/token.html`, { headers })
+    const res = await clientFetch(config, `${config.url}/gui/token.html`, { headers })
     if (!res.ok) throw new Error(`HTTP ${res.status} — token introuvable`)
 
     const text   = await res.text()
@@ -90,14 +91,14 @@ async function utGetSession(config: Record<string, string | number>): Promise<UT
 }
 
 async function utRequest(
-    config : Record<string, string | number>,
+    config : ClientConfig,
     params : Record<string, string>,
     session: UTSession,
 ): Promise<any> {
     const auth = btoa(`${config.username ?? ''}:${config.password ?? ''}`)
     const qs   = new URLSearchParams({ token: session.token, ...params })
 
-    const res = await fetch(`${config.url}/gui/?${qs}`, {
+    const res = await clientFetch(config, `${config.url}/gui/?${qs}`, {
         headers: {
             'Authorization': `Basic ${auth}`,
             'Cookie'       : session.cookie,
@@ -142,6 +143,7 @@ const UT: TorrentClientDriver = {
             { key: 'savePath', label: 'Dossier cible',      type: 'text',     placeholder: '/downloads/fankai',      required: false },
             { key: 'remotePath', label: 'Chemin distant (client)', type: 'text', placeholder: '/downloads',          required: false },
             { key: 'localPath',  label: 'Chemin local (FanKarr)',  type: 'text', placeholder: '/mnt/nas/downloads',  required: false },
+            { key: 'ignoreCertificateErrors', label: 'Ignorer les erreurs de certificat SSL', type: 'boolean', required: false },
         ],
     },
 
@@ -213,7 +215,7 @@ const UT: TorrentClientDriver = {
         const qs = new URLSearchParams({ token: session.token, action: 'add-url', s: url })
         if (config.savePath) qs.set('path', String(config.savePath))
 
-        const res = await fetch(`${config.url}/gui/?${qs}`, {
+        const res = await clientFetch(config, `${config.url}/gui/?${qs}`, {
             method : 'GET',
             headers: { Authorization: `Basic ${auth}`, Cookie: session.cookie },
         })
