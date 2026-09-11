@@ -1,5 +1,19 @@
 # Changelog
 
+## [3.23.0](https://github.com/Masutayunikon/FanKarr/compare/v3.22.0...v3.23.0) (2026-09-11)
+
+
+### Features
+
+* **import:** catalogue unifié, renommage de dossier série et nettoya……ge des orphelins corection dédoublonnage ([c6b26d8](https://github.com/Masutayunikon/FanKarr/commit/c6b26d88f0a9c5b1092e162f43ff052efdbffb4d))
+* **import:** catalogue unifié, renommage de dossier série et nettoyage des orphelins corection dédoublonnage ([0ff7f21](https://github.com/Masutayunikon/FanKarr/commit/0ff7f21958ad33432123f76a2fa7830655329cbb))
+
+
+### Bug Fixes
+
+* **import:** repli sur l'API Fankai quand une série est absente du scraper et retrait de Kodi des NFO ([1ca7eac](https://github.com/Masutayunikon/FanKarr/commit/1ca7eac48c9337c39b1d40a43a90c993e90d11ea))
+* **import:** repli sur l'API Fankai quand une série est absente du scraper et retrait de Kodi des NFO ([67794d9](https://github.com/Masutayunikon/FanKarr/commit/67794d92c8ab48a402bdcb5a2a855df39c86bba8))
+
 ## [3.22.0](https://github.com/Masutayunikon/FanKarr/compare/v3.21.0...v3.22.0) (2026-09-11)
 
 
