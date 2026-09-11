@@ -1,5 +1,15 @@
 # Changelog
 
+## [3.22.0](https://github.com/Masutayunikon/FanKarr/compare/v3.21.0...v3.22.0) (2026-09-11)
+
+
+### Features
+
+* actions de masse sur les séries et fiabilisation des imports ([f4f2135](https://github.com/Masutayunikon/FanKarr/commit/f4f213508de8500aa5e32e8782f358a22e47ec36))
+* actions de masse sur les séries et fiabilisation des imports et correction protection admin ([7f06dd6](https://github.com/Masutayunikon/FanKarr/commit/7f06dd654a72b4960195202ef5597411a54f8d75))
+* **torrent:** ajout d'une option pour ignorer les erreurs de certificat ssl ([7479ddf](https://github.com/Masutayunikon/FanKarr/commit/7479ddf8eb63579727cbb0f497ead98c90145da5))
+* **torrent:** ajout d'une option pour ignorer les erreurs de certificat SSL ([#138](https://github.com/Masutayunikon/FanKarr/issues/138)) ([0768964](https://github.com/Masutayunikon/FanKarr/commit/07689640413cf9ea57ea69e1b50273c80dffd640))
+
 ## [3.21.0](https://github.com/Masutayunikon/FanKarr/compare/v3.20.3...v3.21.0) (2026-06-28)
 
 
