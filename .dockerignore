@@ -6,3 +6,4 @@ config
 .env
 .env.*
 !.env.example
+.test-sandbox

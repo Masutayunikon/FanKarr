@@ -27,3 +27,8 @@ binaries
 *.njsproj
 *.sln
 *.sw?
+
+# Instance de test locale
+.test-sandbox
+scripts/seed-test-sandbox.mjs
+docker-compose.test.yml

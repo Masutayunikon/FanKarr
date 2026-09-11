@@ -8,10 +8,8 @@ import fs   from 'fs'
 import path from 'path'
 import { Worker } from 'worker_threads'
 import { logger } from './logger.js'
-import { DATA_DIR } from './config.js'
 import { readSettings } from './settings.js'
-
-const ORGANIZED_PATH = path.join(DATA_DIR, 'organized.json')
+import { readOrganized, writeOrganized, updateOrganized, type Organized } from './lib/organized-store.js'
 
 export let workerRunning = false
 const _prevStates = new Map<string, string>()
@@ -30,18 +28,54 @@ export interface OrganizeResult {
     errors  : { file: string; error: string }[]
 }
 
-interface OrgEntry {
-    at           : string
-    season       : number
-    episode      : number
-    episode_id   : number
-    src_filename : string
-    dest_filename: string
-    dest_path    : string
-    dest_dir?    : string   // absent dans les anciennes entrées — backfillé au démarrage
+type WorkerResult = { hash: string; name: string; serieId?: number | null; total: number; done: number; skipped: number; errors: { file: string; error: string }[] }
+
+// ── File d'attente des workers ────────────────────────────────
+let _queue: Promise<unknown> = Promise.resolve()
+let _queued = 0
+const _pendingManual = new Map<string, Promise<OrganizeResult>>()
+
+function enqueue<T>(job: () => Promise<T>): Promise<T> {
+    _queued++
+    const run = _queue.then(job).finally(() => { _queued-- })
+    _queue = run.catch(() => {})
+    return run
 }
 
-type Organized = Record<string, Record<string, OrgEntry>>
+function runWorker(torrents: any[], seriesData: any[], onResult: (r: WorkerResult) => void): Promise<void> {
+    return new Promise((resolve, reject) => {
+        workerRunning = true
+        const worker  = new Worker(resolveWorkerPath())
+        let settled   = false
+        const finish  = (err?: Error) => {
+            if (settled) return
+            settled = true
+            workerRunning = false
+            worker.terminate()
+            err ? reject(err) : resolve()
+        }
+
+        worker.on('message', (msg: any) => {
+            if (msg.type === 'log') {
+                logger[msg.level as 'info' | 'warn' | 'error' | 'debug']?.('organize-worker', msg.msg)
+            } else if (msg.type === 'mark') {
+                try {
+                    updateOrganized(data => { (data[msg.hash] ??= {})[String(msg.episodeId)] = msg.entry })
+                } catch (err) {
+                    logger.error('organize', `Enregistrement de l'import impossible (ep ${msg.episodeId}) : ${err instanceof Error ? err.message : err}`)
+                }
+            } else if (msg.type === 'result') {
+                onResult(msg)
+            } else if (msg.type === 'done') {
+                finish()
+            }
+        })
+        worker.on('error', err => finish(err))
+        worker.on('exit', code => finish(code > 1 ? new Error(`Worker exit inattendu : code ${code}`) : undefined))
+
+        worker.postMessage({ type: 'run', torrents, seriesData })
+    })
+}
 
 // ── Scan initial ──────────────────────────────────────────────
 
@@ -65,10 +99,8 @@ export async function scanMediaPath(
 
     logger.info('organize', `Scan de la médiathèque : ${mediaPath}`)
 
-    // Map : nom_sans_extension → { hash, srcFilename, episodeId, season, episode }
-    // On indexe par nom sans extension pour matcher quelle que soit l'extension sur le disque
     const filenameIndex = new Map<string, {
-        hash        : string
+        hashes      : string[]
         srcFilename : string
         episodeId   : number
         season      : number
@@ -84,8 +116,13 @@ export async function scanMediaPath(
                 const idx = (filename: string, hash: string, destFilename?: string) => {
                     const base = filename.replace(/\.[^.]+$/, '')
                     if (!base) return
+                    const existing = filenameIndex.get(base)
+                    if (existing && existing.episodeId === ep.id) {
+                        if (!existing.hashes.includes(hash)) existing.hashes.push(hash)
+                        return
+                    }
                     filenameIndex.set(base, {
-                        hash,
+                        hashes      : [hash],
                         srcFilename : filename,
                         episodeId   : ep.id,
                         season      : season.season_number,
@@ -123,11 +160,12 @@ export async function scanMediaPath(
         }
     }
 
-    let organized: Organized = {}
-    try {
-        if (fs.existsSync(organizedPath))
-            organized = JSON.parse(fs.readFileSync(organizedPath, 'utf-8'))
-    } catch {}
+    let organized: Organized
+    try { organized = readOrganized(organizedPath) }
+    catch (err) {
+        logger.error('organize', `Scan annulé : ${err instanceof Error ? err.message : err}`)
+        return result
+    }
 
     // Track les paires hash:episodeId présentes
     const presentFiles = new Set<string>()
@@ -167,7 +205,8 @@ export async function scanMediaPath(
                     continue
                 }
 
-                const { hash, srcFilename, episodeId, season, episode } = match
+                const { hashes, srcFilename, episodeId, season, episode } = match
+                const hash = hashes.find(h => organized[h]?.[String(episodeId)]) ?? hashes[0]
                 presentFiles.add(`${hash}:${episodeId}`)
 
                 if (organized[hash]?.[String(episodeId)]) continue
@@ -190,11 +229,17 @@ export async function scanMediaPath(
 
     walk(mediaPath)
 
+    const mediaEmpty = result.found === 0 && Object.keys(organized).length > 0
+    if (mediaEmpty) logger.warn('organize', `Scan : aucun fichier dans ${mediaPath} — suppression des entrées ignorée`)
+
     // Supprimer uniquement les entrées connues dans l'index et absentes du disque
-    const allEpisodeIds = new Set([...filenameIndex.values()].map(v => `${v.hash}:${v.episodeId}`))
+    const allEpisodeIds = new Set(
+        [...filenameIndex.values()].flatMap(v => v.hashes.map(h => `${h}:${v.episodeId}`))
+    )
 
     let removed = 0
     for (const [hash, episodes] of Object.entries(organized)) {
+        if (mediaEmpty) break
         for (const episodeId of Object.keys(episodes)) {
             if (allEpisodeIds.has(`${hash}:${episodeId}`) && !presentFiles.has(`${hash}:${episodeId}`)) {
                 delete organized[hash][episodeId]
@@ -207,7 +252,7 @@ export async function scanMediaPath(
     // Désimport automatique des fichiers manquants sur le disque
     const { autoUnimportMissing } = readSettings() as any
     let autoRemoved = 0
-    if (autoUnimportMissing) {
+    if (autoUnimportMissing && !mediaEmpty) {
         for (const [hash, episodes] of Object.entries(organized)) {
             for (const [episodeId, entry] of Object.entries(episodes as Record<string, any>)) {
                 const destPath = entry?.dest_path
@@ -222,7 +267,7 @@ export async function scanMediaPath(
     }
 
     if (result.added > 0 || removed > 0 || autoRemoved > 0) {
-        fs.writeFileSync(organizedPath, JSON.stringify(organized, null, 2), 'utf-8')
+        writeOrganized(organized, organizedPath)
     }
 
     logger.info('organize', `Scan terminé — ${result.found} fichiers, ${result.added} ajoutés, ${removed} orphelins supprimés${autoRemoved > 0 ? `, ${autoRemoved} désimportés auto (fichier manquant)` : ''}${noMatch > 0 ? `, ${noMatch} non matchés` : ''}`)
@@ -243,8 +288,8 @@ export async function autoOrganizeAll(
         return
     }
 
-    if (workerRunning) {
-        logger.debug('organize', 'Worker déjà en cours — skip')
+    if (_queued > 0) {
+        logger.debug('organize', 'Import déjà en cours — skip')
         return
     }
 
@@ -268,11 +313,12 @@ export async function autoOrganizeAll(
 
     for (const t of torrents) _prevStates.set(t.hash, t.state)
 
-    let organized: Organized = {}
-    try {
-        if (fs.existsSync(ORGANIZED_PATH))
-            organized = JSON.parse(fs.readFileSync(ORGANIZED_PATH, 'utf-8'))
-    } catch {}
+    let organized: Organized
+    try { organized = readOrganized() }
+    catch (err) {
+        logger.error('organize', `Import automatique annulé : ${err instanceof Error ? err.message : err}`)
+        return
+    }
 
     const hasUnorganized = torrents.some(t =>
         t.state === 'seeding' && !organized[t.hash?.toLowerCase()]
@@ -290,13 +336,8 @@ export async function autoOrganizeAll(
         logger.debug('organize', `Lancement worker (${seedingCount} torrents en seeding, vérification initiale)`)
     }
 
-    workerRunning = true
-    const worker  = new Worker(resolveWorkerPath())
-
-    worker.on('message', (msg: any) => {
-        if (msg.type === 'log') {
-            logger[msg.level as 'info' | 'warn' | 'error' | 'debug']?.('organize-worker', msg.msg)
-        } else if (msg.type === 'result') {
+    try {
+        await enqueue(() => runWorker(torrents, seriesData, msg => {
             if (msg.errors.length > 0) {
                 logger.warn('organize', `"${msg.name}" — ${msg.done} importé(s), ${msg.skipped} skippé(s), ${msg.errors.length} erreur(s)`)
                 for (const e of msg.errors) {
@@ -316,24 +357,11 @@ export async function autoOrganizeAll(
                 errors    : msg.errors.length,
                 errorFiles: msg.errors,
             })
-        } else if (msg.type === 'done') {
-            logger.debug('organize', 'Worker terminé')
-            workerRunning = false
-            worker.terminate()
-        }
-    })
-
-    worker.on('error', (err) => {
-        logger.error('organize', `Worker erreur : ${err.message}`)
-        workerRunning = false
-    })
-    worker.on('exit', (code) => {
-        if (code > 1) logger.error('organize', `Worker exit inattendu avec code ${code}`)
-        else logger.debug('organize', `Worker terminé (code ${code})`)
-        workerRunning = false
-    })
-
-    worker.postMessage({ type: 'run', torrents, seriesData })
+        }))
+        logger.debug('organize', 'Worker terminé')
+    } catch (err) {
+        logger.error('organize', `Worker erreur : ${err instanceof Error ? err.message : err}`)
+    }
 }
 
 // ── Migration des IDs épisodes ────────────────────────────────
@@ -368,11 +396,12 @@ export async function migrateOrganizedEpisodeIds(
     }
 
     // 2. Charger organized.json
-    let organized: Organized = {}
-    try {
-        if (fs.existsSync(organizedPath))
-            organized = JSON.parse(fs.readFileSync(organizedPath, 'utf-8'))
-    } catch { return { updated: 0, orphaned: 0 } }
+    let organized: Organized
+    try { organized = readOrganized(organizedPath) }
+    catch (err) {
+        logger.error('organize', `Migration IDs annulée : ${err instanceof Error ? err.message : err}`)
+        return { updated: 0, orphaned: 0 }
+    }
 
     let updated = 0
     let orphaned = 0
@@ -422,13 +451,65 @@ export async function migrateOrganizedEpisodeIds(
     }
 
     if (changed) {
-        fs.writeFileSync(organizedPath, JSON.stringify(organized, null, 2), 'utf-8')
+        writeOrganized(organized, organizedPath)
         logger.info('organize', `Migration IDs terminée — ${updated} mis à jour${orphaned > 0 ? `, ${orphaned} non résolus` : ''}`)
     } else {
         logger.debug('organize', `Migration IDs — aucun changement nécessaire${orphaned > 0 ? ` (${orphaned} IDs inconnus conservés)` : ''}`)
     }
 
     return { updated, orphaned }
+}
+
+// ── Déduplication : un seul enregistrement par épisode ────────
+
+export function dedupeOrganizedEpisodes(
+    organizedPath: string,
+): { removed: number } {
+    let organized: Organized
+    try { organized = readOrganized(organizedPath) }
+    catch (err) {
+        logger.error('organize', `Dédoublonnage annulé : ${err instanceof Error ? err.message : err}`)
+        return { removed: 0 }
+    }
+
+    // episode_id → [{ hash, entry }]
+    const byEpisode = new Map<string, { hash: string; entry: any }[]>()
+    for (const [hash, episodes] of Object.entries(organized)) {
+        for (const [episodeId, entry] of Object.entries(episodes as Record<string, any>)) {
+            if (!byEpisode.has(episodeId)) byEpisode.set(episodeId, [])
+            byEpisode.get(episodeId)!.push({ hash, entry })
+        }
+    }
+
+    let removed = 0
+    for (const [episodeId, candidates] of byEpisode) {
+        if (candidates.length < 2) continue
+
+        const score = (c: { entry: any }) => {
+            const exists = c.entry?.dest_path ? fs.existsSync(c.entry.dest_path) : false
+            const at     = Date.parse(c.entry?.at ?? '') || 0
+            return { exists, at }
+        }
+        const sorted = [...candidates].sort((a, b) => {
+            const sa = score(a), sb = score(b)
+            if (sa.exists !== sb.exists) return sa.exists ? -1 : 1
+            return sb.at - sa.at
+        })
+
+        const keep = sorted[0]
+        for (const c of sorted.slice(1)) {
+            delete (organized[c.hash] as any)[episodeId]
+            removed++
+            logger.info('organize', `Dédoublonnage : ep ${episodeId} retiré de ${c.hash.slice(0, 8)}… (conservé sous ${keep.hash.slice(0, 8)}…)`)
+        }
+    }
+
+    if (removed > 0) {
+        writeOrganized(organized, organizedPath)
+        logger.info('organize', `Dédoublonnage terminé — ${removed} entrée(s) redondante(s) supprimée(s)`)
+    }
+
+    return { removed }
 }
 
 // ── Sync des noms de fichiers après mise à jour du scraper ────
@@ -438,11 +519,12 @@ export async function syncFilenameChanges(
     organizedPath: string,
 ): Promise<{ renamed: number; errors: number }> {
     const { nfoSupport } = readSettings()
-    let organized: Organized = {}
-    try {
-        if (fs.existsSync(organizedPath))
-            organized = JSON.parse(fs.readFileSync(organizedPath, 'utf-8'))
-    } catch { return { renamed: 0, errors: 0 } }
+    let organized: Organized
+    try { organized = readOrganized(organizedPath) }
+    catch (err) {
+        logger.error('organize', `Sync noms annulée : ${err instanceof Error ? err.message : err}`)
+        return { renamed: 0, errors: 0 }
+    }
 
     let renamed = 0
     let errors  = 0
@@ -506,7 +588,7 @@ export async function syncFilenameChanges(
     }
 
     if (changed)
-        fs.writeFileSync(organizedPath, JSON.stringify(organized, null, 2), 'utf-8')
+        writeOrganized(organized, organizedPath)
 
     if (renamed > 0 || errors > 0)
         logger.info('organize', `Sync noms scraper — ${renamed} renommé(s)${errors > 0 ? `, ${errors} erreur(s)` : ''}`)
@@ -523,20 +605,24 @@ export async function organizeTorrent(
     seriesData: any[],
     files?    : { name?: string; progress: number; priority?: number }[],
 ): Promise<OrganizeResult> {
-    logger.info('organize', `Import manuel lancé pour "${name}" (${hash})`)
+    const key     = hash.toLowerCase()
+    const pending = _pendingManual.get(key)
+    if (pending) {
+        logger.info('organize', `Import manuel de "${name}" déjà en attente — demande fusionnée`)
+        return pending
+    }
+    logger.info('organize', `Import manuel ${_queued > 0 ? 'mis en file' : 'lancé'} pour "${name}" (${hash})`)
 
-    return new Promise((resolve, reject) => {
-        const worker      = new Worker(resolveWorkerPath())
-        // files : progression par fichier récupérée depuis le client torrent.
-        // Permet au worker de ne traiter que les fichiers à 100% et d'éviter
-        // les EBUSY sur Windows quand qBit est encore en train d'écrire les autres.
-        const fakeTorrent = { hash, name, save_path: savePath, state: 'seeding', files: files ?? [] }
-        const result: OrganizeResult = { total: 0, skipped: 0, done: 0, errors: [] }
+    // files : progression par fichier récupérée depuis le client torrent.
+    // Permet au worker de ne traiter que les fichiers à 100% et d'éviter
+    // les EBUSY sur Windows quand qBit est encore en train d'écrire les autres.
+    const fakeTorrent = { hash, name, save_path: savePath, state: 'seeding', files: files ?? [] }
+    const result: OrganizeResult = { total: 0, skipped: 0, done: 0, errors: [] }
 
-        worker.on('message', (msg: any) => {
-            if (msg.type === 'log') {
-                logger[msg.level as 'info' | 'warn' | 'error' | 'debug']?.('organize-worker', msg.msg)
-            } else if (msg.type === 'result') {
+    const job = enqueue(async () => {
+        _pendingManual.delete(key)
+        try {
+            await runWorker([fakeTorrent], seriesData, msg => {
                 result.total   = msg.total
                 result.skipped = msg.skipped
                 result.done    = msg.done
@@ -549,21 +635,13 @@ export async function organizeTorrent(
                 } else {
                     logger.info('organize', `Import "${name}" terminé — ${msg.done} fichier(s) importé(s), ${msg.skipped} skippé(s)`)
                 }
-            } else if (msg.type === 'done') {
-                worker.terminate()
-                resolve(result)
-            }
-        })
-
-        worker.on('error', (err) => {
-            logger.error('organize', `Worker erreur lors de l'import de "${name}" : ${err.message}`)
-            worker.terminate()
-            reject(err)
-        })
-        worker.on('exit', (code) => {
-            if (code > 1) reject(new Error(`Worker exit inattendu: code ${code}`))
-        })
-
-        worker.postMessage({ type: 'run', torrents: [fakeTorrent], seriesData })
+            })
+        } catch (err) {
+            logger.error('organize', `Worker erreur lors de l'import de "${name}" : ${err instanceof Error ? err.message : err}`)
+            throw err
+        }
+        return result
     })
+    _pendingManual.set(key, job)
+    return job
 }

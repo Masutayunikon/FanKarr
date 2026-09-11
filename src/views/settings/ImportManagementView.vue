@@ -23,6 +23,14 @@
           Actualiser
         </button>
         <button
+            @click="forceMetadataRefresh"
+            :disabled="forcingRefresh"
+            class="btn-secondary"
+            title="Recharge les correspondances de renommage depuis le scraper Fankai en ignorant tous les caches, migre les IDs d'épisodes, puis renomme les fichiers importés"
+        >
+          {{ forcingRefresh ? 'Rechargement…' : 'Forcer la MAJ des correspondances' }}
+        </button>
+        <button
             @click="purgeNfo"
             :disabled="purgingNfo"
             class="btn-secondary text-red-400 hover:text-red-300"
@@ -177,6 +185,7 @@ const { add: toast } = useToast()
 const loading     = ref(true)
 const renamingAll = ref(false)
 const purgingNfo  = ref(false)
+const forcingRefresh = ref(false)
 const series      = ref<any[]>([])
 const nfoSupport  = ref(false)
 const collapsed   = ref<Set<number>>(new Set())
@@ -251,6 +260,30 @@ async function renameSingle(ep: any, serie: any) {
     toast('Impossible de contacter le serveur', 'error')
   } finally {
     renamingEp.value[ep.episode_id] = false
+  }
+}
+
+async function forceMetadataRefresh() {
+  forcingRefresh.value = true
+  try {
+    const res = await fetch('/api/update', {
+      method     : 'POST',
+      headers    : { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body       : JSON.stringify({ force: true }),
+    })
+    const data = await res.json()
+    if (!res.ok) { toast(data.error ?? 'Erreur lors du rechargement', 'error'); return }
+    const parts = [`${data.count} séries rechargées`]
+    if (data.migrated > 0) parts.push(`${data.migrated} ID(s) migré(s)`)
+    if (data.deduped  > 0) parts.push(`${data.deduped} doublon(s) retiré(s)`)
+    parts.push(`${data.renamed} fichier${data.renamed > 1 ? 's' : ''} renommé${data.renamed > 1 ? 's' : ''}`)
+    toast(parts.join(' · ') + ' ✓', data.errors > 0 ? 'error' : 'success')
+    await load()
+  } catch {
+    toast('Impossible de contacter le serveur', 'error')
+  } finally {
+    forcingRefresh.value = false
   }
 }
 

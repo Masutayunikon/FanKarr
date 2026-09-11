@@ -46,6 +46,10 @@ export interface Serie {
     status: string | null
     torrent_count: number
     has_torrents: boolean
+    download_state: 'none' | 'downloading' | 'partial' | 'complete'
+    in_client: boolean
+    has_files: boolean
+    rss_synced: boolean
 }
 
 export interface SerieDetail {

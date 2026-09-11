@@ -75,6 +75,18 @@
             </button>
           </div>
         </div>
+
+        <!-- Sélection multiple -->
+        <button
+            v-if="selectable"
+            @click="emit('update:selecting', !selecting)"
+            class="btn-secondary flex items-center gap-1.5 py-1.5 px-2.5 shrink-0"
+            :class="selecting ? 'border-accent text-accent' : ''"
+            title="Sélectionner plusieurs séries"
+        >
+          <ListChecks :size="15" />
+          <span class="hidden md:inline text-xs">Sélection</span>
+        </button>
       </div>
 
       <!-- Ligne 2 : tri + taille + count -->
@@ -121,7 +133,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Search, SlidersHorizontal, ChevronDown } from 'lucide-vue-next'
+import { Search, SlidersHorizontal, ChevronDown, ListChecks } from 'lucide-vue-next'
 import { onClickOutside } from '@vueuse/core'
 
 defineProps<{
@@ -136,6 +148,8 @@ defineProps<{
   filtersImport       : { label: string; value: string; color: string }[]
   sortOptions         : { label: string; value: string }[]
   legend              : { label: string; color: string }[]
+  selectable?         : boolean
+  selecting?          : boolean
 }>()
 
 const emit = defineEmits<{
@@ -143,6 +157,7 @@ const emit = defineEmits<{
   'update:activeFilter': [value: string]
   'update:activeSort'  : [value: string]
   'update:posterSize'  : [value: string]
+  'update:selecting'   : [value: boolean]
 }>()
 
 const filterOpen = ref(false)

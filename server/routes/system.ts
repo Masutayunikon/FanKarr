@@ -6,7 +6,7 @@ import { logger, readLogs, clearLogs, logsFileSize } from '../logger.js'
 import { DATA_DIR, BASE_DIR } from '../config.js'
 import { readSettings } from '../settings.js'
 import { systemInfo } from '../system.js'
-import { scanMediaPath, syncFilenameChanges } from '../organize.js'
+import { scanMediaPath, syncFilenameChanges, migrateOrganizedEpisodeIds, dedupeOrganizedEpisodes } from '../organize.js'
 import { readAvailable, loadEnrichedSeriesData, cacheClear } from '../lib/github-cache.js'
 import { cacheSize } from '../lib/github-cache.js'
 import { recentOrganized } from '../lib/notifs.js'
@@ -126,18 +126,34 @@ router.get('/torrents/status', requireAuth, async (_req, res) => {
     } catch { res.json({ exists: false, count: 0, empty: true }) }
 })
 
-router.post('/update', requireAuth, async (_req, res) => {
+router.post('/update', requireAuth, async (req, res) => {
+    const force = req.body?.force === true
+    const organizedPath = path.join(DATA_DIR, 'organized.json')
     try {
         cacheClear()
-        logger.info('api', 'Cache GitHub vidé — rechargement forcé')
-        const availableIds = await readAvailable()
+        logger.info('api', force
+            ? 'Forçage des correspondances de renommage — cache mémoire et CDN contournés'
+            : 'Cache GitHub vidé — rechargement forcé')
+
+        const availableIds = await readAvailable(force)
         if (!Array.isArray(availableIds)) throw new Error('available.json invalide')
         logger.info('api', `Catalogue rechargé — ${availableIds.length} séries disponibles`)
+
+        if (force) {
+            const seriesData      = await loadEnrichedSeriesData(true)
+            const { updated }     = await migrateOrganizedEpisodeIds(organizedPath, seriesData)
+            const { removed }     = dedupeOrganizedEpisodes(organizedPath)
+            const { renamed, errors } = await syncFilenameChanges(seriesData, organizedPath)
+            logger.info('api', `Forçage terminé — ${updated} ID(s) migré(s), ${removed} doublon(s) retiré(s), ${renamed} fichier(s) renommé(s)${errors > 0 ? `, ${errors} erreur(s)` : ''}`)
+            res.json({ ok: true, count: availableIds.length, migrated: updated, deduped: removed, renamed, errors })
+            return
+        }
+
         res.json({ ok: true, count: availableIds.length })
         ;(async () => {
             try {
                 const seriesData = await loadEnrichedSeriesData()
-                const { renamed } = await syncFilenameChanges(seriesData, path.join(DATA_DIR, 'organized.json'))
+                const { renamed } = await syncFilenameChanges(seriesData, organizedPath)
                 if (renamed > 0)
                     logger.info('api', `Sync noms scraper après mise à jour — ${renamed} fichier(s) renommé(s)`)
             } catch (err) {

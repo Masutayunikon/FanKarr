@@ -13,6 +13,8 @@
         :filters-import="filtersImport"
         :sort-options="sortOptions"
         :legend="legend"
+        :selectable="auth.isAdmin"
+        v-model:selecting="selecting"
     />
 
     <!-- Grille -->
@@ -33,14 +35,22 @@
       </div>
 
       <div v-else class="grid gap-4" :style="{ gridTemplateColumns: `repeat(auto-fill, minmax(${posterSizes[posterSize]}, 1fr))` }">
-        <RouterLink
+        <component
+            :is="selecting ? 'div' : RouterLink"
             v-for="serie in filtered"
             :key="serie.id"
-            :to="`/series/${serie.id}`"
+            v-bind="selecting ? {} : { to: `/series/${serie.id}` }"
             class="group flex flex-col gap-1.5 transition-transform duration-200 hover:-translate-y-0.5"
-            :class="{ 'opacity-40': !serie.has_torrents && serie.download_state === 'none' }"
+            :class="{
+              'opacity-40': !serie.has_torrents && serie.download_state === 'none' && !selected.has(serie.id),
+              'cursor-pointer select-none': selecting,
+            }"
+            @click="selecting && toggleSelected(serie.id)"
         >
-          <div class="relative aspect-[2/3] rounded-lg overflow-hidden bg-card border border-border">
+          <div
+              class="relative aspect-[2/3] rounded-lg overflow-hidden bg-card border"
+              :class="selected.has(serie.id) ? 'border-accent ring-2 ring-accent' : 'border-border'"
+          >
             <img
                 v-if="serie.poster_image"
                 :src="serie.poster_image"
@@ -52,8 +62,20 @@
               <Tv :size="28" />
             </div>
 
-            <div class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+            <div v-if="!selecting" class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-150">
               <span class="text-xs text-white border border-white/30 px-3 py-1 rounded-md">Voir</span>
+            </div>
+
+            <div
+                v-if="selecting"
+                class="absolute top-2 left-2 w-5 h-5 rounded-md border flex items-center justify-center"
+                :class="selected.has(serie.id) ? 'bg-accent border-accent text-white' : 'bg-black/40 border-white/60'"
+            >
+              <Check v-if="selected.has(serie.id)" :size="13" />
+            </div>
+
+            <div v-if="auth.isAdmin && serie.rss_synced" class="absolute top-2 right-2 p-1 rounded-md bg-black/60 text-green-400" title="Surveillée">
+              <Rss :size="11" />
             </div>
 
             <div
@@ -77,7 +99,20 @@
               </span>
             </div>
           </div>
-        </RouterLink>
+        </component>
+      </div>
+    </div>
+
+    <!-- Actions de masse -->
+    <div v-if="selecting" class="sticky bottom-0 z-10 px-4 md:px-6 py-3 border-t border-border bg-shell flex items-center gap-3 flex-wrap">
+      <span class="text-xs text-primary font-medium">{{ selected.size }} sélectionnée{{ selected.size > 1 ? 's' : '' }}</span>
+      <button @click="selectAllFiltered" class="text-xs text-accent hover:underline">Tout sélectionner ({{ filtered.length }})</button>
+      <button v-if="selected.size > 0" @click="clearSelection" class="text-xs text-muted hover:text-primary">Désélectionner</button>
+      <div class="flex items-center gap-2 ml-auto">
+        <button @click="bulkRename" :disabled="bulkBusy || selected.size === 0" class="btn-secondary">Renommer</button>
+        <button @click="bulkSync(true)" :disabled="bulkBusy || selected.size === 0" class="btn-secondary">Surveiller</button>
+        <button @click="bulkSync(false)" :disabled="bulkBusy || selected.size === 0" class="btn-secondary">Ne plus surveiller</button>
+        <button @click="selecting = false" class="btn-secondary" title="Quitter la sélection"><X :size="14" /></button>
       </div>
     </div>
 
@@ -85,10 +120,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, onActivated } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, onActivated } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Tv } from 'lucide-vue-next'
-import { useSeriesStore }    from '@/stores/series'
+import { Tv, Check, Rss, X } from 'lucide-vue-next'
+import { useSeriesStore, type Serie } from '@/stores/series'
 import { useDownloadsStore } from '@/stores/downloads'
 import { useAuthStore }      from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
@@ -117,6 +152,7 @@ const filtersImport = [
   { label: 'Importés',  value: 'complete',    color: '#22c55e' },
   { label: 'En cours',  value: 'downloading', color: '#3b82f6' },
   { label: 'Partiel',   value: 'partial',     color: '#9b59b6' },
+  { label: 'Non suivies', value: 'untracked', color: 'var(--border)' },
 ]
 
 const sortOptions = [
@@ -143,6 +179,7 @@ const filtered = computed(() => {
   if (activeFilter.value === 'complete')    list = list.filter(s => s.download_state === 'complete')
   if (activeFilter.value === 'downloading') list = list.filter(s => ['downloading', 'partial'].includes(s.download_state))
   if (activeFilter.value === 'partial')     list = list.filter(s => s.download_state === 'partial')
+  if (activeFilter.value === 'untracked')   list = list.filter(s => !s.in_client && !s.has_files)
 
   if (search.value.trim()) {
     const q = search.value.toLowerCase()
@@ -162,6 +199,62 @@ const filtered = computed(() => {
 
   return list
 })
+
+// ── Sélection multiple ───────────────────────────────────────
+const selecting = ref(false)
+const selected  = ref<Set<number>>(new Set())
+const bulkBusy  = ref(false)
+
+watch(selecting, on => { if (!on) clearSelection() })
+
+function toggleSelected(id: number) {
+  const next = new Set(selected.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  selected.value = next
+}
+function selectAllFiltered() { selected.value = new Set(filtered.value.map(s => s.id)) }
+function clearSelection()    { selected.value = new Set() }
+
+async function bulkRename() {
+  bulkBusy.value = true
+  try {
+    const res  = await fetch('/api/rename-all', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ serie_ids: [...selected.value] }),
+    })
+    const data = await res.json()
+    if (!res.ok) { toast(data.error ?? 'Erreur lors du renommage', 'error'); return }
+    const errs = data.errors?.length ?? 0
+    toast(`${data.done} fichier${data.done > 1 ? 's' : ''} renommé${data.done > 1 ? 's' : ''}${errs ? ` · ${errs} erreur${errs > 1 ? 's' : ''}` : ''}`, errs ? 'error' : 'success')
+  } catch {
+    toast('Impossible de contacter le serveur', 'error')
+  } finally {
+    bulkBusy.value = false
+  }
+}
+
+async function bulkSync(enabled: boolean) {
+  bulkBusy.value = true
+  try {
+    const targets = store.series.filter((s: Serie) => selected.value.has(s.id))
+    const res  = await fetch('/api/rss-sync/bulk', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ enabled, series: targets.map((s: Serie) => ({ id: s.id, name: s.title })) }),
+    })
+    const data = await res.json()
+    if (!res.ok) { toast(data.error ?? 'Erreur lors de la mise à jour de la surveillance', 'error'); return }
+    for (const s of targets) s.rss_synced = enabled
+    const n = data.changed
+    toast(enabled
+      ? `${n} série${n > 1 ? 's' : ''} ajoutée${n > 1 ? 's' : ''} à la surveillance`
+      : `${n} série${n > 1 ? 's' : ''} retirée${n > 1 ? 's' : ''} de la surveillance`, 'success')
+  } catch {
+    toast('Impossible de contacter le serveur', 'error')
+  } finally {
+    bulkBusy.value = false
+  }
+}
 
 function stateColor(state: string): string {
   return ({

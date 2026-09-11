@@ -1,9 +1,8 @@
 import { Router } from 'express'
 import path from 'path'
 import fs from 'fs'
-import { requireAuth } from '../auth.js'
+import { requireAuth, requireAdmin } from '../auth.js'
 import { logger } from '../logger.js'
-import { DATA_DIR } from '../config.js'
 import { readSettings } from '../settings.js'
 import { getGitlabTitle } from '../gitlab-map.js'
 import { readSerieData, loadEnrichedSeriesData } from '../lib/github-cache.js'
@@ -11,19 +10,9 @@ import { resolveEpNaming, computeExpectedName } from '../lib/serie-helpers.js'
 import { GITLAB_API_NFO, GITLAB_RAW_NFO } from '../lib/nfo.js'
 import { dispatchRemove } from '../torrent-clients/index.js'
 import { readRequests, deleteRequest } from '../requests.js'
+import { readOrganized, writeOrganized, updateOrganized, type Organized } from '../lib/organized-store.js'
 
 const router = Router()
-
-const ORGANIZED_PATH = path.join(DATA_DIR, 'organized.json')
-
-function loadOrganizedJson(): Record<string, Record<string, any>> {
-    try { if (fs.existsSync(ORGANIZED_PATH)) return JSON.parse(fs.readFileSync(ORGANIZED_PATH, 'utf-8')) } catch {}
-    return {}
-}
-
-function saveOrganizedJson(data: Record<string, Record<string, any>>) {
-    fs.writeFileSync(ORGANIZED_PATH, JSON.stringify(data, null, 2), 'utf-8')
-}
 
 // ── Import manuel ──────────────────────────────────────────────
 router.post('/manual-import', requireAuth, async (req, res) => {
@@ -32,7 +21,12 @@ router.post('/manual-import', requireAuth, async (req, res) => {
         res.status(400).json({ error: 'serie_id et items requis' }); return
     }
     const { mediaPath, organizeMode, nfoSupport } = readSettings()
-    const organized = loadOrganizedJson()
+    let organized: Organized
+    try { organized = readOrganized() }
+    catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return }
+    // Les copies de fichiers sont asynchrones : les modifications sont rejouées sur une relecture fraîche à la fin
+    const ops: ((data: Organized) => void)[] = []
+    const apply = (op: (data: Organized) => void) => { op(organized); ops.push(op) }
     let sd = await readSerieData(Number(serie_id))
     if (!sd) {
         // readSerieData ne couvre que le cache local — fallback sur le catalogue complet
@@ -78,13 +72,15 @@ router.post('/manual-import', requireAuth, async (req, res) => {
             // sous un épisode différent (réassignation → l'ancien enregistrement devient invalide)
             for (const [h, eps] of Object.entries(organized)) {
                 for (const [epId, entry] of Object.entries(eps)) {
-                    if (entry?.dest_path === file_path && Number(epId) !== Number(episode_id)) {
-                        delete (organized[h] as any)[epId]
+                    if (entry?.dest_path === file_path && Number(epId) !== Number(episode_id))
                         logger.info('api', `Import manuel : suppression entrée stale ep ${epId} (fichier réassigné)`)
-                    }
                 }
-                if (Object.keys(organized[h]).length === 0) delete organized[h]
             }
+            apply(data => {
+                for (const eps of Object.values(data))
+                    for (const [epId, entry] of Object.entries(eps))
+                        if (entry?.dest_path === file_path && Number(epId) !== Number(episode_id)) delete eps[epId]
+            })
 
             fs.mkdirSync(destDir, { recursive: true })
             if (file_path !== destPath) {
@@ -96,15 +92,17 @@ router.post('/manual-import', requireAuth, async (req, res) => {
                     fs.unlinkSync(destPath)
                     logger.info('api', `Import manuel (réassignation) : suppression ancien fichier "${destFilename}"`)
                     // Nettoyer toute entrée organized qui pointait sur ce fichier supprimé
-                    for (const [h, eps] of Object.entries(organized)) {
+                    for (const eps of Object.values(organized)) {
                         for (const [epId, entry] of Object.entries(eps)) {
-                            if (entry?.dest_path === destPath) {
-                                delete (organized[h] as any)[epId]
+                            if (entry?.dest_path === destPath)
                                 logger.info('api', `Import manuel : suppression entrée stale ep ${epId} (ancien fichier écrasé)`)
-                            }
                         }
-                        if (Object.keys(organized[h]).length === 0) delete organized[h]
                     }
+                    apply(data => {
+                        for (const eps of Object.values(data))
+                            for (const [epId, entry] of Object.entries(eps))
+                                if (entry?.dest_path === destPath) delete eps[epId]
+                    })
                 }
                 if (isInSeriePath && !fs.existsSync(destPath)) {
                     fs.renameSync(file_path, destPath)
@@ -125,12 +123,12 @@ router.post('/manual-import', requireAuth, async (req, res) => {
                 logger.debug('api', `Import manuel : "${srcFilename}" déjà en place`)
             }
             const torrentHash = String(hash || '').toLowerCase() || 'manual'
-            if (!organized[torrentHash]) organized[torrentHash] = {}
-            organized[torrentHash][String(episode_id)] = {
+            const entry = {
                 at: new Date().toISOString(), season: season.season_number,
                 episode: ep.episode_number, episode_id: ep.id,
                 src_filename: srcFilename, dest_filename: destFilename, dest_path: destPath,
             }
+            apply(data => { (data[torrentHash] ??= {})[String(episode_id)] = entry })
             done.push(episode_id)
         } catch (err) {
             const msg = err instanceof Error ? err.message : 'Erreur inconnue'
@@ -138,7 +136,13 @@ router.post('/manual-import', requireAuth, async (req, res) => {
             logger.error('api', `Import manuel échoué pour "${srcFilename}" : ${msg}`)
         }
     }
-    saveOrganizedJson(organized)
+    if (ops.length > 0) {
+        try { updateOrganized(data => { for (const op of ops) op(data) }) }
+        catch (err) {
+            logger.error('api', `Import manuel : enregistrement impossible : ${err instanceof Error ? err.message : err}`)
+            res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return
+        }
+    }
 
     if (nfoSupport && done.length > 0) {
         const gitlabTitle = getGitlabTitle(serieTitle)
@@ -175,7 +179,7 @@ router.get('/organized/:serieId', requireAuth, async (req, res) => {
     try {
         const sd = await readSerieData(serieId)
         if (!sd) { res.status(404).json({ error: 'Série introuvable' }); return }
-        const organized    = loadOrganizedJson()
+        const organized    = readOrganized()
         const { nfoSupport } = readSettings()
         const result: Record<string, any> = {}
         for (const season of sd.seasons ?? []) {
@@ -208,9 +212,11 @@ router.post('/rename-episode', requireAuth, async (req, res) => {
     const { serie_id, episode_id, torrent_hash } = req.body
     if (!serie_id || !episode_id) { res.status(400).json({ error: 'serie_id et episode_id requis' }); return }
     const { nfoSupport } = readSettings()
-    const organized = loadOrganizedJson()
     const sd = await readSerieData(Number(serie_id))
     if (!sd) { res.status(404).json({ error: 'Série introuvable' }); return }
+    let organized: Organized
+    try { organized = readOrganized() }
+    catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return }
     let foundEp: any = null
     for (const season of sd.seasons ?? []) {
         for (const ep of season.episodes ?? []) {
@@ -238,7 +244,7 @@ router.post('/rename-episode', requireAuth, async (req, res) => {
         if (fs.existsSync(newPath)) throw new Error(`Un fichier avec ce nom existe déjà : ${newName}`)
         fs.renameSync(oldPath, newPath)
         organized[entryHash][String(episode_id)] = { ...orgEntry, dest_filename: newName, dest_path: newPath, at: new Date().toISOString() }
-        saveOrganizedJson(organized)
+        writeOrganized(organized)
         logger.info('api', `Rename : "${orgEntry.dest_filename}" → "${newName}"`)
         res.json({ ok: true, renamed: true, old_name: orgEntry.dest_filename, new_name: newName })
     } catch (err) {
@@ -252,9 +258,11 @@ router.post('/rename-episode', requireAuth, async (req, res) => {
 router.delete('/organized/:serieId', requireAuth, async (req, res) => {
     const serieId    = String(req.params.serieId)
     const deleteFile = req.query.deleteFile === 'true'
-    const organized  = loadOrganizedJson()
     const sd = await readSerieData(Number(serieId))
     if (!sd) { res.status(404).json({ error: 'Série introuvable' }); return }
+    let organized: Organized
+    try { organized = readOrganized() }
+    catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return }
     const episodeIds = new Set<string>()
     for (const season of sd.seasons ?? []) {
         for (const ep of season.episodes ?? []) episodeIds.add(String(ep.id))
@@ -279,7 +287,7 @@ router.delete('/organized/:serieId', requireAuth, async (req, res) => {
         }
         if (Object.keys(organized[hash]).length === 0) { delete organized[hash]; emptyHashes.push(hash) }
     }
-    saveOrganizedJson(organized)
+    writeOrganized(organized)
     if (deleteFile) {
         for (const hash of emptyHashes) {
             if (hash === 'manual') continue
@@ -312,9 +320,11 @@ router.delete('/organized/:serieId/seasons/:seasonId', requireAuth, async (req, 
     const serieId    = String(req.params.serieId)
     const seasonId   = Number(req.params.seasonId)
     const deleteFile = req.query.deleteFile === 'true'
-    const organized  = loadOrganizedJson()
     const sd = await readSerieData(Number(serieId))
     if (!sd) { res.status(404).json({ error: 'Série introuvable' }); return }
+    let organized: Organized
+    try { organized = readOrganized() }
+    catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return }
     const season = sd.seasons?.find((s: any) => s.id === seasonId)
     if (!season) { res.status(404).json({ error: 'Saison introuvable' }); return }
     const episodeIds = new Set<string>(season.episodes?.map((e: any) => String(e.id)) ?? [])
@@ -333,7 +343,7 @@ router.delete('/organized/:serieId/seasons/:seasonId', requireAuth, async (req, 
         }
         if (Object.keys(organized[hash]).length === 0) { delete organized[hash]; emptyHashes.push(hash) }
     }
-    saveOrganizedJson(organized)
+    writeOrganized(organized)
     if (deleteFile) {
         for (const hash of emptyHashes) {
             if (hash === 'manual') continue
@@ -348,27 +358,40 @@ router.delete('/organized/:serieId/seasons/:seasonId', requireAuth, async (req, 
 router.delete('/organized/:serieId/:episodeId', requireAuth, async (req, res) => {
     const episodeId  = String(req.params.episodeId)
     const deleteFile = req.query.deleteFile === 'true'
-    const organized  = loadOrganizedJson()
-    let foundHash: string | null = null
-    let foundEntry: any = null
+    let organized: Organized
+    try { organized = readOrganized() }
+    catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return }
+    const found: { hash: string; entry: any }[] = []
     for (const [hash, episodes] of Object.entries(organized)) {
-        if (episodes[episodeId]) { foundHash = hash; foundEntry = episodes[episodeId]; break }
+        if (episodes[episodeId]) found.push({ hash, entry: episodes[episodeId] })
     }
-    if (!foundHash || !foundEntry) { res.status(404).json({ error: 'Épisode non importé' }); return }
+    if (found.length === 0) { res.status(404).json({ error: 'Épisode non importé' }); return }
     try {
-        if (deleteFile && foundEntry.dest_path && fs.existsSync(foundEntry.dest_path)) {
-            fs.unlinkSync(foundEntry.dest_path)
-            logger.info('api', `Désimport + suppression fichier : "${foundEntry.dest_path}"`)
+        const deletedPaths = new Set<string>()
+        if (deleteFile) {
+            for (const { entry } of found) {
+                const p = entry?.dest_path
+                if (!p || deletedPaths.has(p) || !fs.existsSync(p)) continue
+                fs.unlinkSync(p)
+                deletedPaths.add(p)
+                logger.info('api', `Désimport + suppression fichier : "${p}"`)
+            }
         }
-        delete organized[foundHash][episodeId]
-        const torrentEmpty = Object.keys(organized[foundHash]).length === 0
-        if (torrentEmpty) delete organized[foundHash]
-        saveOrganizedJson(organized)
-        // Si plus aucun épisode de ce torrent n'est importé → retirer le torrent du client
-        if (deleteFile && torrentEmpty && foundHash !== 'manual') {
-            dispatchRemove(foundHash, false).catch(err => logger.warn('api', `Impossible de retirer le torrent ${foundHash.slice(0, 8)}… du client : ${err instanceof Error ? err.message : err}`))
+        const emptyHashes: string[] = []
+        for (const { hash } of found) {
+            delete organized[hash][episodeId]
+            if (Object.keys(organized[hash]).length === 0) { delete organized[hash]; emptyHashes.push(hash) }
         }
-        logger.info('api', `Désimport ep ${episodeId}${deleteFile && torrentEmpty ? ` + torrent ${foundHash.slice(0, 8)}… retiré du client` : ''}`)
+        writeOrganized(organized)
+        // Si plus aucun épisode d'un torrent n'est importé → retirer ce torrent du client
+        if (deleteFile) {
+            for (const hash of emptyHashes) {
+                if (hash === 'manual') continue
+                dispatchRemove(hash, false).catch(err => logger.warn('api', `Impossible de retirer le torrent ${hash.slice(0, 8)}… du client : ${err instanceof Error ? err.message : err}`))
+            }
+        }
+        const removedTorrents = deleteFile ? emptyHashes.filter(h => h !== 'manual') : []
+        logger.info('api', `Désimport ep ${episodeId}${removedTorrents.length ? ` + ${removedTorrents.length} torrent(s) retiré(s) du client` : ''}`)
         res.json({ ok: true })
     } catch (err) {
         const msg = err instanceof Error ? err.message : 'Erreur inconnue'
@@ -381,7 +404,7 @@ router.delete('/organized/:serieId/:episodeId', requireAuth, async (req, res) =>
 router.get('/organized-summary', requireAuth, async (_req, res) => {
     try {
         const { nfoSupport } = readSettings()
-        const organized  = loadOrganizedJson()
+        const organized  = readOrganized()
         const seriesData = await loadEnrichedSeriesData()
         const result: any[] = []
         for (const sd of seriesData) {
@@ -421,15 +444,18 @@ router.get('/organized-summary', requireAuth, async (_req, res) => {
 })
 
 // ── Rename en masse ────────────────────────────────────────────
-router.post('/rename-all', requireAuth, async (req, res) => {
-    const { serie_id } = req.body
+router.post('/rename-all', requireAdmin, async (req, res) => {
+    const { serie_id, serie_ids } = req.body
+    const onlyIds = Array.isArray(serie_ids) ? new Set(serie_ids.map(Number)) : serie_id ? new Set([Number(serie_id)]) : null
     const { nfoSupport } = readSettings()
-    const organized  = loadOrganizedJson()
     const seriesData = await loadEnrichedSeriesData()
+    let organized: Organized
+    try { organized = readOrganized() }
+    catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return }
     const done: number[] = []
     const errors: { episode_id: number; error: string }[] = []
     for (const sd of seriesData) {
-        if (serie_id && sd.id !== Number(serie_id)) continue
+        if (onlyIds && !onlyIds.has(sd.id)) continue
         for (const season of sd.seasons ?? []) {
             for (const ep of season.episodes ?? []) {
                 let orgEntry: any = null
@@ -465,7 +491,7 @@ router.post('/rename-all', requireAuth, async (req, res) => {
             }
         }
     }
-    saveOrganizedJson(organized)
+    writeOrganized(organized)
     res.json({ ok: true, done: done.length, errors })
 })
 

@@ -1,7 +1,7 @@
 import { Router } from 'express'
-import { requireAuth } from '../auth.js'
+import { requireAuth, requireAdmin } from '../auth.js'
 import { logger }      from '../logger.js'
-import { loadSynced, setSync, isSynced, runRssSync } from '../lib/rss-sync.js'
+import { loadSynced, setSync, setSyncBulk, isSynced, runRssSync } from '../lib/rss-sync.js'
 
 const router = Router()
 
@@ -19,6 +19,18 @@ router.post('/rss-sync/run', requireAuth, async (_req, res) => {
         logger.error('rss-sync', `Sync forcé échoué : ${err instanceof Error ? err.message : err}`)
         res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
     }
+})
+
+/** POST /api/rss-sync/bulk → activer/désactiver la surveillance de plusieurs séries (avant /:id) */
+router.post('/rss-sync/bulk', requireAdmin, (req, res) => {
+    const enabled = req.body?.enabled === true
+    const series  = (Array.isArray(req.body?.series) ? req.body.series : [])
+        .map((s: any) => ({ id: Number(s?.id), name: String(s?.name ?? '') }))
+        .filter((s: { id: number; name: string }) => s.id && s.name)
+    if (series.length === 0) { res.status(400).json({ error: 'series requis' }); return }
+    const { changed, map } = setSyncBulk(series, enabled)
+    logger.info('rss-sync', `Surveillance ${enabled ? 'activée' : 'désactivée'} en masse — ${changed} série(s) modifiée(s) sur ${series.length}`)
+    res.json({ ok: true, changed, total: Object.keys(map).length })
 })
 
 /** GET /api/rss-sync/:id → statut sync pour une série */

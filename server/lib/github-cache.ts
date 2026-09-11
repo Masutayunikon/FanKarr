@@ -26,34 +26,42 @@ export function cacheClear(): void { _cache.clear() }
 
 export function cacheSize(): number { return _cache.size }
 
-export async function githubGet(urlPath: string): Promise<any> {
-    const cached = cacheGet(urlPath)
-    if (cached) return cached
-    const res = await fetch(`${GITHUB_BASE}/${urlPath}`)
+/**
+ * @param force  Ignore le cache mémoire ET le cache CDN de raw.githubusercontent
+ *               (~5 min).
+ */
+export async function githubGet(urlPath: string, force = false): Promise<any> {
+    if (!force) {
+        const cached = cacheGet(urlPath)
+        if (cached) return cached
+    }
+    const url  = force ? `${GITHUB_BASE}/${urlPath}?_=${Date.now()}` : `${GITHUB_BASE}/${urlPath}`
+    const init = force ? { cache: 'no-store' as const, headers: { 'Cache-Control': 'no-cache' } } : undefined
+    const res  = await fetch(url, init)
     if (!res.ok) throw new Error(`GitHub ${res.status}: ${urlPath}`)
     const data = await res.json()
     cacheSet(urlPath, data)
     return data
 }
 
-export async function readAvailable(): Promise<number[]> {
-    try { return await githubGet('available.json') as number[] }
+export async function readAvailable(force = false): Promise<number[]> {
+    try { return await githubGet('available.json', force) as number[] }
     catch { return [] }
 }
 
-export async function readInfohashMap(): Promise<Record<string, string>> {
-    try { return await githubGet('infohash_map.json') as Record<string, string> }
+export async function readInfohashMap(force = false): Promise<Record<string, string>> {
+    try { return await githubGet('infohash_map.json', force) as Record<string, string> }
     catch { return {} }
 }
 
-export async function readSerieData(serieId: number): Promise<any | null> {
-    try { return await githubGet(`series/${serieId}.json`) }
+export async function readSerieData(serieId: number, force = false): Promise<any | null> {
+    try { return await githubGet(`series/${serieId}.json`, force) }
     catch { return null }
 }
 
-export async function loadEnrichedSeriesData(): Promise<any[]> {
-    const ids   = await readAvailable()
-    const allSd = await Promise.all(ids.map(id => readSerieData(id)))
+export async function loadEnrichedSeriesData(force = false): Promise<any[]> {
+    const ids   = await readAvailable(force)
+    const allSd = await Promise.all(ids.map(id => readSerieData(id, force)))
     return allSd.filter(Boolean)
 }
 

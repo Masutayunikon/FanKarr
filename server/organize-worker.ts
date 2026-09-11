@@ -10,8 +10,7 @@ import path from 'path'
 import { parentPort } from 'worker_threads'
 import { DATA_DIR } from './config.js'
 import { getGitlabTitle } from './gitlab-map.js'
-
-const ORGANIZED_PATH = path.join(DATA_DIR, 'organized.json')
+import { readOrganized } from './lib/organized-store.js'
 
 // ─── Utils log ────────────────────────────────────────────────
 function log(msg: string)   { parentPort?.postMessage({ type: 'log', level: 'info',  msg }) }
@@ -44,22 +43,12 @@ function readSettings(): { mediaPath: string; completePath: string; organizeMode
 }
 
 // ─── Organized log ────────────────────────────────────────────
-function loadOrganized(): Organized {
-    try {
-        if (!fs.existsSync(ORGANIZED_PATH)) return {}
-        return JSON.parse(fs.readFileSync(ORGANIZED_PATH, 'utf-8'))
-    } catch { return {} }
-}
-
 function markOrganized(hash: string, episodeId: number, entry: OrgEntry) {
-    const data = loadOrganized()
-    if (!data[hash]) data[hash] = {}
-    data[hash][String(episodeId)] = entry
-    fs.writeFileSync(ORGANIZED_PATH, JSON.stringify(data, null, 2), 'utf-8')
+    parentPort?.postMessage({ type: 'mark', hash, episodeId, entry })
 }
 
 function isOrganized(hash: string, episodeId: number): boolean {
-    return !!loadOrganized()[hash]?.[String(episodeId)]
+    return !!readOrganized()[hash]?.[String(episodeId)]
 }
 
 // ─── Lookup torrent dans les seriesData ───────────────────────
@@ -550,8 +539,15 @@ parentPort?.on('message', async (msg: any) => {
 
     const torrents: any[]   = msg.torrents
     const seriesData: any[] = msg.seriesData ?? []
-    const organized         = loadOrganized()
     const { nfoSupport }    = readSettings()
+
+    let organized: Organized
+    try { organized = readOrganized() as Organized }
+    catch (err) {
+        error(`Import annulé : ${err instanceof Error ? err.message : err}`)
+        parentPort?.postMessage({ type: 'done' })
+        return
+    }
 
     for (const t of torrents) {
         if (t.state !== 'seeding') continue
