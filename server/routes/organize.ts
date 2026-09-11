@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { requireAuth } from '../auth.js'
 import { logger } from '../logger.js'
 import { organizeTorrent, migrateOrganizedEpisodeIds } from '../organize.js'
-import { loadEnrichedSeriesData } from '../lib/github-cache.js'
+import { loadCatalog } from '../lib/serie-helpers.js'
 import { recentOrganized, pushNotif } from '../lib/notifs.js'
 import { dispatchGetFiles } from '../torrent-clients/index.js'
 import { DATA_DIR } from '../config.js'
@@ -12,7 +12,7 @@ const router = Router()
 
 router.post('/organize/migrate-ids', requireAuth, async (_req, res) => {
     try {
-        const seriesData    = await loadEnrichedSeriesData()
+        const seriesData    = await loadCatalog()
         const organizedPath = path.join(DATA_DIR, 'organized.json')
         const result        = await migrateOrganizedEpisodeIds(organizedPath, seriesData)
         res.json({ ok: true, ...result })
@@ -36,7 +36,7 @@ router.post('/organize', requireAuth, async (req, res) => {
     const { hash, name, save_path } = req.body
     if (!hash || !name || !save_path) { res.status(400).json({ error: 'hash, name et save_path requis' }); return }
     try {
-        const seriesData = await loadEnrichedSeriesData()
+        const seriesData = await loadCatalog()
 
         // Récupère la progression par fichier depuis le client torrent.
         // Permet au worker de sauter les fichiers encore en téléchargement (EBUSY sur Windows).

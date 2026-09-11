@@ -7,7 +7,8 @@ import { DATA_DIR, BASE_DIR } from '../config.js'
 import { readSettings } from '../settings.js'
 import { systemInfo } from '../system.js'
 import { scanMediaPath, syncFilenameChanges, migrateOrganizedEpisodeIds, dedupeOrganizedEpisodes } from '../organize.js'
-import { readAvailable, loadEnrichedSeriesData, cacheClear } from '../lib/github-cache.js'
+import { readAvailable, cacheClear } from '../lib/github-cache.js'
+import { loadCatalog } from '../lib/serie-helpers.js'
 import { cacheSize } from '../lib/github-cache.js'
 import { recentOrganized } from '../lib/notifs.js'
 import { workerRunning } from '../organize.js'
@@ -87,10 +88,8 @@ router.get('/browse-files', requireAuth, (req, res) => {
     const dirPath = (req.query.path as string) || '/'
     const VIDEO_EXTS = new Set(['.mkv', '.mp4', '.avi', '.m4v', '.mov', '.wmv'])
     try {
-        if (!fs.existsSync(dirPath)) {
-            fs.mkdirSync(dirPath, { recursive: true })
-            logger.info('api', `Dossier créé : ${dirPath}`)
-        }
+        // Lecture seule : le dossier est créé au moment de l'import
+        if (!fs.existsSync(dirPath)) { res.json({ path: dirPath, files: [], exists: false }); return }
         const files: { name: string; path: string; size: number }[] = []
         function walk(dir: string) {
             let entries: fs.Dirent[]
@@ -111,7 +110,7 @@ router.get('/browse-files', requireAuth, (req, res) => {
         }
         walk(dirPath)
         files.sort((a, b) => a.name.localeCompare(b.name, 'fr'))
-        res.json({ path: dirPath, files })
+        res.json({ path: dirPath, files, exists: true })
     } catch (err) {
         logger.warn('api', `browse-files "${dirPath}" : ${err instanceof Error ? err.message : err}`)
         res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur lecture dossier' })
@@ -140,7 +139,7 @@ router.post('/update', requireAuth, async (req, res) => {
         logger.info('api', `Catalogue rechargé — ${availableIds.length} séries disponibles`)
 
         if (force) {
-            const seriesData      = await loadEnrichedSeriesData(true)
+            const seriesData      = await loadCatalog(true)
             const { updated }     = await migrateOrganizedEpisodeIds(organizedPath, seriesData)
             const { removed }     = dedupeOrganizedEpisodes(organizedPath)
             const { renamed, errors } = await syncFilenameChanges(seriesData, organizedPath)
@@ -152,7 +151,7 @@ router.post('/update', requireAuth, async (req, res) => {
         res.json({ ok: true, count: availableIds.length })
         ;(async () => {
             try {
-                const seriesData = await loadEnrichedSeriesData()
+                const seriesData = await loadCatalog()
                 const { renamed } = await syncFilenameChanges(seriesData, organizedPath)
                 if (renamed > 0)
                     logger.info('api', `Sync noms scraper après mise à jour — ${renamed} fichier(s) renommé(s)`)
@@ -170,7 +169,7 @@ router.post('/scan', requireAuth, async (_req, res) => {
     try {
         const { mediaPath } = readSettings()
         logger.info('api', 'Scan médiathèque manuel lancé')
-        const seriesData = await loadEnrichedSeriesData()
+        const seriesData = await loadCatalog()
         const result     = await scanMediaPath(mediaPath, path.join(DATA_DIR, 'organized.json'), seriesData)
         res.json({ ok: true, ...result })
     } catch (err) {

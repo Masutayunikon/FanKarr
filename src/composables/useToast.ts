@@ -11,11 +11,8 @@ interface Toast {
 const toasts = ref<Toast[]>([])
 let nextId = 0
 const DURATION = 3500
-const GROUP_WINDOW = 800 // ms — toasts du même type dans cette fenêtre sont groupés
 
 function add(message: string, type: Toast['type'] = 'info') {
-    const now = Date.now()
-
     // Cherche un toast récent du même type à grouper
     const existing = toasts.value.find(t => t.type === type)
 
@@ -44,7 +41,7 @@ function buildGroupMessage(type: Toast['type'], count: number): string {
 function remove(id: number) {
     const i = toasts.value.findIndex(t => t.id === id)
     if (i !== -1) {
-        clearTimeout(toasts.value[i].timer)
+        clearTimeout(toasts.value[i]?.timer)
         toasts.value.splice(i, 1)
     }
 }

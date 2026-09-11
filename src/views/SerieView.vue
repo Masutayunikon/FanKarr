@@ -114,6 +114,23 @@
         </div>
       </div>
 
+      <!-- Dossier série à renommer -->
+      <div v-if="auth.isAdmin && staleFolders.length > 0" class="mx-4 md:mx-8 mt-4 flex items-center justify-between gap-3 flex-wrap px-4 py-3 rounded-lg border border-yellow-500/40 bg-yellow-500/5">
+        <div class="flex items-start gap-3 min-w-0">
+          <span class="text-yellow-500 text-sm mt-0.5">⚠</span>
+          <div class="flex flex-col gap-0.5 min-w-0">
+            <p class="text-sm text-yellow-500 font-medium">Dossier différent du titre de la série</p>
+            <p class="text-xs text-muted break-all">
+              <span class="font-mono text-primary">{{ staleFolders.map(f => basename(f.path)).join(', ') }}</span>
+              → <span class="font-mono text-primary">{{ folderTarget }}</span>
+            </p>
+          </div>
+        </div>
+        <button @click="renameFolder" :disabled="renamingFolder" class="btn-secondary text-xs shrink-0">
+          {{ renamingFolder ? 'Renommage…' : 'Renommer le dossier' }}
+        </button>
+      </div>
+
       <!-- Barre utilisateur (mode demande) -->
       <div v-if="!auth.isAdmin" class="px-4 md:px-8 py-3 flex items-center justify-between gap-3 border-b border-border flex-wrap">
         <div v-if="myRequest" class="flex items-center gap-3">
@@ -388,6 +405,12 @@ const downloadMenuOpen   = ref(false)
 const downloadingAll     = ref(false)
 const downloadingSeason  = ref<Record<number, boolean>>({})
 const rssSync            = ref(false)
+const folderStatus       = ref<{ expected: string; current: { path: string; entries: number; exists: boolean }[] } | null>(null)
+const renamingFolder     = ref(false)
+
+const basename      = (p: string) => p.split(/[\\/]/).pop() ?? p
+const staleFolders  = computed(() => folderStatus.value?.current.filter(f => f.exists && f.path !== folderStatus.value?.expected) ?? [])
+const folderTarget  = computed(() => folderStatus.value ? basename(folderStatus.value.expected) : '')
 
 export interface ActiveTorrent { hash: string; progress: number; state: string; files?: { index: number; progress: number }[]; save_path?: string; name?: string }
 const activeTorrents = ref<ActiveTorrent[]>([])
@@ -484,6 +507,27 @@ async function fetchOrganized() {
     const res = await fetch(`/api/organized/${route.params.id}`, { credentials: 'include' })
     if (res.ok) organizedByEpisode.value = await res.json()
   } catch {}
+  fetchFolderStatus()
+}
+
+async function fetchFolderStatus() {
+  try {
+    const res = await fetch(`/api/organized/${route.params.id}/folder`, { credentials: 'include' })
+    folderStatus.value = res.ok ? await res.json() : null
+  } catch {}
+}
+
+async function renameFolder() {
+  if (!confirm(`Déplacer le contenu vers « ${folderTarget.value} » ? Les fichiers existants ne sont jamais écrasés.`)) return
+  renamingFolder.value = true
+  try {
+    const res = await fetch(`/api/organized/${route.params.id}/folder`, { method: 'POST', credentials: 'include' })
+    const d = await res.json()
+    if (!res.ok) { toast(d.error ?? 'Erreur lors du renommage du dossier', 'error'); return }
+    toast(`Dossier renommé ✓ (${d.moved} fichier${d.moved > 1 ? 's' : ''} déplacé${d.moved > 1 ? 's' : ''})`, 'success')
+    await fetchOrganized()
+  } catch { toast('Impossible de contacter le serveur', 'error') }
+  finally { renamingFolder.value = false }
 }
 
 async function fetchSettings() {
@@ -647,10 +691,8 @@ function collectDownloadables(integraleIndex?: number): DlItem[] {
     if (!hasUncovered) continue
     const packKey = (i: number) => (i === 0 ? `season-${season.id}` : `season-${season.id}-${i}`)
     const alreadyHandled = season.torrents.some((t: any, i: number) => isAlreadyQueued(t) || isDownloaded(packKey(i)))
-    if (!alreadyHandled) {
-      const t = season.torrents[0]
-      result.push({ key: packKey(0), torrent_url: t.torrent_url, magnet: t.magnet })
-    }
+    const t = season.torrents[0]
+    if (!alreadyHandled && t) result.push({ key: packKey(0), torrent_url: t.torrent_url, magnet: t.magnet })
     for (const ep of season.episodes) covered.add(ep.id)
   }
 
@@ -683,7 +725,7 @@ async function downloadAll(integraleIndex?: number) {
 
 async function downloadSeason(season: Season, packHash?: string) {
   downloadingSeason.value[season.id] = true
-  const torrents: { key: string; torrent_url: string | null; magnet: string | null; file_index?: number | null; file_path?: string | null }[] = []
+  const torrents: DlItem[] = []
   const seasonAny = season as any
   if (seasonAny.torrents && seasonAny.torrents.length > 0 && seasonAny.organized_state !== 'complete') {
     const packKey = (i: number) => (i === 0 ? `season-${season.id}` : `season-${season.id}-${i}`)

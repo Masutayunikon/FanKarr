@@ -19,7 +19,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 
 const STORAGE_KEY = 'fankarr-theme'
@@ -32,7 +32,7 @@ const themes = [
 
 const current = ref('indigo')
 
-function setTheme(id) {
+function setTheme(id: string) {
   current.value = id
   document.documentElement.setAttribute('data-theme', id)
   localStorage.setItem(STORAGE_KEY, id)

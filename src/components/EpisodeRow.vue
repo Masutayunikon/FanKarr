@@ -3,7 +3,7 @@
     <div class="w-24 flex-shrink-0">
       <img
           v-if="ep.cover"
-          :src="imageUrl(ep.cover)"
+          :src="imageUrl(ep.cover) ?? undefined"
           :alt="ep.name"
           class="w-full aspect-video object-cover"
       />

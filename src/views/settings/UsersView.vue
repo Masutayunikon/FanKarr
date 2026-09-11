@@ -25,7 +25,7 @@
                 class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
                 :class="u.role === 'admin' ? 'bg-accent/20 text-accent' : 'bg-border text-muted'"
             >
-              {{ u.username[0].toUpperCase() }}
+              {{ u.username.charAt(0).toUpperCase() }}
             </span>
             <div>
               <p class="text-sm text-primary font-medium">{{ u.username }}</p>
@@ -137,7 +137,7 @@
               <span
                   class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
                   :class="u.role === 'admin' ? 'bg-accent/20 text-accent' : 'bg-border text-muted'"
-              >{{ u.username[0].toUpperCase() }}</span>
+              >{{ u.username.charAt(0).toUpperCase() }}</span>
               <span class="text-sm text-primary">{{ u.username }}</span>
               <span class="text-xs text-muted">{{ u.role === 'admin' ? 'Admin' : 'Utilisateur' }}</span>
             </div>

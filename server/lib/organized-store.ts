@@ -26,6 +26,22 @@ export function writeOrganized(data: Organized, file = ORGANIZED_PATH): void {
     renameWithRetry(tmp, file)
 }
 
+// Répercute des déplacements de fichiers sur toutes les entrées qui les suivent, tous hashes confondus
+export function retargetEntries(data: Organized, moves: Map<string, string>): number {
+    let updated = 0
+    for (const eps of Object.values(data)) {
+        for (const entry of Object.values(eps)) {
+            const to = entry?.dest_path ? moves.get(entry.dest_path) : undefined
+            if (!to) continue
+            entry.dest_path     = to
+            entry.dest_filename = path.basename(to)
+            entry.dest_dir      = path.dirname(to)
+            updated++
+        }
+    }
+    return updated
+}
+
 // Lecture-modification-écriture synchrone ; fn renvoie false pour ne rien écrire
 export function updateOrganized(fn: (data: Organized) => boolean | void, file = ORGANIZED_PATH): void {
     const data = readOrganized(file)

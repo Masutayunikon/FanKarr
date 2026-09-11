@@ -20,8 +20,10 @@
 
         <!-- Dossier vide / introuvable -->
         <div v-else-if="!scanning && items.length === 0 && !scanError" class="flex flex-col items-center gap-3 py-16 text-center px-6">
-          <p class="text-sm text-muted">Aucun fichier vidéo trouvé dans ce dossier.</p>
-          <p class="text-xs text-muted">Placez vos fichiers dans <span class="font-mono text-primary">{{ serieFolder }}</span> puis réessayez.</p>
+          <p class="text-sm text-muted">{{ folderMissing ? 'Ce dossier n\'existe pas encore.' : 'Aucun fichier vidéo trouvé dans ce dossier.' }}</p>
+          <p class="text-xs text-muted">
+            {{ folderMissing ? 'Créez' : 'Placez vos fichiers dans' }} <span class="font-mono text-primary">{{ serieFolder }}</span>{{ folderMissing ? ', placez-y vos fichiers' : '' }} puis réessayez.
+          </p>
           <button @click="scan" class="btn-secondary mt-2">Rescanner</button>
         </div>
 
@@ -77,7 +79,7 @@
 
               <!-- Sélecteur épisode -->
               <select
-                  v-model="items[i].episode_id"
+                  v-model="item.episode_id"
                   class="settings-input text-xs py-1 max-w-[260px] shrink-0"
                   @change="onEpisodeChange(i)"
               >
@@ -154,6 +156,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useToast } from '@/composables/useToast'
+import { matchEpisodeFile } from '@/utils/episode-match'
 
 const { add: toast } = useToast()
 
@@ -176,6 +179,7 @@ const scanning    = ref(false)
 const importing   = ref(false)
 const importError = ref('')
 const scanError   = ref('')
+const folderMissing = ref(false)
 const importResult = ref({ done: 0, errors: [] as { file: string; error: string }[] })
 
 // Dossier de la série dans la médiathèque
@@ -230,33 +234,8 @@ function buildOrganizedByPath(): Map<string, number> {
 }
 
 function autoMatch(filename: string): { episode_id: number | null; hash: string | null } {
-  const nameNoExt = filename.replace(/\.[^.]+$/, '').toLowerCase()
-
-  for (const season of props.seasons) {
-    for (const ep of season.episodes) {
-      const candidates = [
-        ep.original_filename,
-        ep.nfo_filename?.replace(/\.nfo$/, ''),
-        ep.formatted_name?.replace(/[<>:"/\\|?*]/g, '').trim(),
-      ].filter(Boolean).map((s: string) => s.toLowerCase().replace(/\.[^.]+$/, ''))
-
-      if (candidates.some(c => c === nameNoExt || nameNoExt.startsWith(c + '.'))) {
-        return { episode_id: ep.id, hash: getHashForEpisode(ep.id) }
-      }
-    }
-  }
-
-  // Fallback numéro d'épisode
-  const numMatch = filename.match(/[.\s_-]0*(\d{1,3})[.\s_-]/i)
-  if (numMatch) {
-    const num = parseInt(numMatch[1], 10)
-    for (const season of props.seasons) {
-      const ep = season.episodes.find((e: any) => e.episode_number === num)
-      if (ep) return { episode_id: ep.id, hash: getHashForEpisode(ep.id) }
-    }
-  }
-
-  return { episode_id: null, hash: null }
+  const episodeId = matchEpisodeFile(filename, props.seasons)
+  return { episode_id: episodeId, hash: episodeId === null ? null : getHashForEpisode(episodeId) }
 }
 
 function formatSize(bytes: number): string {
@@ -268,6 +247,7 @@ function formatSize(bytes: number): string {
 
 function onEpisodeChange(i: number) {
   const item    = items.value[i]
+  if (!item) return
   const newEpId = item.episode_id   // v-model a déjà mis à jour la valeur
 
   item.hash            = getHashForEpisode(Number(newEpId))
@@ -297,6 +277,7 @@ async function scan() {
       return
     }
     const data = await res.json()
+    folderMissing.value = data.exists === false
     const files: { name: string; path: string; size: number }[] = data.files ?? []
 
     const organizedByPath = buildOrganizedByPath()

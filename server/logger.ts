@@ -22,18 +22,26 @@ export interface LogEntry {
 
 const LOGS_PATH    = path.join(DATA_DIR, 'logs.jsonl')
 const MAX_LINES    = 2000   // rotation auto au-delà
+const ROTATE_SLACK = 200    // marge avant rotation, pour ne pas réécrire le fichier à chaque ligne
 const IS_PROD      = process.env.NODE_ENV === 'production'
 
 // ── Écriture ──────────────────────────────────────────────────
 
+let lineCount: number | null = null
+
+function countLines(): number {
+    if (!fs.existsSync(LOGS_PATH)) return 0
+    return fs.readFileSync(LOGS_PATH, 'utf-8').split('\n').filter(Boolean).length
+}
+
 function writeLine(entry: LogEntry) {
     try {
+        lineCount ??= countLines()
         fs.appendFileSync(LOGS_PATH, JSON.stringify(entry) + '\n', 'utf-8')
-        // Rotation si trop grand
-        const content = fs.readFileSync(LOGS_PATH, 'utf-8')
-        const lines   = content.split('\n').filter(Boolean)
-        if (lines.length > MAX_LINES) {
-            fs.writeFileSync(LOGS_PATH, lines.slice(-MAX_LINES).join('\n') + '\n', 'utf-8')
+        if (++lineCount > MAX_LINES + ROTATE_SLACK) {
+            const lines = fs.readFileSync(LOGS_PATH, 'utf-8').split('\n').filter(Boolean).slice(-MAX_LINES)
+            fs.writeFileSync(LOGS_PATH, lines.join('\n') + '\n', 'utf-8')
+            lineCount = lines.length
         }
     } catch {}
 }
@@ -98,7 +106,7 @@ export function readLogs(opts: LogsReadOptions = {}): LogEntry[] {
 }
 
 export function clearLogs(): void {
-    try { fs.writeFileSync(LOGS_PATH, '', 'utf-8') } catch {}
+    try { fs.writeFileSync(LOGS_PATH, '', 'utf-8'); lineCount = 0 } catch {}
 }
 
 export function logsFileSize(): number {

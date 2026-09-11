@@ -103,7 +103,6 @@
 
 <script setup lang="ts">
 import { ref, onMounted }  from 'vue'
-import { copyToClipboard } from '@/composables/useClipboard'
 
 const jellyfinUrl        = ref('')
 const jellyfinAdminToken = ref('')
@@ -115,8 +114,6 @@ const testResult         = ref<{ ok: boolean; version?: string; error?: string }
 const syncing            = ref(false)
 const syncResult         = ref<{ created: number; skipped: number; users: string[] } | null>(null)
 const syncError          = ref<string | null>(null)
-
-const origin = window.location.origin
 
 const apiEndpoints = [
   { method: 'POST', path: '/api/v1/auth/jellyfin', desc: 'Échanger un token Jellyfin contre un token FanKarr' },
@@ -179,13 +176,6 @@ async function syncUsers() {
   syncing.value = false
 }
 
-async function copyToken() {
-  try {
-    await copyToClipboard(myToken.value)
-    tokenCopied.value = true
-    setTimeout(() => { tokenCopied.value = false }, 2000)
-  } catch {}
-}
 
 
 </script>

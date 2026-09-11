@@ -9,7 +9,7 @@ import path from 'path'
 import { Worker } from 'worker_threads'
 import { logger } from './logger.js'
 import { readSettings } from './settings.js'
-import { readOrganized, writeOrganized, updateOrganized, type Organized } from './lib/organized-store.js'
+import { readOrganized, writeOrganized, updateOrganized, retargetEntries, type Organized } from './lib/organized-store.js'
 
 export let workerRunning = false
 const _prevStates = new Map<string, string>()
@@ -171,6 +171,16 @@ export async function scanMediaPath(
     const presentFiles = new Set<string>()
     let noMatch = 0
 
+    const trackedByPath = new Map<string, string[]>()
+    for (const [hash, episodes] of Object.entries(organized)) {
+        for (const [episodeId, entry] of Object.entries(episodes)) {
+            if (!entry?.dest_path) continue
+            const keys = trackedByPath.get(entry.dest_path) ?? []
+            keys.push(`${hash}:${episodeId}`)
+            trackedByPath.set(entry.dest_path, keys)
+        }
+    }
+
     function walk(dir: string) {
         let entries: fs.Dirent[]
         try { entries = fs.readdirSync(dir, { withFileTypes: true }) }
@@ -181,6 +191,14 @@ export async function scanMediaPath(
                 walk(full)
             } else if (entry.isFile() && /\.(mkv|mp4|avi|m4v|mov|wmv)$/i.test(entry.name)) {
                 result.found++
+
+                // Fichier déjà suivi (sous n'importe quel hash) : ne pas créer d'entrée en double
+                const tracked = trackedByPath.get(full)
+                if (tracked) {
+                    for (const key of tracked) presentFiles.add(key)
+                    continue
+                }
+
                 const nameWithoutExt = entry.name.replace(/\.[^.]+$/, '')
                 let match = filenameIndex.get(nameWithoutExt)
 
@@ -460,8 +478,7 @@ export async function migrateOrganizedEpisodeIds(
     return { updated, orphaned }
 }
 
-// ── Déduplication : un seul enregistrement par épisode ────────
-
+// ── Déduplication ─────────────────────────────────────────────
 export function dedupeOrganizedEpisodes(
     organizedPath: string,
 ): { removed: number } {
@@ -485,22 +502,14 @@ export function dedupeOrganizedEpisodes(
     for (const [episodeId, candidates] of byEpisode) {
         if (candidates.length < 2) continue
 
-        const score = (c: { entry: any }) => {
-            const exists = c.entry?.dest_path ? fs.existsSync(c.entry.dest_path) : false
-            const at     = Date.parse(c.entry?.at ?? '') || 0
-            return { exists, at }
-        }
-        const sorted = [...candidates].sort((a, b) => {
-            const sa = score(a), sb = score(b)
-            if (sa.exists !== sb.exists) return sa.exists ? -1 : 1
-            return sb.at - sa.at
-        })
+        const present = candidates.filter(c => c.entry?.dest_path && fs.existsSync(c.entry.dest_path))
+        if (present.length === 0) continue
 
-        const keep = sorted[0]
-        for (const c of sorted.slice(1)) {
+        for (const c of candidates) {
+            if (present.includes(c)) continue
             delete (organized[c.hash] as any)[episodeId]
             removed++
-            logger.info('organize', `Dédoublonnage : ep ${episodeId} retiré de ${c.hash.slice(0, 8)}… (conservé sous ${keep.hash.slice(0, 8)}…)`)
+            logger.info('organize', `Dédoublonnage : ep ${episodeId} retiré de ${c.hash.slice(0, 8)}… (fichier absent, conservé sous ${present[0].hash.slice(0, 8)}…)`)
         }
     }
 
@@ -576,6 +585,7 @@ export async function syncFilenameChanges(
                         dest_path    : newPath,
                         at           : new Date().toISOString(),
                     }
+                    retargetEntries(organized, new Map([[oldPath, newPath]]))
                     renamed++
                     changed = true
                     logger.info('organize', `Sync rename : "${currentName}" → "${expectedName}"`)

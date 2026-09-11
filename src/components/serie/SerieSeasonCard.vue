@@ -115,7 +115,7 @@
             </button>
             <div v-if="seasonMenuOpen" class="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl p-1 z-20 w-52 shadow-xl flex flex-col gap-0.5">
               <button
-                  v-for="(t, i) in season.torrents"
+                  v-for="(t, i) in (season.torrents as any[])"
                   :key="i"
                   :title="t.raw ?? t.torrent_name ?? ''"
                   class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-primary hover:bg-hover transition-colors"
@@ -231,7 +231,7 @@
                  class="absolute right-0 bottom-full mb-1 bg-card border border-border rounded-xl p-1 z-20 w-72 shadow-xl flex flex-col gap-0.5">
               <p class="px-3 pt-1.5 pb-0.5 text-[10px] text-muted font-medium uppercase tracking-wide">Choisir le torrent</p>
               <button
-                  v-for="(t, i) in ep.torrents"
+                  v-for="(t, i) in (ep.torrents as any[])"
                   :key="i"
                   :title="t.raw ?? t.torrent_name ?? ''"
                   class="flex items-start gap-2 px-3 py-2 rounded-lg text-xs text-primary hover:bg-hover transition-colors text-left"
@@ -246,7 +246,7 @@
             <div v-if="!requestMode && epOptionsOpen === ep.id && ep.torrents && ep.torrents.length > 1"
                  class="absolute right-0 bottom-full mb-1 bg-card border border-border rounded-xl p-1 z-20 w-52 shadow-xl flex flex-col gap-0.5">
               <button
-                  v-for="(t, i) in ep.torrents"
+                  v-for="(t, i) in (ep.torrents as any[])"
                   :key="i"
                   :title="t.raw ?? t.torrent_name ?? ''"
                   class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-primary hover:bg-hover transition-colors"
@@ -433,16 +433,6 @@ function isAlreadyQueued(torrent: any): boolean {
 
 // ── Computed saison ────────────────────────────────────────────
 const availableCount = computed(() => props.season.episodes.filter((e: any) => e.available).length)
-const seasonProgress = computed(() => {
-  if (props.season.torrents && props.season.torrents.length > 1) {
-    for (const t of props.season.torrents) {
-      const prog = torrentProgress(extractHash(t))
-      if (prog) return prog
-    }
-    return null
-  }
-  return torrentProgress(extractHash(props.season.torrent))
-})
 const hasDownloadable = computed(() =>
     props.season.episodes.some((ep: any) =>
         ep.torrent && ep.available && !ep.organized && !isAlreadyQueued(ep.torrent) && !isDownloaded(`ep-${ep.id}`)
@@ -540,7 +530,7 @@ function handleEpRequestClick(ep: any) {
     return
   }
   // Torrent unique ou aucun → émettre directement
-  emit('requestEpisode', season.season_number, ep.id, ep.torrent ?? undefined)
+  emit('requestEpisode', props.season.season_number, ep.id, ep.torrent ?? undefined)
 }
 
 function epState(ep: any): 'idle' | 'loading' | 'done' | 'unavailable' {
@@ -606,7 +596,7 @@ const _epChapCache = new Map<string | null | undefined, ReturnType<typeof _parse
  */
 function _parseEpChap(plot: string | null | undefined): {
   episodes: string | null
-  season: number | null
+  season: string | null
   chapters: string |null
   cleanPlot: string
 } {

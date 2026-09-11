@@ -17,7 +17,8 @@ import delugeDriver       from './torrent-clients/deluge.js'
 import { autoOrganizeAll, scanMediaPath, syncFilenameChanges, migrateOrganizedEpisodeIds, dedupeOrganizedEpisodes } from './organize.js'
 import { logger } from './logger.js'
 import { DATA_DIR, BASE_DIR } from './config.js'
-import { readAvailable, readInfohashMap, loadEnrichedSeriesData } from './lib/github-cache.js'
+import { readAvailable, readInfohashMap } from './lib/github-cache.js'
+import { loadCatalog } from './lib/serie-helpers.js'
 import { ORGANIZED_PATH, readOrganized, writeOrganized } from './lib/organized-store.js'
 import { pushNotif } from './lib/notifs.js'
 import { readRequests, completeRequest } from './requests.js'
@@ -175,7 +176,7 @@ server.listen(PORT, async () => {
         logger.warn('api', `Migration dest_dir échouée : ${err instanceof Error ? err.message : err}`)
     }
 
-    loadEnrichedSeriesData()
+    loadCatalog()
         .then(async seriesData => {
             await migrateOrganizedEpisodeIds(ORGANIZED_PATH, seriesData)
             dedupeOrganizedEpisodes(ORGANIZED_PATH)
@@ -187,7 +188,7 @@ server.listen(PORT, async () => {
         try {
             const { category } = readSettings()
             const infohashMap  = await readInfohashMap()
-            const seriesData   = await loadEnrichedSeriesData()
+            const seriesData   = await loadCatalog()
             await autoOrganizeAll(
                 () => dispatchList(category ?? 'fankai', infohashMap),
                 seriesData,
@@ -242,7 +243,7 @@ server.listen(PORT, async () => {
     // Le TTL du cache GitHub est de 1h — ce setInterval tire toujours sur des données fraîches.
     setInterval(async () => {
         try {
-            const seriesData   = await loadEnrichedSeriesData()
+            const seriesData   = await loadCatalog()
             const organizedPath = path.join(DATA_DIR, 'organized.json')
             const { updated }  = await migrateOrganizedEpisodeIds(organizedPath, seriesData)
             if (updated > 0)

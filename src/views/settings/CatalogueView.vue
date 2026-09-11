@@ -48,6 +48,29 @@
         <p class="text-xs text-muted mt-2">Force la synchronisation sans attendre le cache de 6h.</p>
       </div>
 
+      <!-- Surveillances orphelines -->
+      <div v-if="syncOrphans.length > 0" class="settings-card flex flex-col gap-2">
+        <div>
+          <p class="text-sm font-medium text-primary">Surveillances orphelines ({{ syncOrphans.length }})</p>
+          <p class="text-xs text-muted mt-0.5">
+            Séries surveillées qui n'existent plus dans le catalogue (supprimées ou recréées sous un autre nom).
+            Réactivez la surveillance sur la nouvelle fiche si besoin.
+          </p>
+        </div>
+        <div class="flex flex-col divide-y divide-border/50 -mx-4 px-4">
+          <div v-for="s in syncOrphans" :key="s.serieId" class="flex items-center gap-3 py-2">
+            <span class="flex-1 min-w-0 text-sm text-primary truncate">{{ s.serieName }}</span>
+            <span class="text-xs text-muted font-mono shrink-0">#{{ s.serieId }}</span>
+            <button
+                @click="removeSyncOrphan(s.serieId)"
+                class="text-xs px-2 py-1 rounded-lg border border-border text-muted hover:text-primary transition-colors shrink-0"
+            >
+              Retirer
+            </button>
+          </div>
+        </div>
+      </div>
+
     </template>
 
   </div>
@@ -62,12 +85,32 @@ const { add: toast } = useToast()
 const updating = ref(false)
 const loaded   = ref(false)
 const status   = ref({ exists: false, count: 0, empty: true })
+const syncOrphans = ref<{ serieId: number; serieName: string }[]>([])
 
 onMounted(async () => {
+  fetchSyncOrphans()
   const res = await fetch('/api/torrents/status', { credentials: 'include' })
   if (res.ok) status.value = await res.json()
   loaded.value = true
 })
+
+async function fetchSyncOrphans() {
+  try {
+    const res = await fetch('/api/rss-sync/orphans', { credentials: 'include' })
+    if (res.ok) syncOrphans.value = (await res.json()).orphans ?? []
+  } catch {}
+}
+
+async function removeSyncOrphan(serieId: number) {
+  try {
+    const res = await fetch(`/api/rss-sync/${serieId}`, { method: 'DELETE', credentials: 'include' })
+    if (!res.ok) { toast('Erreur lors du retrait de la surveillance', 'error'); return }
+    syncOrphans.value = syncOrphans.value.filter(s => s.serieId !== serieId)
+    toast('Surveillance retirée ✓', 'success')
+  } catch {
+    toast('Impossible de contacter le serveur', 'error')
+  }
+}
 
 async function update() {
   updating.value = true
@@ -77,6 +120,7 @@ async function update() {
       const { count } = await res.json()
       status.value = { exists: true, count, empty: count === 0 }
       toast(`${count} séries chargées ✓`, 'success')
+      fetchSyncOrphans()
     } else {
       const { error } = await res.json()
       toast(error ?? 'Erreur lors de la mise à jour', 'error')

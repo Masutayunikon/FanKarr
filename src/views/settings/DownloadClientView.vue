@@ -407,7 +407,7 @@ watch(() => modal.value.config, (newConfig) => {
   // Si au moins un champ non-password a changé → reset tested
   // Pour les passwords, on reset seulement si la valeur n'est plus le masque
   for (const [key, val] of Object.entries(newConfig)) {
-    const field = driver.fields.find(f => f.key === key)
+    const field = driver.fields.find((f: any) => f.key === key)
     if (!field) continue
     if (field.type === 'password' && val === '••••••••') continue
     modal.value.tested = false
