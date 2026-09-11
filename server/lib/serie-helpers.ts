@@ -1,4 +1,6 @@
 import path from 'path'
+import { logger } from '../logger.js'
+import { githubGet } from './github-cache.js'
 
 const FANKAI_API = 'https://metadata.fankai.fr'
 
@@ -6,6 +8,41 @@ export async function fankaiGet(endpoint: string): Promise<any> {
     const res = await fetch(`${FANKAI_API}${endpoint}`)
     if (!res.ok) throw new Error(`Fankai API ${res.status}: ${endpoint}`)
     return res.json()
+}
+
+export async function fetchSerieFromApi(serieId: number): Promise<any> {
+    const [serie, seasonsData] = await Promise.all([fankaiGet(`/series/${serieId}`), fankaiGet(`/series/${serieId}/seasons`)])
+    const seasons = Array.isArray(seasonsData) ? seasonsData : (seasonsData.seasons ?? [])
+    return {
+        ...serie,
+        seasons: await Promise.all(seasons.map(async (season: any) => {
+            const epsData = await fankaiGet(`/seasons/${season.id}/episodes`)
+            return { ...season, episodes: Array.isArray(epsData) ? epsData : (epsData.episodes ?? []) }
+        })),
+    }
+}
+
+export function serieHasEpisodes(sd: any): boolean {
+    return (sd?.seasons ?? []).some((s: any) => (s.episodes ?? []).length > 0)
+}
+
+// Repli sur l'API Fankai quand le scraper n'a pas (encore) la série
+export async function resolveSerieData(serieId: number, action?: string): Promise<any | null> {
+    let scraperError = 'aucun épisode'
+    try {
+        const sd = await githubGet(`series/${serieId}.json`)
+        if (serieHasEpisodes(sd)) return sd
+    } catch (err) {
+        scraperError = err instanceof Error ? err.message : String(err)
+    }
+    try {
+        const sd = await fetchSerieFromApi(serieId)
+        if (action) logger.warn('api', `${action} : série ${serieId} absente du scraper (${scraperError}), données reprises de l'API Fankai`)
+        return sd
+    } catch (err) {
+        logger.error('api', `${action ?? 'Lecture série'} : série ${serieId} introuvable — scraper (${scraperError}), API Fankai (${err instanceof Error ? err.message : err})`)
+        return null
+    }
 }
 
 export function imgProxy(url: string | null | undefined, w: number, q = 70): string | null {
