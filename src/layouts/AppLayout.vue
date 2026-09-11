@@ -40,7 +40,7 @@ import { Menu } from 'lucide-vue-next'
 import SidebarNav from '@/components/nav/SidebarNav.vue'
 import { useDownloadsStore } from '@/stores/downloads'
 import { useAuthStore }      from '@/stores/auth'
-import type { NavItem } from '@/types/nav'
+import type { NavItem, NavChild } from '@/types/nav'
 
 const mobileOpen = ref(false)
 const dlStore    = useDownloadsStore()
@@ -79,7 +79,7 @@ const navItems = computed<NavItem[]>(() => {
 
   items.push({ separator: true })
 
-  const settingsChildren: NavItem[] = [
+  const settingsChildren: NavChild[] = [
     { label: 'Mon profil', to: '/settings/profile' },
   ]
   if (auth.isAdmin) {

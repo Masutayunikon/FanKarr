@@ -118,7 +118,7 @@
           <div v-for="r in req.requesters" :key="r.userId"
                class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-shell border border-border text-xs">
             <span class="w-4 h-4 rounded-full bg-border flex items-center justify-center text-[9px] font-semibold text-muted shrink-0">
-              {{ r.username[0].toUpperCase() }}
+              {{ r.username.charAt(0).toUpperCase() }}
             </span>
             <span class="text-muted">{{ r.username }}</span>
             <span v-if="r.episodes?.length > 0" class="text-muted/60">
@@ -179,7 +179,7 @@ const filters = [
   { value: 'approved',  label: 'Approuvées' },
   { value: 'completed', label: 'Disponibles' },
   { value: 'rejected',  label: 'Refusées'   },
-]
+] as const
 
 const counts = computed(() => ({
   all      : requests.value.length,

@@ -172,6 +172,35 @@
       </div>
     </div>
 
+    <!-- Entrées orphelines -->
+    <div v-if="!loading && orphans.length > 0" class="settings-card flex flex-col gap-2">
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <p class="text-sm font-medium text-primary">Entrées orphelines ({{ orphans.length }})</p>
+          <p class="text-xs text-muted mt-0.5">Épisodes suivis qui n'existent plus dans le catalogue. Les retirer du suivi ne supprime aucun fichier.</p>
+        </div>
+        <button @click="removeOrphans()" :disabled="removingOrphans" class="btn-secondary text-xs shrink-0">
+          {{ removingOrphans ? '…' : 'Tout retirer' }}
+        </button>
+      </div>
+      <div class="flex flex-col divide-y divide-border/50 -mx-4 px-4">
+        <div v-for="o in orphans" :key="`${o.hash}:${o.episode_id}`" class="flex items-center gap-3 py-2">
+          <span class="text-xs text-muted font-mono shrink-0 w-14">
+            {{ o.season != null && o.episode != null ? `S${pad(o.season)}E${pad(o.episode)}` : `#${o.episode_id}` }}
+          </span>
+          <span class="flex-1 min-w-0 text-[11px] font-mono text-muted truncate" :title="o.dest_path ?? ''">{{ o.dest_path ?? '—' }}</span>
+          <span v-if="!o.file_exists" class="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20 shrink-0">Introuvable</span>
+          <button
+              @click="removeOrphans([o.episode_id])"
+              :disabled="removingOrphans"
+              class="text-xs px-2 py-1 rounded-lg border border-border text-muted hover:text-primary transition-colors shrink-0"
+          >
+            Retirer
+          </button>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -192,6 +221,10 @@ const collapsed   = ref<Set<number>>(new Set())
 const renamingEp  = ref<Record<number, boolean>>({})
 const renameResult = ref<{ done: number; errors: any[] } | null>(null)
 const showOnlyNeedsRename = ref(false)
+const orphans     = ref<{ hash: string; episode_id: number; season: number | null; episode: number | null; dest_path: string | null; file_exists: boolean }[]>([])
+const removingOrphans = ref(false)
+
+const pad = (n: number) => String(n).padStart(2, '0')
 
 // ─── Computed ──────────────────────────────────────────────────
 const totalNeedsRename = computed(() => series.value.reduce((acc, s) => acc + s.needs_rename, 0))
@@ -209,6 +242,7 @@ async function load() {
     const data = await res.json()
     series.value     = data.series ?? []
     nfoSupport.value = data.nfo_support ?? false
+    orphans.value    = data.orphans ?? []
     // Replier les séries sans rename par défaut
     collapsed.value = new Set(series.value.filter(s => s.needs_rename === 0).map((s: any) => s.serie_id))
   } finally {
@@ -337,6 +371,27 @@ async function unimportEp(ep: any, deleteFile: boolean) {
     toast('Impossible de contacter le serveur', 'error')
   } finally {
     renamingEp.value[ep.episode_id] = false
+  }
+}
+
+async function removeOrphans(episodeIds?: number[]) {
+  if (!episodeIds && !confirm(`Retirer ${orphans.value.length} entrée(s) orpheline(s) du suivi ? Aucun fichier n'est supprimé.`)) return
+  removingOrphans.value = true
+  try {
+    const res = await fetch('/api/organized-summary/orphans', {
+      method     : 'DELETE',
+      headers    : { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body       : JSON.stringify(episodeIds ? { episode_ids: episodeIds } : {}),
+    })
+    const data = await res.json()
+    if (!res.ok) { toast(data.error ?? 'Erreur', 'error'); return }
+    toast(`${data.removed} entrée${data.removed > 1 ? 's' : ''} retirée${data.removed > 1 ? 's' : ''} du suivi ✓`, 'success')
+    await load()
+  } catch {
+    toast('Impossible de contacter le serveur', 'error')
+  } finally {
+    removingOrphans.value = false
   }
 }
 

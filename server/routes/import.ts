@@ -5,16 +5,74 @@ import { requireAuth, requireAdmin } from '../auth.js'
 import { logger } from '../logger.js'
 import { readSettings } from '../settings.js'
 import { getGitlabTitle } from '../gitlab-map.js'
-import { loadEnrichedSeriesData } from '../lib/github-cache.js'
-import { resolveEpNaming, computeExpectedName, resolveSerieData } from '../lib/serie-helpers.js'
+import {
+    resolveEpNaming, computeExpectedName, resolveSerieData, loadCatalog, loadCatalogStatus,
+    serieFolderName, seasonFolderName,
+} from '../lib/serie-helpers.js'
 import { GITLAB_API_NFO, GITLAB_RAW_NFO } from '../lib/nfo.js'
 import { dispatchRemove } from '../torrent-clients/index.js'
 import { readRequests, deleteRequest } from '../requests.js'
-import { readOrganized, writeOrganized, updateOrganized, type Organized } from '../lib/organized-store.js'
+import { readOrganized, writeOrganized, updateOrganized, retargetEntries, type Organized } from '../lib/organized-store.js'
 
 const router = Router()
 
 const serieNotFound = (id: unknown) => `Série ${id} introuvable dans le scraper et sur l'API Fankai (voir les logs)`
+
+// Entrée d'un épisode sous n'importe quel hash (torrent absent des paths du scraper)
+function findEntry(organized: Organized, episodeId: number): { hash: string; entry: any } | null {
+    for (const [hash, eps] of Object.entries(organized))
+        if (eps[String(episodeId)]) return { hash, entry: eps[String(episodeId)] }
+    return null
+}
+
+// Entrées dont l'épisode n'existe plus dans le catalogue
+function findOrphans(organized: Organized, catalog: any[]) {
+    const known = new Set<string>()
+    for (const sd of catalog)
+        for (const season of sd.seasons ?? [])
+            for (const ep of season.episodes ?? []) known.add(String(ep.id))
+    const orphans: { hash: string; episode_id: number; season: number | null; episode: number | null; dest_path: string | null }[] = []
+    for (const [hash, eps] of Object.entries(organized))
+        for (const [episodeId, entry] of Object.entries(eps))
+            if (!known.has(episodeId))
+                orphans.push({ hash, episode_id: Number(episodeId), season: entry?.season ?? null, episode: entry?.episode ?? null, dest_path: entry?.dest_path ?? null })
+    return orphans
+}
+
+// Dossiers série (enfants directs de la médiathèque) contenant les fichiers suivis d'une série
+function serieFolders(sd: any, organized: Organized, mediaPath: string): Map<string, number> {
+    const ids = new Set<string>()
+    for (const season of sd.seasons ?? [])
+        for (const ep of season.episodes ?? []) ids.add(String(ep.id))
+    const folders = new Map<string, number>()
+    if (!mediaPath) return folders
+    for (const eps of Object.values(organized)) {
+        for (const [episodeId, entry] of Object.entries(eps)) {
+            if (!ids.has(episodeId) || !entry?.dest_path) continue
+            const parts = path.relative(mediaPath, entry.dest_path).split(path.sep)
+            if (parts.length < 2 || parts[0] === '..' || path.isAbsolute(parts[0])) continue
+            const folder = path.join(mediaPath, parts[0])
+            folders.set(folder, (folders.get(folder) ?? 0) + 1)
+        }
+    }
+    return folders
+}
+
+function listFiles(dir: string): string[] {
+    const files: string[] = []
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name)
+        if (entry.isDirectory()) files.push(...listFiles(full))
+        else files.push(full)
+    }
+    return files
+}
+
+function removeEmptyDirs(dir: string): void {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true }))
+        if (entry.isDirectory()) removeEmptyDirs(path.join(dir, entry.name))
+    if (fs.readdirSync(dir).length === 0) fs.rmdirSync(dir)
+}
 
 // ── Import manuel ──────────────────────────────────────────────
 router.post('/manual-import', requireAuth, async (req, res) => {
@@ -22,7 +80,7 @@ router.post('/manual-import', requireAuth, async (req, res) => {
     if (!serie_id || !Array.isArray(items) || items.length === 0) {
         res.status(400).json({ error: 'serie_id et items requis' }); return
     }
-    const { mediaPath, organizeMode, nfoSupport } = readSettings()
+    const { mediaPath, organizeMode, nfoSupport, englishDirectory } = readSettings()
     let organized: Organized
     try { organized = readOrganized() }
     catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return }
@@ -31,8 +89,7 @@ router.post('/manual-import', requireAuth, async (req, res) => {
     const apply = (op: (data: Organized) => void) => { op(organized); ops.push(op) }
     const sd = await resolveSerieData(Number(serie_id), 'Import manuel')
     if (!sd) { res.status(404).json({ error: serieNotFound(serie_id) }); return }
-    const rawTitle   = sd.title ?? sd.show_title ?? ''
-    const serieTitle = rawTitle.replace(/:/g, ' -').replace(/[<>"/\\|?*]/g, '').replace(/\s+/g, ' ').trim()
+    const serieTitle = serieFolderName(sd.title ?? sd.show_title ?? '')
     const episodeIndex = new Map<number, { ep: any; season: any }>()
     for (const season of sd.seasons ?? []) {
         for (const ep of season.episodes ?? []) {
@@ -58,8 +115,7 @@ router.post('/manual-import', requireAuth, async (req, res) => {
         const destFilename = resolvedExt && resolvedExt !== srcExt
             ? resolvedName.slice(0, -resolvedExt.length) + srcExt
             : resolvedName
-        const seasonFolder  = season.season_number === 0 ? 'Specials' : `Saison ${season.season_number}`
-        const destDir       = path.join(mediaPath, serieTitle, seasonFolder)
+        const destDir       = path.join(mediaPath, serieTitle, seasonFolderName(season.season_number, englishDirectory))
         const destPath      = path.join(destDir, destFilename)
         try {
             if (!fs.existsSync(file_path)) throw new Error('Fichier source introuvable')
@@ -102,6 +158,7 @@ router.post('/manual-import', requireAuth, async (req, res) => {
                 }
                 if (isInSeriePath && !fs.existsSync(destPath)) {
                     fs.renameSync(file_path, destPath)
+                    apply(data => { retargetEntries(data, new Map([[file_path, destPath]])) })
                     logger.info('api', `Import manuel (rename) : "${srcFilename}" → "${destFilename}"`)
                 } else if (!isInSeriePath && !fs.existsSync(destPath)) {
                     if (organizeMode === 'hardlink') {
@@ -110,6 +167,7 @@ router.post('/manual-import', requireAuth, async (req, res) => {
                     } else if (organizeMode === 'move') {
                         try { fs.renameSync(file_path, destPath) }
                         catch { await fs.promises.copyFile(file_path, destPath); await fs.promises.unlink(file_path) }
+                        apply(data => { retargetEntries(data, new Map([[file_path, destPath]])) })
                     } else {
                         await fs.promises.copyFile(file_path, destPath)
                     }
@@ -191,6 +249,10 @@ router.get('/organized/:serieId', requireAuth, async (req, res) => {
                 if (!entry && organized['manual']?.[String(ep.id)]) {
                     entry = organized['manual'][String(ep.id)]
                 }
+                if (!entry) {
+                    const found = findEntry(organized, ep.id)
+                    if (found) { entry = found.entry; entryHash = found.hash }
+                }
                 if (!entry) continue
 
                 const { needsRename } = computeExpectedName(ep, entry, entryHash, nfoSupport)
@@ -226,9 +288,8 @@ router.post('/rename-episode', requireAuth, async (req, res) => {
     let orgEntry = organized[hash]?.[String(episode_id)] ?? organized['manual']?.[String(episode_id)]
     let entryHash = organized[hash]?.[String(episode_id)] ? hash : 'manual'
     if (!orgEntry) {
-        for (const [h, eps] of Object.entries(organized)) {
-            if (eps[String(episode_id)]) { orgEntry = eps[String(episode_id)]; entryHash = h; break }
-        }
+        const found = findEntry(organized, Number(episode_id))
+        if (found) { orgEntry = found.entry; entryHash = found.hash }
     }
     if (!orgEntry) { res.status(404).json({ error: 'Épisode non importé' }); return }
     const { currentName, expectedName: newName, needsRename } = computeExpectedName(ep, orgEntry, entryHash, nfoSupport)
@@ -240,6 +301,7 @@ router.post('/rename-episode', requireAuth, async (req, res) => {
         if (fs.existsSync(newPath)) throw new Error(`Un fichier avec ce nom existe déjà : ${newName}`)
         fs.renameSync(oldPath, newPath)
         organized[entryHash][String(episode_id)] = { ...orgEntry, dest_filename: newName, dest_path: newPath, at: new Date().toISOString() }
+        retargetEntries(organized, new Map([[oldPath, newPath]]))
         writeOrganized(organized)
         logger.info('api', `Rename : "${orgEntry.dest_filename}" → "${newName}"`)
         res.json({ ok: true, renamed: true, old_name: orgEntry.dest_filename, new_name: newName })
@@ -400,12 +462,12 @@ router.delete('/organized/:serieId/:episodeId', requireAuth, async (req, res) =>
 router.get('/organized-summary', requireAuth, async (_req, res) => {
     try {
         const { nfoSupport } = readSettings()
+        const { series: seriesData, complete } = await loadCatalogStatus()
         const organized  = readOrganized()
-        const seriesData = await loadEnrichedSeriesData()
         const result: any[] = []
         for (const sd of seriesData) {
             const rawTitle   = sd.title ?? sd.show_title ?? ''
-            const serieTitle = rawTitle.replace(/:/g, ' -').replace(/[<>"/\\|?*]/g, '').replace(/\s+/g, ' ').trim()
+            const serieTitle = serieFolderName(rawTitle)
             const episodes: any[] = []
             for (const season of sd.seasons ?? []) {
                 for (const ep of season.episodes ?? []) {
@@ -422,6 +484,10 @@ router.get('/organized-summary', requireAuth, async (_req, res) => {
                     if (!orgEntry && organized['manual']?.[String(ep.id)]) {
                         orgEntry = organized['manual'][String(ep.id)]; orgHash = 'manual'
                     }
+                    if (!orgEntry) {
+                        const found = findEntry(organized, ep.id)
+                        if (found) { orgEntry = found.entry; orgHash = found.hash }
+                    }
                     if (!orgEntry) continue
                     const { currentName, expectedName, needsRename } = computeExpectedName(ep, orgEntry, orgHash, nfoSupport)
                     const fileExists = orgEntry.dest_path ? fs.existsSync(orgEntry.dest_path) : false
@@ -432,11 +498,103 @@ router.get('/organized-summary', requireAuth, async (_req, res) => {
                 result.push({ serie_id: sd.id, serie_title: rawTitle, serie_title_clean: serieTitle, total: episodes.length, needs_rename: episodes.filter(e => e.needs_rename).length, episodes })
             }
         }
-        res.json({ series: result, nfo_support: nfoSupport })
+        const orphans = complete
+            ? findOrphans(organized, seriesData).map(o => ({ ...o, file_exists: !!o.dest_path && fs.existsSync(o.dest_path) }))
+            : []
+        res.json({ series: result, nfo_support: nfoSupport, orphans, orphans_checked: complete })
     } catch (err) {
         logger.error('api', `organized-summary échoué : ${err instanceof Error ? err.message : err}`)
         res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
     }
+})
+
+// ── Retrait des entrées orphelines ─────────────────────────────
+router.delete('/organized-summary/orphans', requireAdmin, async (req, res) => {
+    const only = Array.isArray(req.body?.episode_ids) ? new Set(req.body.episode_ids.map(String)) : null
+    const { series, complete } = await loadCatalogStatus()
+    if (!complete) { res.status(503).json({ error: 'Catalogue incomplet (scraper ou API Fankai injoignable), réessayez plus tard' }); return }
+    let removed = 0
+    try {
+        updateOrganized(data => {
+            for (const o of findOrphans(data, series)) {
+                if (only && !only.has(String(o.episode_id))) continue
+                delete data[o.hash][String(o.episode_id)]
+                removed++
+            }
+            return removed > 0
+        })
+    } catch (err) {
+        res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return
+    }
+    logger.info('api', `Entrées orphelines retirées du suivi : ${removed}`)
+    res.json({ ok: true, removed })
+})
+
+// ── Dossier série ──────────────────────────────────────────────
+router.get('/organized/:serieId/folder', requireAuth, async (req, res) => {
+    const serieId = Number(req.params.serieId)
+    const sd = await resolveSerieData(serieId)
+    if (!sd) { res.status(404).json({ error: serieNotFound(serieId) }); return }
+    const { mediaPath } = readSettings()
+    let organized: Organized
+    try { organized = readOrganized() }
+    catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return }
+    const expected = path.join(mediaPath, serieFolderName(sd.title ?? sd.show_title ?? ''))
+    const current  = [...serieFolders(sd, organized, mediaPath)].map(([folder, entries]) => ({ path: folder, entries, exists: fs.existsSync(folder) }))
+    res.json({ expected, current, needs_rename: current.some(f => f.exists && f.path !== expected) })
+})
+
+router.post('/organized/:serieId/folder', requireAdmin, async (req, res) => {
+    const serieId = Number(req.params.serieId)
+    const sd = await resolveSerieData(serieId, 'Renommage dossier')
+    if (!sd) { res.status(404).json({ error: serieNotFound(serieId) }); return }
+    const { mediaPath } = readSettings()
+    if (!mediaPath) { res.status(400).json({ error: 'Chemin médiathèque non configuré' }); return }
+    let organized: Organized
+    try { organized = readOrganized() }
+    catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return }
+    const expected = path.join(mediaPath, serieFolderName(sd.title ?? sd.show_title ?? ''))
+    const sources  = [...serieFolders(sd, organized, mediaPath).keys()].filter(f => f !== expected && fs.existsSync(f))
+    if (sources.length === 0) { res.json({ ok: true, moved: 0, updated: 0 }); return }
+
+    // Tout le contenu (vidéos, NFO, images…) est fusionné dans le dossier attendu, sans jamais écraser
+    const moves = new Map<string, string>()
+    for (const src of sources)
+        for (const file of listFiles(src)) moves.set(file, path.join(expected, path.relative(src, file)))
+    const targets   = [...moves.values()]
+    const conflicts = targets.filter((to, i) => fs.existsSync(to) || targets.indexOf(to) !== i)
+    if (conflicts.length > 0) {
+        res.status(409).json({ error: `${conflicts.length} fichier(s) existent déjà dans « ${path.basename(expected)} »`, conflicts: conflicts.slice(0, 10) }); return
+    }
+
+    const done = new Map<string, string>()
+    let failure: string | null = null
+    for (const [from, to] of moves) {
+        try {
+            fs.mkdirSync(path.dirname(to), { recursive: true })
+            fs.renameSync(from, to)
+            done.set(from, to)
+        } catch (err) {
+            failure = `${path.basename(from)} : ${err instanceof Error ? err.message : err}`
+            break
+        }
+    }
+    for (const src of sources) {
+        try { removeEmptyDirs(src) } catch {}
+    }
+    let updated = 0
+    try { updateOrganized(data => { updated = retargetEntries(data, done); return updated > 0 }) }
+    catch (err) {
+        logger.error('api', `Renommage dossier série ${serieId} : fichiers déplacés mais suivi non mis à jour : ${err instanceof Error ? err.message : err}`)
+        res.status(500).json({ error: 'Fichiers déplacés mais suivi non mis à jour, lancez un scan de la médiathèque' }); return
+    }
+    const label = `"${sources.map(s => path.basename(s)).join('", "')}" → "${path.basename(expected)}"`
+    if (failure) {
+        logger.error('api', `Renommage dossier ${label} interrompu après ${done.size} fichier(s) : ${failure}`)
+        res.status(500).json({ error: `Interrompu après ${done.size} fichier(s) : ${failure}`, moved: done.size, updated }); return
+    }
+    logger.info('api', `Dossier série renommé : ${label} (${done.size} fichier(s), ${updated} entrée(s))`)
+    res.json({ ok: true, moved: done.size, updated })
 })
 
 // ── Rename en masse ────────────────────────────────────────────
@@ -444,12 +602,7 @@ router.post('/rename-all', requireAdmin, async (req, res) => {
     const { serie_id, serie_ids } = req.body
     const onlyIds = Array.isArray(serie_ids) ? new Set(serie_ids.map(Number)) : serie_id ? new Set([Number(serie_id)]) : null
     const { nfoSupport } = readSettings()
-    const seriesData = await loadEnrichedSeriesData()
-    if (onlyIds) {
-        const known   = new Set(seriesData.map((sd: any) => sd.id))
-        const missing = await Promise.all([...onlyIds].filter(id => !known.has(id)).map(id => resolveSerieData(id, 'Rename masse')))
-        seriesData.push(...missing.filter(Boolean))
-    }
+    const seriesData = await loadCatalog()
     let organized: Organized
     try { organized = readOrganized() }
     catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return }
@@ -482,6 +635,7 @@ router.post('/rename-all', requireAdmin, async (req, res) => {
                     }
                     fs.renameSync(oldPath, newPath)
                     organized[orgHash][String(ep.id)] = { ...orgEntry, dest_filename: expectedName, dest_path: newPath, at: new Date().toISOString() }
+                    retargetEntries(organized, new Map([[oldPath, newPath]]))
                     done.push(ep.id)
                     logger.info('api', `Rename masse : "${currentName}" → "${expectedName}"`)
                 } catch (err) {

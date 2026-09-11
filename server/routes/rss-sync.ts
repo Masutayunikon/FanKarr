@@ -1,7 +1,8 @@
 import { Router } from 'express'
 import { requireAuth, requireAdmin } from '../auth.js'
 import { logger }      from '../logger.js'
-import { loadSynced, setSync, setSyncBulk, isSynced, runRssSync } from '../lib/rss-sync.js'
+import { loadSynced, setSync, setSyncBulk, isSynced, runRssSync, reconcileSynced } from '../lib/rss-sync.js'
+import { loadCatalogStatus } from '../lib/serie-helpers.js'
 
 const router = Router()
 
@@ -19,6 +20,12 @@ router.post('/rss-sync/run', requireAuth, async (_req, res) => {
         logger.error('rss-sync', `Sync forcé échoué : ${err instanceof Error ? err.message : err}`)
         res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
     }
+})
+
+/** GET /api/rss-sync/orphans → surveillances dont la série n'existe plus (avant /:id) */
+router.get('/rss-sync/orphans', requireAdmin, async (_req, res) => {
+    const { series, complete } = await loadCatalogStatus()
+    res.json({ checked: complete, orphans: complete ? reconcileSynced(series) : [] })
 })
 
 /** POST /api/rss-sync/bulk → activer/désactiver la surveillance de plusieurs séries (avant /:id) */

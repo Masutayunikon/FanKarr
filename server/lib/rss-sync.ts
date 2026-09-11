@@ -11,7 +11,8 @@ import path from 'path'
 import fs   from 'fs'
 import { DATA_DIR } from '../config.js'
 import { logger }   from '../logger.js'
-import { loadEnrichedSeriesData, readInfohashMap } from './github-cache.js'
+import { readInfohashMap }                         from './github-cache.js'
+import { loadCatalogStatus }                       from './serie-helpers.js'
 import { dispatchDownload, dispatchList }          from '../torrent-clients/index.js'
 import { readSettings }                            from '../settings.js'
 
@@ -69,6 +70,32 @@ export function isSynced(serieId: number): boolean {
     return !!loadSynced()[serieId]
 }
 
+const normalizeName = (name: string) =>
+    name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+
+// Série recréée sous un nouvel ID avec le même nom : la surveillance suit.
+// Renvoie les surveillances dont la série n'existe plus dans le catalogue.
+export function reconcileSynced(catalog: any[]): SyncedSerie[] {
+    const map     = loadSynced()
+    const ids     = new Set(catalog.map(sd => sd.id))
+    const orphans: SyncedSerie[] = []
+    let changed   = false
+    for (const entry of Object.values(map)) {
+        if (ids.has(entry.serieId)) continue
+        const matches = catalog.filter(sd => normalizeName(sd.title ?? '') === normalizeName(entry.serieName))
+        if (matches.length === 1 && !map[matches[0].id]) {
+            delete map[entry.serieId]
+            map[matches[0].id] = { ...entry, serieId: matches[0].id, serieName: matches[0].title }
+            logger.info('rss-sync', `Surveillance de "${entry.serieName}" déplacée de la série ${entry.serieId} vers ${matches[0].id}`)
+            changed = true
+        } else {
+            orphans.push(entry)
+        }
+    }
+    if (changed) saveSynced(map)
+    return orphans
+}
+
 // ── Helpers ───────────────────────────────────────────────────
 
 function readOrganized(): Record<string, Record<string, any>> {
@@ -119,14 +146,16 @@ function getOrganizedEpisodeIds(sd: any, organized: Record<string, Record<string
 // ── Logique de sync ───────────────────────────────────────────
 
 export async function runRssSync(): Promise<{ sent: number; skipped: number; errors: number }> {
+    if (Object.keys(loadSynced()).length === 0) return { sent: 0, skipped: 0, errors: 0 }
+
+    const { series: seriesData, complete } = await loadCatalogStatus()
+    if (complete) reconcileSynced(seriesData)
     const synced = loadSynced()
     const ids    = Object.keys(synced).map(Number)
-    if (ids.length === 0) return { sent: 0, skipped: 0, errors: 0 }
 
     logger.info('rss-sync', `Démarrage sync — ${ids.length} série(s) surveillée(s)`)
 
     const organized  = readOrganized()
-    const seriesData = await loadEnrichedSeriesData()
 
     const activeHashes = new Set<string>()
     try {
@@ -146,7 +175,7 @@ export async function runRssSync(): Promise<{ sent: number; skipped: number; err
         const syncedEntry = synced[serieId]
         const sd          = seriesData.find((s: any) => s.id === serieId)
         if (!sd) {
-            logger.warn('rss-sync', `Série ${serieId} introuvable dans le cache`)
+            logger.warn('rss-sync', `Série ${serieId} ("${syncedEntry.serieName}") introuvable dans le catalogue — surveillance à retirer depuis Paramètres › Catalogue`)
             continue
         }
 

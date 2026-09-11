@@ -2,10 +2,16 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 export interface TorrentRef {
-    torrent_raw: string
     torrent_url: string | null
     magnet: string | null
     type: string
+    raw?: string | null
+    infohash?: string | null
+    torrent_name?: string | null
+    file_index?: number | null
+    file_path?: string | null
+    fankai?: boolean
+    manual?: boolean
 }
 
 export interface Episode {
@@ -20,7 +26,10 @@ export interface Episode {
     has_thumbnail: boolean
     season_id: number
     available: boolean
-    torrent: TorrentRef | null  // non-null seulement si type=episode
+    organized: boolean
+    fankai: boolean | null
+    torrent: TorrentRef | null
+    torrents: TorrentRef[]
 }
 
 export interface Season {
@@ -33,6 +42,9 @@ export interface Season {
     premiered: string | null
     episodes: Episode[]
     torrent: TorrentRef | null
+    torrents: TorrentRef[]
+    organized_state: 'none' | 'partial' | 'complete'
+    organized_count: number
 }
 
 export interface Serie {
@@ -56,7 +68,7 @@ export interface SerieDetail {
     serie: Serie
     seasons: Season[]
     scraper_synced: boolean
-    torrents_integrale: { raw: string; torrent_url: string | null; magnet: string | null }[]
+    torrents_integrale: { label: string; raw: string; torrent_url: string | null; magnet: string | null; infohash: string | null; torrent_name: string | null }[]
 }
 
 export const useSeriesStore = defineStore('series', () => {

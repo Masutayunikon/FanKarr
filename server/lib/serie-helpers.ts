@@ -1,6 +1,6 @@
 import path from 'path'
 import { logger } from '../logger.js'
-import { githubGet } from './github-cache.js'
+import { githubGet, loadEnrichedSeriesData, readAvailable } from './github-cache.js'
 
 const FANKAI_API = 'https://metadata.fankai.fr'
 
@@ -26,23 +26,62 @@ export function serieHasEpisodes(sd: any): boolean {
     return (sd?.seasons ?? []).some((s: any) => (s.episodes ?? []).length > 0)
 }
 
-// Repli sur l'API Fankai quand le scraper n'a pas (encore) la série
+export function serieFolderName(title: string): string {
+    return title.replace(/:/g, ' -').replace(/[<>"/\\|?*]/g, '').replace(/\s+/g, ' ').trim()
+}
+
+// Même règle que seasonFolder() du worker
+export function seasonFolderName(seasonNumber: number, englishDirectory: boolean): string {
+    return seasonNumber === 0 ? 'Specials' : (englishDirectory ? `Season ${String(seasonNumber).padStart(2, '0')}` : `Saison ${seasonNumber}`)
+}
+
+const errorMessage = (err: unknown) => err instanceof Error ? err.message : String(err)
+
+// Données scraper avec le titre à jour de l'API, ou repli complet sur l'API quand le scraper n'a pas (encore) la série
 export async function resolveSerieData(serieId: number, action?: string): Promise<any | null> {
-    let scraperError = 'aucun épisode'
-    try {
-        const sd = await githubGet(`series/${serieId}.json`)
-        if (serieHasEpisodes(sd)) return sd
-    } catch (err) {
-        scraperError = err instanceof Error ? err.message : String(err)
-    }
+    const [scraper, api] = await Promise.allSettled([githubGet(`series/${serieId}.json`), fankaiGet(`/series/${serieId}`)])
+    if (scraper.status === 'fulfilled' && serieHasEpisodes(scraper.value))
+        return api.status === 'fulfilled' && api.value?.title ? { ...scraper.value, title: api.value.title } : scraper.value
+    const scraperError = scraper.status === 'rejected' ? errorMessage(scraper.reason) : 'aucun épisode'
     try {
         const sd = await fetchSerieFromApi(serieId)
         if (action) logger.warn('api', `${action} : série ${serieId} absente du scraper (${scraperError}), données reprises de l'API Fankai`)
         return sd
     } catch (err) {
-        logger.error('api', `${action ?? 'Lecture série'} : série ${serieId} introuvable — scraper (${scraperError}), API Fankai (${err instanceof Error ? err.message : err})`)
+        logger.error('api', `${action ?? 'Lecture série'} : série ${serieId} introuvable — scraper (${scraperError}), API Fankai (${errorMessage(err)})`)
         return null
     }
+}
+
+let lastCatalogWarn = 0
+
+// Catalogue du scraper complété par l'API Fankai : titres à jour et séries pas encore scrapées.
+// complete = false si une source a échoué : ne rien supprimer sur la base d'une absence dans ce cas.
+export async function loadCatalogStatus(force = false): Promise<{ series: any[]; complete: boolean }> {
+    const [seriesData, availableIds] = await Promise.all([loadEnrichedSeriesData(force), readAvailable(force)])
+    const scraperComplete = availableIds.length > 0 && seriesData.length === availableIds.length
+    let apiSeries: any[]
+    try {
+        const data = await fankaiGet('/series')
+        apiSeries  = Array.isArray(data) ? data : (data.series ?? [])
+    } catch (err) {
+        if (Date.now() - lastCatalogWarn > 60 * 60_000) {
+            lastCatalogWarn = Date.now()
+            logger.warn('api', `Catalogue : API Fankai injoignable, titres du scraper conservés (${errorMessage(err)})`)
+        }
+        return { series: seriesData, complete: false }
+    }
+    const titles  = new Map<number, string>(apiSeries.filter(s => s.title).map(s => [s.id, s.title]))
+    const catalog = seriesData.map(sd => titles.has(sd.id) ? { ...sd, title: titles.get(sd.id) } : sd)
+    // Scraper vide = injoignable : ne pas interroger l'API série par série
+    if (seriesData.length === 0) return { series: catalog, complete: false }
+    const known   = new Set(seriesData.map(sd => sd.id))
+    const missing = await Promise.all(apiSeries.filter(s => !known.has(s.id)).map(s => fetchSerieFromApi(s.id).catch(() => null)))
+    return { series: [...catalog, ...missing.filter(Boolean)], complete: scraperComplete && missing.every(Boolean) }
+}
+
+export async function loadCatalog(force = false): Promise<any[]> {
+    return (await loadCatalogStatus(force)).series
 }
 
 export function imgProxy(url: string | null | undefined, w: number, q = 70): string | null {
