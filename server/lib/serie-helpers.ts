@@ -246,15 +246,9 @@ export function computeSerieDownloadState(serieData: any | null, organized: Reco
         }
     }
 
-    const manualOrg = organized['manual'] ?? {}
-    for (const season of serieData.seasons ?? []) {
-        for (const ep of season.episodes ?? []) {
-            if (manualOrg[String(ep.id)]) {
-                const key = epIdToKey.get(ep.id)
-                if (key) organizedEpKeys.add(key)
-            }
-        }
-    }
+    const trackedIds = new Set(Object.values(organized).flatMap(eps => Object.keys(eps)))
+    for (const [id, key] of epIdToKey)
+        if (trackedIds.has(String(id))) organizedEpKeys.add(key)
 
     if (uniqueEpKeys.size === 0 || organizedEpKeys.size === 0) return 'none'
     if (organizedEpKeys.size >= uniqueEpKeys.size) return 'complete'

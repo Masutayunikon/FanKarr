@@ -58,10 +58,11 @@ router.get('/series/:id', requireAuth, async (req, res) => {
         const integraleTorrents    : any[] = []
         const organizedEpisodeIds  = new Set<number>()
 
-        const manualOrg = organized['manual'] ?? {}
+        // Importé = une entrée pour l'épisode sous n'importe quel hash : les torrents du scraper peuvent disparaître
+        const trackedIds = new Set(Object.values(organized).flatMap(eps => Object.keys(eps)))
         for (const season of seasonsWithEpisodes) {
             for (const ep of season.episodes) {
-                if (manualOrg[String(ep.id)]) organizedEpisodeIds.add(ep.id)
+                if (trackedIds.has(String(ep.id))) organizedEpisodeIds.add(ep.id)
             }
         }
         if (serieData) {
