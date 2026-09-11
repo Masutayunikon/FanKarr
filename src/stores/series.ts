@@ -55,6 +55,7 @@ export interface Serie {
 export interface SerieDetail {
     serie: Serie
     seasons: Season[]
+    scraper_synced: boolean
     torrents_integrale: { raw: string; torrent_url: string | null; magnet: string | null }[]
 }
 

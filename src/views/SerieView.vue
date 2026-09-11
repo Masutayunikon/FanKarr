@@ -103,6 +103,17 @@
         </div>
       </div>
 
+      <!-- Série absente du scraper -->
+      <div v-if="auth.isAdmin && !data.scraper_synced" class="mx-4 md:mx-8 mt-4 flex items-start gap-3 px-4 py-3 rounded-lg border border-yellow-500/40 bg-yellow-500/5">
+        <span class="text-yellow-500 text-sm mt-0.5">⚠</span>
+        <div class="flex flex-col gap-0.5">
+          <p class="text-sm text-yellow-500 font-medium">Série absente du scraper</p>
+          <p class="text-xs text-muted">
+            Téléchargements indisponibles pour le moment. L'import manuel et le renommage s'appuient sur l'API Fankai en attendant la prochaine synchronisation.
+          </p>
+        </div>
+      </div>
+
       <!-- Barre utilisateur (mode demande) -->
       <div v-if="!auth.isAdmin" class="px-4 md:px-8 py-3 flex items-center justify-between gap-3 border-b border-border flex-wrap">
         <div v-if="myRequest" class="flex items-center gap-3">

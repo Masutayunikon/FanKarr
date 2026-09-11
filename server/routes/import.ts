@@ -5,14 +5,16 @@ import { requireAuth, requireAdmin } from '../auth.js'
 import { logger } from '../logger.js'
 import { readSettings } from '../settings.js'
 import { getGitlabTitle } from '../gitlab-map.js'
-import { readSerieData, loadEnrichedSeriesData } from '../lib/github-cache.js'
-import { resolveEpNaming, computeExpectedName } from '../lib/serie-helpers.js'
+import { loadEnrichedSeriesData } from '../lib/github-cache.js'
+import { resolveEpNaming, computeExpectedName, resolveSerieData } from '../lib/serie-helpers.js'
 import { GITLAB_API_NFO, GITLAB_RAW_NFO } from '../lib/nfo.js'
 import { dispatchRemove } from '../torrent-clients/index.js'
 import { readRequests, deleteRequest } from '../requests.js'
 import { readOrganized, writeOrganized, updateOrganized, type Organized } from '../lib/organized-store.js'
 
 const router = Router()
+
+const serieNotFound = (id: unknown) => `Série ${id} introuvable dans le scraper et sur l'API Fankai (voir les logs)`
 
 // ── Import manuel ──────────────────────────────────────────────
 router.post('/manual-import', requireAuth, async (req, res) => {
@@ -27,14 +29,8 @@ router.post('/manual-import', requireAuth, async (req, res) => {
     // Les copies de fichiers sont asynchrones : les modifications sont rejouées sur une relecture fraîche à la fin
     const ops: ((data: Organized) => void)[] = []
     const apply = (op: (data: Organized) => void) => { op(organized); ops.push(op) }
-    let sd = await readSerieData(Number(serie_id))
-    if (!sd) {
-        // readSerieData ne couvre que le cache local — fallback sur le catalogue complet
-        // (utile pour les séries sans torrent officiel dont les données sont peut-être absentes du cache individuel)
-        const all = await loadEnrichedSeriesData()
-        sd = all.find((s: any) => s.id === Number(serie_id)) ?? null
-    }
-    if (!sd) { res.status(404).json({ error: 'Série introuvable dans le catalogue' }); return }
+    const sd = await resolveSerieData(Number(serie_id), 'Import manuel')
+    if (!sd) { res.status(404).json({ error: serieNotFound(serie_id) }); return }
     const rawTitle   = sd.title ?? sd.show_title ?? ''
     const serieTitle = rawTitle.replace(/:/g, ' -').replace(/[<>"/\\|?*]/g, '').replace(/\s+/g, ' ').trim()
     const episodeIndex = new Map<number, { ep: any; season: any }>()
@@ -177,8 +173,8 @@ router.post('/manual-import', requireAuth, async (req, res) => {
 router.get('/organized/:serieId', requireAuth, async (req, res) => {
     const serieId = Number(req.params.serieId)
     try {
-        const sd = await readSerieData(serieId)
-        if (!sd) { res.status(404).json({ error: 'Série introuvable' }); return }
+        const sd = await resolveSerieData(serieId)
+        if (!sd) { res.status(404).json({ error: serieNotFound(serieId) }); return }
         const organized    = readOrganized()
         const { nfoSupport } = readSettings()
         const result: Record<string, any> = {}
@@ -212,8 +208,8 @@ router.post('/rename-episode', requireAuth, async (req, res) => {
     const { serie_id, episode_id, torrent_hash } = req.body
     if (!serie_id || !episode_id) { res.status(400).json({ error: 'serie_id et episode_id requis' }); return }
     const { nfoSupport } = readSettings()
-    const sd = await readSerieData(Number(serie_id))
-    if (!sd) { res.status(404).json({ error: 'Série introuvable' }); return }
+    const sd = await resolveSerieData(Number(serie_id), 'Renommage')
+    if (!sd) { res.status(404).json({ error: serieNotFound(serie_id) }); return }
     let organized: Organized
     try { organized = readOrganized() }
     catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return }
@@ -258,8 +254,8 @@ router.post('/rename-episode', requireAuth, async (req, res) => {
 router.delete('/organized/:serieId', requireAuth, async (req, res) => {
     const serieId    = String(req.params.serieId)
     const deleteFile = req.query.deleteFile === 'true'
-    const sd = await readSerieData(Number(serieId))
-    if (!sd) { res.status(404).json({ error: 'Série introuvable' }); return }
+    const sd = await resolveSerieData(Number(serieId), 'Désimport série')
+    if (!sd) { res.status(404).json({ error: serieNotFound(serieId) }); return }
     let organized: Organized
     try { organized = readOrganized() }
     catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return }
@@ -320,8 +316,8 @@ router.delete('/organized/:serieId/seasons/:seasonId', requireAuth, async (req, 
     const serieId    = String(req.params.serieId)
     const seasonId   = Number(req.params.seasonId)
     const deleteFile = req.query.deleteFile === 'true'
-    const sd = await readSerieData(Number(serieId))
-    if (!sd) { res.status(404).json({ error: 'Série introuvable' }); return }
+    const sd = await resolveSerieData(Number(serieId), 'Désimport saison')
+    if (!sd) { res.status(404).json({ error: serieNotFound(serieId) }); return }
     let organized: Organized
     try { organized = readOrganized() }
     catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return }
@@ -449,6 +445,11 @@ router.post('/rename-all', requireAdmin, async (req, res) => {
     const onlyIds = Array.isArray(serie_ids) ? new Set(serie_ids.map(Number)) : serie_id ? new Set([Number(serie_id)]) : null
     const { nfoSupport } = readSettings()
     const seriesData = await loadEnrichedSeriesData()
+    if (onlyIds) {
+        const known   = new Set(seriesData.map((sd: any) => sd.id))
+        const missing = await Promise.all([...onlyIds].filter(id => !known.has(id)).map(id => resolveSerieData(id, 'Rename masse')))
+        seriesData.push(...missing.filter(Boolean))
+    }
     let organized: Organized
     try { organized = readOrganized() }
     catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return }

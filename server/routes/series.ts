@@ -9,9 +9,9 @@ import { dispatchList } from '../torrent-clients/index.js'
 import { readAvailable, readInfohashMap, readSerieData } from '../lib/github-cache.js'
 import { loadSynced } from '../lib/rss-sync.js'
 import {
-    fankaiGet, normalizeSerie, normalizeSeason, normalizeEpisode,
+    fankaiGet, fetchSerieFromApi, normalizeSerie, normalizeSeason, normalizeEpisode,
     extractTorrentsFromSerieData, buildResolvedEpisodes, computeSerieDownloadState,
-    deduplicateEpisodes,
+    deduplicateEpisodes, serieHasEpisodes,
 } from '../lib/serie-helpers.js'
 
 const router = Router()
@@ -46,14 +46,9 @@ router.get('/series', requireAuth, async (_req, res) => {
 router.get('/series/:id', requireAuth, async (req, res) => {
     const id = Number(req.params.id)
     try {
-        const [serieRaw, seasonsData, serieData] = await Promise.all([fankaiGet(`/series/${id}`), fankaiGet(`/series/${id}/seasons`), readSerieData(id)])
+        const [{ seasons, ...serieRaw }, serieData] = await Promise.all([fetchSerieFromApi(id), readSerieData(id)])
         const serie   = { ...normalizeSerie(serieRaw), wiki: serieData?.wiki ?? null }
-        const seasons = Array.isArray(seasonsData) ? seasonsData : (seasonsData.seasons ?? [])
-        const seasonsWithEpisodes = await Promise.all(seasons.map(async (season: any) => {
-            const epsData  = await fankaiGet(`/seasons/${season.id}/episodes`)
-            const episodes = (Array.isArray(epsData) ? epsData : (epsData.episodes ?? [])).map(normalizeEpisode)
-            return { ...normalizeSeason(season), episodes }
-        }))
+        const seasonsWithEpisodes = seasons.map((season: any) => ({ ...normalizeSeason(season), episodes: season.episodes.map(normalizeEpisode) }))
         let organized: Record<string, Record<string, any>> = {}
         try { const p = path.join(DATA_DIR, 'organized.json'); if (fs.existsSync(p)) organized = JSON.parse(fs.readFileSync(p, 'utf-8')) } catch {}
 
@@ -64,11 +59,9 @@ router.get('/series/:id', requireAuth, async (req, res) => {
         const organizedEpisodeIds  = new Set<number>()
 
         const manualOrg = organized['manual'] ?? {}
-        if (serieData) {
-            for (const season of serieData.seasons ?? []) {
-                for (const ep of season.episodes ?? []) {
-                    if (manualOrg[String(ep.id)]) organizedEpisodeIds.add(ep.id)
-                }
+        for (const season of seasonsWithEpisodes) {
+            for (const ep of season.episodes) {
+                if (manualOrg[String(ep.id)]) organizedEpisodeIds.add(ep.id)
             }
         }
         if (serieData) {
@@ -191,7 +184,7 @@ router.get('/series/:id', requireAuth, async (req, res) => {
             }
         })
 
-        res.json({ serie, seasons: enrichedSeasons, torrents_integrale: integraleTorrents.map(t => ({ label: 'Intégrale', torrent_url: t.torrent_url, magnet: t.magnet, infohash: t.infohash?.toLowerCase() ?? null, raw: t.title ?? t.raw, torrent_name: t.torrent_name ?? null })) })
+        res.json({ serie, seasons: enrichedSeasons, scraper_synced: serieHasEpisodes(serieData), torrents_integrale: integraleTorrents.map(t => ({ label: 'Intégrale', torrent_url: t.torrent_url, magnet: t.magnet, infohash: t.infohash?.toLowerCase() ?? null, raw: t.title ?? t.raw, torrent_name: t.torrent_name ?? null })) })
     } catch (err) {
         logger.error('api', `GET /api/series/${id} échoué : ${err instanceof Error ? err.message : err}`)
         res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })

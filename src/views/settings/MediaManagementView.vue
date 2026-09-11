@@ -90,7 +90,7 @@
             :model-value="form.nfoSupport"
             @update:model-value="onNfoToggle"
             label="NFO / Métadonnées"
-            description="Télécharge les NFO et images depuis GitLab lors de l'import (Kodi, Infuse, etc.)."
+            description="Télécharge les NFO et images depuis GitLab lors de l'import (Infuse, etc.)."
         />
         <SettingsToggle
             v-if="form.organizeMode === 'move'"
@@ -164,12 +164,12 @@
         <div class="flex flex-col gap-1.5">
           <h3 class="text-sm font-semibold text-primary">Activer les NFO / Métadonnées ?</h3>
           <p class="text-xs text-muted leading-relaxed">
-            Si vous utilisez l'agent Fankai sur <span class="text-primary">Jellyfin, Plex ou Emby</span>,
+            Si vous utilisez l'agent Fankai sur <span class="text-primary">Jellyfin, Plex, Emby ou Kodi</span>,
             les métadonnées sont déjà gérées directement par l'agent — activer les NFO est inutile
             et peut créer des conflits.
           </p>
           <p class="text-xs text-muted leading-relaxed">
-            Activez cette option uniquement si vous utilisez <span class="text-primary">Kodi, Infuse</span>
+            Activez cette option uniquement si vous utilisez <span class="text-primary">Infuse</span>
             ou un lecteur qui lit les fichiers NFO locaux.
           </p>
         </div>
