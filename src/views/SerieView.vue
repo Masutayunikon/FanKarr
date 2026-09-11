@@ -405,6 +405,16 @@ function integraleGroupLabels(): string[] {
 }
 
 // Épisodes couverts par une intégrale donnée (hash commun)
+// Épisodes déjà présents dans la médiathèque — sert de garde-fou pour ne pas
+// redescendre une autre version (x264 / x265) de fichiers déjà importés.
+const organizedEpisodeIds = computed(() => {
+  const ids = new Set<number>()
+  for (const season of data.value?.seasons ?? [])
+    for (const ep of season.episodes)
+      if (ep.organized) ids.add(ep.id)
+  return ids
+})
+
 function integraleEpisodeCoverage(integraleIndex: number): Set<number> {
   const covered = new Set<number>()
   const t = data.value?.torrents_integrale[integraleIndex]
@@ -503,6 +513,8 @@ async function fetchActiveDownloads() {
     const list: any[] = await res.json()
 
     const isFirstPoll = _prevTorrentStates.size === 0
+    // Un seul import par torrent, même si plusieurs de ses fichiers viennent de se terminer
+    const toOrganize  = new Map<string, any>()
 
     for (const t of list) {
       const prevState = _prevTorrentStates.get(t.hash)
@@ -515,7 +527,7 @@ async function fetchActiveDownloads() {
           _prevFileProgresses.set(key, f.progress)
           if (!isFirstPoll && prevProg !== undefined && prevProg < 1 && f.progress >= 1 && !_recentlyOrganized.has(key)) {
             _recentlyOrganized.add(key)
-            triggerOrganize(t)
+            toOrganize.set(t.hash, t)
           }
         }
       }
@@ -523,11 +535,13 @@ async function fetchActiveDownloads() {
       // Détecter torrent entier passé en seeding (épisodes standalone sans per-file data)
       if (!isFirstPoll && t.state === 'seeding' && prevState !== undefined && prevState !== 'seeding' && !_recentlyOrganized.has(t.hash)) {
         _recentlyOrganized.add(t.hash)
-        triggerOrganize(t)
+        toOrganize.set(t.hash, t)
       }
 
       _prevTorrentStates.set(t.hash, t.state)
     }
+
+    for (const t of toOrganize.values()) triggerOrganize(t)
 
     activeTorrents.value = list.map(t => ({
       hash     : t.hash,
@@ -582,6 +596,12 @@ function collectDownloadables(integraleIndex?: number): DlItem[] {
   const result: DlItem[] = []
   const covered = new Set<number>()
 
+  // Une autre version déjà envoyée couvre déjà ses épisodes
+  data.value.torrents_integrale.forEach((t: any, i: number) => {
+    if (isAlreadyQueued(t) || isDownloaded(`integrale-${i}`))
+      for (const id of integraleEpisodeCoverage(i)) covered.add(id)
+  })
+
   // ── 1. Intégrale(s) ───────────────────────────────────────────
   const integrales: { t: any; i: number }[] = integraleIndex !== undefined
     ? [{ t: data.value.torrents_integrale[integraleIndex], i: integraleIndex }]
@@ -589,15 +609,23 @@ function collectDownloadables(integraleIndex?: number): DlItem[] {
 
   for (const { t, i } of integrales) {
     if (!t) continue
-    if (!isAlreadyQueued(t) && !isDownloaded(`integrale-${i}`))
-      result.push({ key: `integrale-${i}`, torrent_url: t.torrent_url, magnet: t.magnet })
-    // Marquer les épisodes couverts par CETTE intégrale uniquement
+
+    // Épisodes apportés par CETTE intégrale
     const hash = t.infohash?.toLowerCase() ?? extractHash(t)
+    const coveredByThis = new Set<number>()
     if (hash)
       for (const season of data.value!.seasons)
         for (const ep of season.episodes)
           if (ep.torrents?.some((et: any) => (et.infohash ?? extractHash(et)) === hash))
-            covered.add(ep.id)
+            coveredByThis.add(ep.id)
+
+    const bringsSomething = coveredByThis.size === 0
+      || [...coveredByThis].some(id => !covered.has(id) && !organizedEpisodeIds.value.has(id))
+
+    if (bringsSomething && !isAlreadyQueued(t) && !isDownloaded(`integrale-${i}`))
+      result.push({ key: `integrale-${i}`, torrent_url: t.torrent_url, magnet: t.magnet })
+
+    for (const id of coveredByThis) covered.add(id)
   }
 
   // ── 2. Packs saison non couverts ──────────────────────────────
@@ -606,12 +634,13 @@ function collectDownloadables(integraleIndex?: number): DlItem[] {
     // Skiper si tous les épisodes disponibles sont déjà couverts par l'intégrale
     const hasUncovered = season.episodes.some((ep: any) => ep.available && !ep.organized && !covered.has(ep.id))
     if (!hasUncovered) continue
-    let addedAny = false
-    season.torrents.forEach((t: any, i: number) => {
-      const key = i === 0 ? `season-${season.id}` : `season-${season.id}-${i}`
-      if (!isAlreadyQueued(t) && !isDownloaded(key)) { result.push({ key, torrent_url: t.torrent_url, magnet: t.magnet }); addedAny = true }
-    })
-    if (addedAny) for (const ep of season.episodes) covered.add(ep.id)
+    const packKey = (i: number) => (i === 0 ? `season-${season.id}` : `season-${season.id}-${i}`)
+    const alreadyHandled = season.torrents.some((t: any, i: number) => isAlreadyQueued(t) || isDownloaded(packKey(i)))
+    if (!alreadyHandled) {
+      const t = season.torrents[0]
+      result.push({ key: packKey(0), torrent_url: t.torrent_url, magnet: t.magnet })
+    }
+    for (const ep of season.episodes) covered.add(ep.id)
   }
 
   // ── 3. Épisodes individuels non couverts ─────────────────────
@@ -625,17 +654,9 @@ function collectDownloadables(integraleIndex?: number): DlItem[] {
 }
 
 // Le bouton "Tout télécharger" s'affiche s'il y a quoi que ce soit à lancer
-const hasSomethingToDownload = computed(() => {
-  if (!data.value) return false
-  if (data.value.torrents_integrale.some((t: any, i: number) => !isAlreadyQueued(t) && !isDownloaded(`integrale-${i}`))) return true
-  for (const season of data.value.seasons) {
-    if (season.torrents?.length && season.organized_state !== 'complete' &&
-        season.torrents.some((t: any, i: number) => !isAlreadyQueued(t) && !isDownloaded(i === 0 ? `season-${season.id}` : `season-${season.id}-${i}`))) return true
-    for (const ep of season.episodes)
-      if (ep.torrent && ep.available && !ep.organized && !isAlreadyQueued(ep.torrent) && !isDownloaded(`ep-${ep.id}`)) return true
-  }
-  return false
-})
+// Dérivé de collectDownloadables pour que le bouton n'apparaisse jamais alors
+// que le garde-fou versions ne laisserait passer aucun torrent.
+const hasSomethingToDownload = computed(() => collectDownloadables().length > 0)
 
 async function downloadAll(integraleIndex?: number) {
   downloadingAll.value = true
@@ -654,12 +675,16 @@ async function downloadSeason(season: Season, packHash?: string) {
   const torrents: { key: string; torrent_url: string | null; magnet: string | null; file_index?: number | null; file_path?: string | null }[] = []
   const seasonAny = season as any
   if (seasonAny.torrents && seasonAny.torrents.length > 0 && seasonAny.organized_state !== 'complete') {
-    seasonAny.torrents.forEach((t: any, i: number) => {
-      const key = i === 0 ? `season-${season.id}` : `season-${season.id}-${i}`
-      if (!isAlreadyQueued(t) && !isDownloaded(key)) {
-        torrents.push({ key, torrent_url: t.torrent_url, magnet: t.magnet })
-      }
-    })
+    const packKey = (i: number) => (i === 0 ? `season-${season.id}` : `season-${season.id}-${i}`)
+    const alreadyHandled = seasonAny.torrents.some((t: any, i: number) => isAlreadyQueued(t) || isDownloaded(packKey(i)))
+    if (!alreadyHandled) {
+      const chosen = packHash
+        ? seasonAny.torrents.findIndex((t: any) => (t.infohash ?? extractHash(t)) === packHash)
+        : 0
+      const i = chosen >= 0 ? chosen : 0
+      const t = seasonAny.torrents[i]
+      torrents.push({ key: packKey(i), torrent_url: t.torrent_url, magnet: t.magnet })
+    }
   } else {
     for (const ep of seasonAny.episodes ?? []) {
       // Si un hash de pack est précisé (choix depuis dropdown), utiliser le torrent correspondant

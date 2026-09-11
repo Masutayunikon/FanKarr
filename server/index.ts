@@ -14,10 +14,11 @@ import utorrentDriver     from './torrent-clients/utorrent.js'
 import rtorrentDriver     from './torrent-clients/rtorrent.js'
 import realDebridDriver   from './torrent-clients/real-debrid.js'
 import delugeDriver       from './torrent-clients/deluge.js'
-import { autoOrganizeAll, scanMediaPath, syncFilenameChanges, migrateOrganizedEpisodeIds } from './organize.js'
+import { autoOrganizeAll, scanMediaPath, syncFilenameChanges, migrateOrganizedEpisodeIds, dedupeOrganizedEpisodes } from './organize.js'
 import { logger } from './logger.js'
 import { DATA_DIR, BASE_DIR } from './config.js'
 import { readAvailable, readInfohashMap, loadEnrichedSeriesData } from './lib/github-cache.js'
+import { ORGANIZED_PATH, readOrganized, writeOrganized } from './lib/organized-store.js'
 import { pushNotif } from './lib/notifs.js'
 import { readRequests, completeRequest } from './requests.js'
 import { checkNfoUpdates } from './lib/nfo.js'
@@ -91,6 +92,9 @@ const ADMIN_PREFIXES = [
     '/users', '/jellyfin', '/settings', '/torrent-clients',
     '/downloads', '/download', '/organize', '/import',
     '/system', '/nfo-updates', '/plex', '/rss-sync',
+    '/torrent', '/manual-import', '/organized', '/organized-summary',
+    '/rename-episode', '/rename-all', '/purge-nfo',
+    '/logs', '/browse', '/browse-files', '/update', '/scan', '/debug',
 ]
 app.use('/api', (req, res, next) => {
     if (ADMIN_PREFIXES.some(p => req.path === p || req.path.startsWith(p + '/'))) {
@@ -135,40 +139,37 @@ server.listen(PORT, async () => {
         logger.warn('api', `Impossible de charger available.json au démarrage : ${err instanceof Error ? err.message : err}`)
     }
 
-    const ORGANIZED_PATH = path.join(DATA_DIR, 'organized.json')
     const { mediaPath }  = readSettings()
 
     // Migration organized.json : si ancien format (valeurs string) → reset + rescan
     try {
-        if (fs.existsSync(ORGANIZED_PATH)) {
-            const raw = JSON.parse(fs.readFileSync(ORGANIZED_PATH, 'utf-8'))
-            const isOldFormat = Object.values(raw).some((entries: any) =>
-                Object.values(entries).some(v => typeof v === 'string')
-            )
-            if (isOldFormat) {
-                logger.info('api', 'Migration organized.json : ancien format détecté → réinitialisation')
-                fs.writeFileSync(ORGANIZED_PATH, '{}', 'utf-8')
-            }
+        const raw = readOrganized()
+        const isOldFormat = Object.values(raw).some((entries: any) =>
+            Object.values(entries).some(v => typeof v === 'string')
+        )
+        if (isOldFormat) {
+            logger.info('api', 'Migration organized.json : ancien format détecté → réinitialisation')
+            writeOrganized({})
         }
-    } catch {}
+    } catch (err) {
+        logger.error('api', `Migration organized.json ignorée : ${err instanceof Error ? err.message : err}`)
+    }
 
     // Migration organized.json : backfill dest_dir manquant sur les anciennes entrées
     try {
-        if (fs.existsSync(ORGANIZED_PATH)) {
-            const raw: Record<string, Record<string, any>> = JSON.parse(fs.readFileSync(ORGANIZED_PATH, 'utf-8'))
-            let patched = 0
-            for (const episodes of Object.values(raw)) {
-                for (const entry of Object.values(episodes)) {
-                    if (!entry.dest_dir && entry.dest_path) {
-                        entry.dest_dir = path.dirname(entry.dest_path)
-                        patched++
-                    }
+        const raw = readOrganized()
+        let patched = 0
+        for (const episodes of Object.values(raw)) {
+            for (const entry of Object.values(episodes)) {
+                if (!entry.dest_dir && entry.dest_path) {
+                    entry.dest_dir = path.dirname(entry.dest_path)
+                    patched++
                 }
             }
-            if (patched > 0) {
-                fs.writeFileSync(ORGANIZED_PATH, JSON.stringify(raw, null, 2))
-                logger.info('api', `Migration organized.json : ${patched} entrée(s) backfillées avec dest_dir`)
-            }
+        }
+        if (patched > 0) {
+            writeOrganized(raw)
+            logger.info('api', `Migration organized.json : ${patched} entrée(s) backfillées avec dest_dir`)
         }
     } catch (err) {
         logger.warn('api', `Migration dest_dir échouée : ${err instanceof Error ? err.message : err}`)
@@ -177,6 +178,7 @@ server.listen(PORT, async () => {
     loadEnrichedSeriesData()
         .then(async seriesData => {
             await migrateOrganizedEpisodeIds(ORGANIZED_PATH, seriesData)
+            dedupeOrganizedEpisodes(ORGANIZED_PATH)
             return scanMediaPath(mediaPath, ORGANIZED_PATH, seriesData)
         })
         .catch(err => logger.error('api', `Scan initial échoué : ${err instanceof Error ? err.message : err}`))
@@ -245,6 +247,9 @@ server.listen(PORT, async () => {
             const { updated }  = await migrateOrganizedEpisodeIds(organizedPath, seriesData)
             if (updated > 0)
                 logger.info('api', `Migration IDs auto — ${updated} ID(s) mis à jour`)
+            const { removed }  = dedupeOrganizedEpisodes(organizedPath)
+            if (removed > 0)
+                logger.info('api', `Dédoublonnage auto — ${removed} entrée(s) redondante(s) supprimée(s)`)
             const { renamed }  = await syncFilenameChanges(seriesData, organizedPath)
             if (renamed > 0)
                 logger.info('api', `Sync noms auto — ${renamed} fichier(s) renommé(s)`)

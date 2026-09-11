@@ -53,6 +53,18 @@ export function setSync(serieId: number, serieName: string, enabled: boolean): S
     return map
 }
 
+// Une série déjà surveillée garde sa date d'activation
+export function setSyncBulk(series: { id: number; name: string }[], enabled: boolean): { changed: number; map: SyncedMap } {
+    const map = loadSynced()
+    let changed = 0
+    for (const { id, name } of series) {
+        if (enabled && !map[id]) { map[id] = { serieId: id, serieName: name, addedAt: new Date().toISOString() }; changed++ }
+        if (!enabled && map[id]) { delete map[id]; changed++ }
+    }
+    if (changed > 0) saveSynced(map)
+    return { changed, map }
+}
+
 export function isSynced(serieId: number): boolean {
     return !!loadSynced()[serieId]
 }
