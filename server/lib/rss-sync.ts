@@ -109,10 +109,11 @@ function readOrganized(): Record<string, Record<string, any>> {
 function getOrganizedEpisodeIds(sd: any, organized: Record<string, Record<string, any>>): Set<number> {
     const ids = new Set<number>()
 
-    const manual = organized['manual'] ?? {}
+    // Sous n'importe quel hash : évite de retélécharger un épisode importé via un torrent disparu du scraper
+    const tracked = new Set(Object.values(organized).flatMap(eps => Object.keys(eps)))
     for (const season of sd.seasons ?? [])
         for (const ep of season.episodes ?? [])
-            if (manual[String(ep.id)]) ids.add(ep.id)
+            if (tracked.has(String(ep.id))) ids.add(ep.id)
 
     for (const t of sd.torrents ?? []) {
         const orgFiles = organized[t.infohash?.toLowerCase()] ?? {}
