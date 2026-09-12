@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.23.1](https://github.com/Masutayunikon/FanKarr/compare/v3.23.0...v3.23.1) (2026-09-12)
+
+
+### Bug Fixes
+
+* **scrap:** Correction fallback si scraper KO ([f64d2e1](https://github.com/Masutayunikon/FanKarr/commit/f64d2e19f7f9ab838cee6d33f5523fabb22b5cf7))
+* **scrap:** Correction fallback si scraper KO ([6348cc4](https://github.com/Masutayunikon/FanKarr/commit/6348cc40cb42dd23e3b3e77aa1e96f813b9d2687))
+
 ## [3.23.0](https://github.com/Masutayunikon/FanKarr/compare/v3.22.0...v3.23.0) (2026-09-11)
 
 
