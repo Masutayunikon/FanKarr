@@ -49,7 +49,7 @@ export function createInvite(opts: {
         expiresAt: opts.expiresInHours
             ? new Date(Date.now() + opts.expiresInHours * 3_600_000).toISOString()
             : null,
-        maxUses  : opts.maxUses ?? 1,
+        maxUses  : opts.maxUses === undefined ? 1 : opts.maxUses, // null = illimité
         uses     : 0,
         note     : opts.note,
     }

@@ -20,7 +20,7 @@ router.post('/invites', requireAdmin, (req, res) => {
         const invite = createInvite({
             createdBy    : req.user!.id,
             expiresInHours: expiresInHours ?? null,
-            maxUses       : maxUses        ?? 1,
+            maxUses,
             note,
         })
         res.json(invite)

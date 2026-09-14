@@ -431,9 +431,8 @@ async function submitInviteModal() {
   const m = inviteModal.value
   m.error = null; m.loading = true
 
-  const body: Record<string, any> = {}
+  const body: Record<string, any> = { maxUses: m.maxUses || null }
   if (m.note)           body.note           = m.note
-  if (m.maxUses)        body.maxUses        = m.maxUses
   if (m.expiresInHours) body.expiresInHours = m.expiresInHours
 
   const res  = await fetch('/api/invites', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) })

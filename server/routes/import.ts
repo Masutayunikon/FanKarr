@@ -40,7 +40,7 @@ function findOrphans(organized: Organized, catalog: any[]) {
 }
 
 // Dossiers série (enfants directs de la médiathèque) contenant les fichiers suivis d'une série
-function serieFolders(sd: any, organized: Organized, mediaPath: string): Map<string, number> {
+function serieFolders(sd: any, organized: Organized, mediaPath: string, exclude = new Set<string>()): Map<string, number> {
     const ids = new Set<string>()
     for (const season of sd.seasons ?? [])
         for (const ep of season.episodes ?? []) ids.add(String(ep.id))
@@ -52,10 +52,15 @@ function serieFolders(sd: any, organized: Organized, mediaPath: string): Map<str
             const parts = path.relative(mediaPath, entry.dest_path).split(path.sep)
             if (parts.length < 2 || parts[0] === '..' || path.isAbsolute(parts[0])) continue
             const folder = path.join(mediaPath, parts[0])
+            if (exclude.has(folder)) continue
             folders.set(folder, (folders.get(folder) ?? 0) + 1)
         }
     }
     return folders
+}
+
+function otherSerieFolders(catalog: any[], serieId: number, mediaPath: string): Set<string> {
+    return new Set(catalog.filter(sd => sd.id !== serieId).map(sd => path.join(mediaPath, serieFolderName(sd.title ?? sd.show_title ?? ''))))
 }
 
 function listFiles(dir: string): string[] {
@@ -539,10 +544,11 @@ router.get('/organized-folders', requireAdmin, async (_req, res) => {
     catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return }
     try {
         const result: { serie_id: number; serie_title: string; expected: string; current: string[] }[] = []
-        for (const sd of await loadCatalog()) {
+        const catalog = await loadCatalog()
+        for (const sd of catalog) {
             const title    = sd.title ?? sd.show_title ?? ''
             const expected = path.join(mediaPath, serieFolderName(title))
-            const stale    = [...serieFolders(sd, organized, mediaPath).keys()].filter(f => f !== expected && fs.existsSync(f))
+            const stale    = [...serieFolders(sd, organized, mediaPath, otherSerieFolders(catalog, sd.id, mediaPath)).keys()].filter(f => f !== expected && fs.existsSync(f))
             if (stale.length > 0) result.push({ serie_id: sd.id, serie_title: title, expected, current: stale })
         }
         res.json(result)
@@ -561,7 +567,8 @@ router.get('/organized/:serieId/folder', requireAuth, async (req, res) => {
     try { organized = readOrganized() }
     catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return }
     const expected = path.join(mediaPath, serieFolderName(sd.title ?? sd.show_title ?? ''))
-    const current  = [...serieFolders(sd, organized, mediaPath)].map(([folder, entries]) => ({ path: folder, entries, exists: fs.existsSync(folder) }))
+    const others   = otherSerieFolders(await loadCatalog().catch(() => []), serieId, mediaPath)
+    const current  = [...serieFolders(sd, organized, mediaPath, others)].map(([folder, entries]) => ({ path: folder, entries, exists: fs.existsSync(folder) }))
     res.json({ expected, current, needs_rename: current.some(f => f.exists && f.path !== expected) })
 })
 
@@ -574,8 +581,11 @@ router.post('/organized/:serieId/folder', requireAdmin, async (req, res) => {
     let organized: Organized
     try { organized = readOrganized() }
     catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return }
+    let catalog: any[]
+    try { catalog = await loadCatalog() }
+    catch (err) { res.status(503).json({ error: `Catalogue indisponible : ${err instanceof Error ? err.message : err}` }); return }
     const expected = path.join(mediaPath, serieFolderName(sd.title ?? sd.show_title ?? ''))
-    const sources  = [...serieFolders(sd, organized, mediaPath).keys()].filter(f => f !== expected && fs.existsSync(f))
+    const sources  = [...serieFolders(sd, organized, mediaPath, otherSerieFolders(catalog, serieId, mediaPath)).keys()].filter(f => f !== expected && fs.existsSync(f))
     if (sources.length === 0) { res.json({ ok: true, moved: 0, updated: 0 }); return }
 
     // Tout le contenu (vidéos, NFO, images…) est fusionné dans le dossier attendu, sans jamais écraser
