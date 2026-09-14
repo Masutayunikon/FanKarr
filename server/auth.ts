@@ -8,9 +8,11 @@ import { DATA_DIR }   from './config.js'
 import { logger }     from './logger.js'
 import {
     findByUsername, findById, findByApiToken,
-    createUser, changePassword, regenerateApiToken, safeUser, hasUsers,
+    createUser, changePassword, regenerateApiToken, safeUser, hasUsers, markTourSeen,
     type User,
 } from './users.js'
+import { readSettings } from './settings.js'
+import { startOnboarding } from './onboarding.js'
 
 // ── Typage Express étendu ─────────────────────────────────────
 declare global {
@@ -50,7 +52,11 @@ export function authStatus(req: Request, res: Response): void {
         const payload = jwt.verify(token, JWT_SECRET) as any
         const user    = findById(payload.id)
         if (!user) { res.json({ setup, loggedIn: false }); return }
-        res.json({ setup, loggedIn: true, role: user.role, username: user.username, userId: user.id })
+        res.json({
+            setup, loggedIn: true, role: user.role, username: user.username, userId: user.id,
+            onboardingDone: !!readSettings().onboardingCompletedAt,
+            tourSeen      : !!user.tourSeenAt,
+        })
     } catch {
         res.json({ setup, loggedIn: false })
     }
@@ -67,9 +73,13 @@ export function authSetup(req: Request, res: Response): void {
     if (!username || !password) {
         res.status(400).json({ error: 'Username et password requis' }); return
     }
+    if (password.length < 6) {
+        res.status(400).json({ error: 'Le mot de passe doit faire au moins 6 caractères' }); return
+    }
 
     try {
         const user = createUser(username, password, 'admin')
+        startOnboarding()
         logger.info('auth', `Premier compte admin créé pour "${username}"`)
         setCookieAndRespond(res, user)
     } catch (err) {
@@ -138,6 +148,15 @@ export function authRegenerateToken(req: Request, res: Response): void {
     try {
         const token = regenerateApiToken(req.user!.id)
         res.json({ apiToken: token })
+    } catch (err) {
+        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur' })
+    }
+}
+
+// POST /api/auth/tour-seen
+export function authTourSeen(req: Request, res: Response): void {
+    try {
+        res.json({ tourSeenAt: markTourSeen(req.user!.id) })
     } catch (err) {
         res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur' })
     }

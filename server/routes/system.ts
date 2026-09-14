@@ -5,7 +5,7 @@ import { requireAuth } from '../auth.js'
 import { logger, readLogs, clearLogs, logsFileSize } from '../logger.js'
 import { DATA_DIR, BASE_DIR } from '../config.js'
 import { readSettings } from '../settings.js'
-import { systemInfo } from '../system.js'
+import { systemInfo, checkPaths } from '../system.js'
 import { scanMediaPath, syncFilenameChanges, migrateOrganizedEpisodeIds, dedupeOrganizedEpisodes } from '../organize.js'
 import { readAvailable, cacheClear } from '../lib/github-cache.js'
 import { loadCatalog } from '../lib/serie-helpers.js'
@@ -34,6 +34,14 @@ router.get('/system/info', systemInfo)
 
 router.get('/system', requireAuth, (_req, res) => {
     res.json({ isDocker: fs.existsSync('/.dockerenv') })
+})
+
+router.post('/system/check-paths', requireAuth, (req, res) => {
+    const { mediaPath, completePath } = req.body ?? {}
+    if (typeof mediaPath !== 'string' || (completePath !== undefined && typeof completePath !== 'string')) {
+        res.status(400).json({ error: 'mediaPath requis' }); return
+    }
+    res.json(checkPaths(mediaPath, completePath))
 })
 
 router.get('/version', (_req, res) => {

@@ -23,6 +23,12 @@ const router = createRouter({
             component: () => import('@/views/InviteView.vue'),
             meta: { public: true },
         },
+        {
+            path: '/setup',
+            name: 'setup',
+            component: () => import('@/views/SetupView.vue'),
+            meta: { adminOnly: true },
+        },
 
         // ─── App principale avec layout sidebar ──────────────────
         {
@@ -127,6 +133,7 @@ const router = createRouter({
 
     scrollBehavior(to, from, savedPosition) {
         if (savedPosition) return savedPosition
+        if (to.name === 'setup') return { top: 0 }
         // Retour depuis le détail vers la liste — ne pas scroller en haut
         if (to.name === 'series' && from.name === 'serie-detail') return false
         return { el: '#main-scroll', top: 0 }
@@ -147,6 +154,10 @@ router.beforeEach(async (to) => {
 
     // Redirige les non-admins hors des pages admin
     if (to.meta.adminOnly && !auth.isAdmin) return '/series'
+
+    // Premier lancement : l'assistant de configuration est obligatoire
+    if (auth.loggedIn && auth.isAdmin && !auth.onboardingDone
+        && !to.meta.public && to.name !== 'setup') return '/setup'
 })
 
 export default router

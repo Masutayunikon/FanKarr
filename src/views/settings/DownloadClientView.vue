@@ -118,117 +118,16 @@
         <div class="bg-card border border-border rounded-xl w-full max-w-md p-6 flex flex-col gap-4">
 
           <div class="flex items-center justify-between">
-            <h3 class="text-sm font-semibold text-primary">{{ modal.uuid ? 'Modifier un client' : 'Ajouter un client' }}</h3>
+            <h3 class="text-sm font-semibold text-primary">{{ modal.client ? 'Modifier un client' : 'Ajouter un client' }}</h3>
             <button @click="closeModal" class="text-muted hover:text-primary transition-colors">✕</button>
           </div>
 
-          <div class="flex flex-col gap-3">
-            <div>
-              <label class="settings-label">Nom</label>
-              <input v-model="modal.name" placeholder="Mon client torrent" class="settings-input" />
-            </div>
-            <div>
-              <label class="settings-label">Type</label>
-              <select v-model="modal.type" @change="onTypeChange" class="settings-input">
-                <option value="">Choisir un type...</option>
-                <option v-for="def in availableClients" :key="def.id" :value="def.id">{{ def.label }}</option>
-              </select>
-            </div>
-
-            <!-- Champs principaux -->
-            <template v-if="currentDefinition">
-              <div v-for="field in basicFields" :key="field.key">
-                <SettingsToggle
-                    v-if="field.type === 'boolean'"
-                    :model-value="toBool(modal.config[field.key])"
-                    :label="field.label"
-                    :description="fieldTooltip(field.key)"
-                    @update:model-value="modal.config[field.key] = $event"
-                />
-                <template v-else>
-                  <label class="settings-label">
-                    {{ field.label }}
-                    <span v-if="field.required" class="text-red-400 ml-0.5">*</span>
-                  </label>
-                  <input
-                      v-model="modal.config[field.key]"
-                      :type="field.type === 'password' ? 'password' : 'text'"
-                      :placeholder="field.placeholder ?? ''"
-                      class="settings-input"
-                  />
-                </template>
-              </div>
-
-              <!-- Paramètres avancés -->
-              <div v-if="advancedFields.length > 0">
-                <button
-                    type="button"
-                    @click="advancedOpen = !advancedOpen"
-                    class="flex items-center gap-1.5 text-xs text-muted hover:text-primary transition-colors w-full py-1"
-                >
-                  <ChevronDown
-                      :size="13"
-                      class="transition-transform duration-200 shrink-0"
-                      :class="advancedOpen ? 'rotate-180' : ''"
-                  />
-                  Paramètres avancés
-                </button>
-
-                <div v-if="advancedOpen" class="flex flex-col gap-3 mt-2 pl-3 border-l border-border">
-                  <div v-for="field in advancedFields" :key="field.key">
-                    <SettingsToggle
-                        v-if="field.type === 'boolean'"
-                        :model-value="toBool(modal.config[field.key])"
-                        :label="field.label"
-                        :description="fieldTooltip(field.key)"
-                        @update:model-value="modal.config[field.key] = $event"
-                    />
-                    <template v-else>
-                      <label class="settings-label flex items-center gap-1.5">
-                        {{ field.label }}
-                        <span
-                            class="inline-flex items-center justify-center w-4 h-4 rounded-full border border-border text-[10px] text-muted cursor-default leading-none shrink-0 relative group"
-                            tabindex="-1"
-                        >
-                          i
-                          <span class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-56 text-[11px] text-secondary bg-card border border-border rounded-lg px-2.5 py-1.5 shadow-lg pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-10 leading-relaxed">
-                            {{ fieldTooltip(field.key) }}
-                          </span>
-                        </span>
-                      </label>
-                      <input
-                          v-model="modal.config[field.key]"
-                          :type="field.type === 'password' ? 'password' : 'text'"
-                          :placeholder="field.placeholder ?? ''"
-                          class="settings-input"
-                      />
-                    </template>
-                  </div>
-                </div>
-              </div>
-            </template>
-          </div>
-
-          <p v-if="!modal.tested && modal.type" class="text-xs text-muted">
-            Testez la connexion avant d'enregistrer.
-          </p>
-
-          <div class="flex gap-2 pt-1">
-            <button
-                @click="saveClient"
-                :disabled="modal.saving || !modal.tested"
-                class="btn-primary"
-            >
-              {{ modal.saving ? '...' : 'Enregistrer' }}
-            </button>
-            <button
-                @click="testNewClient"
-                :disabled="modal.testing || !modal.type"
-                class="btn-secondary"
-            >
-              {{ modal.testing ? '...' : modal.tested ? 'Testé ✓' : 'Tester' }}
-            </button>
-          </div>
+          <TorrentClientForm
+              :key="modal.key"
+              :client="modal.client"
+              :definitions="availableClients"
+              @saved="onSaved"
+          />
 
         </div>
       </div>
@@ -238,15 +137,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
-import { ChevronDown } from 'lucide-vue-next'
-import SettingsToggle from '@/components/settings/SettingsToggle.vue'
+import { ref, onMounted } from 'vue'
+import TorrentClientForm from '@/components/settings/TorrentClientForm.vue'
 import { useToast } from '@/composables/useToast'
+import type { TorrentClientDefinition, SavedTorrentClient } from '@/types/torrent-client'
 
 const { add: toast } = useToast()
 
-const clients          = ref<any[]>([])
-const availableClients = ref<any[]>([])
+const clients          = ref<SavedTorrentClient[]>([])
+const availableClients = ref<TorrentClientDefinition[]>([])
 const healthStatus     = ref<Record<string, boolean | null>>({})
 
 const clientMatrix = [
@@ -276,48 +175,7 @@ const clientMatrix = [
   }
 ]
 
-const modal = ref({
-  open   : false,
-  uuid   : null as string | null,
-  name   : '',
-  type   : '',
-  config : {} as Record<string, string | number | boolean>,
-  testing: false,
-  saving : false,
-  tested : false,
-})
-
-const ADVANCED_KEYS = ['savePath', 'remotePath', 'localPath', 'ignoreCertificateErrors']
-
-const FIELD_TOOLTIPS: Record<string, string> = {
-  savePath   : 'Optionnel. Permet de placer les téléchargements dans un sous-dossier spécifique à l\'intérieur du dossier déjà configuré dans la gestion des médias.',
-  remotePath : 'Si le client tourne sur une autre machine, indiquez ici le chemin qu\'il utilise (ex: /downloads). À associer avec le chemin local ci-dessous.',
-  localPath  : 'Chemin équivalent au chemin distant, mais vu par FanKarr sur sa machine (ex: /mnt/nas/downloads). Les deux champs fonctionnent en binôme pour faire la correspondance.',
-  ignoreCertificateErrors: 'Accepte les certificats auto-signés ou invalides en HTTPS. À n\'utiliser que sur un réseau de confiance.',
-}
-
-function fieldTooltip(key: string): string {
-  return FIELD_TOOLTIPS[key] ?? ''
-}
-
-// Tolère la forme string "true" en plus du booléen natif
-function toBool(v: unknown): boolean {
-  return v === true || v === 'true'
-}
-
-const advancedOpen = ref(false)
-
-const currentDefinition = computed(() =>
-    availableClients.value.find(d => d.id === modal.value.type) ?? null
-)
-
-const basicFields = computed(() =>
-    currentDefinition.value?.fields.filter((f: any) => !ADVANCED_KEYS.includes(f.key)) ?? []
-)
-
-const advancedFields = computed(() =>
-    currentDefinition.value?.fields.filter((f: any) => ADVANCED_KEYS.includes(f.key)) ?? []
-)
+const modal = ref({ open: false, key: 0, client: null as SavedTorrentClient | null })
 
 function clientLabel(type: string) {
   return availableClients.value.find(d => d.id === type)?.label ?? type
@@ -362,110 +220,23 @@ async function deleteClient(uuid: string) {
 }
 
 function openAddModal() {
-  modal.value = { open: true, uuid: null, name: '', type: '', config: {}, testing: false, saving: false, tested: false }
-  advancedOpen.value = false
+  modal.value = { open: true, key: modal.value.key + 1, client: null }
 }
 
-function editClient(client: any) {
-  modal.value = {
-    open   : true,
-    uuid   : client.uuid,
-    name   : client.name,
-    type   : client.type,
-    config : JSON.parse(JSON.stringify(client.config)),
-    testing: false,
-    saving : false,
-    tested : true,
-  }
+function editClient(client: SavedTorrentClient) {
+  modal.value = { open: true, key: modal.value.key + 1, client }
 }
 
 function closeModal() { modal.value.open = false }
 
-function onTypeChange() {
-  modal.value.config = {}
-  modal.value.tested = false
-  advancedOpen.value = false
-  const def = currentDefinition.value
-  if (def) {
-    for (const field of def.fields) {
-      if (field.default === undefined) continue
-      modal.value.config[field.key] = field.type === 'boolean' ? field.default : String(field.default)
-    }
+function onSaved(client: SavedTorrentClient, isEdit: boolean) {
+  if (isEdit) {
+    const index = clients.value.findIndex(c => c.uuid === client.uuid)
+    if (index !== -1) clients.value[index] = client
+  } else {
+    clients.value.push(client)
   }
-}
-
-// Reset tested dès que l'utilisateur modifie un champ (nom ou config)
-// sauf si c'est un mot de passe masqué non touché
-watch(() => modal.value.name, () => {
-  if (modal.value.uuid) modal.value.tested = false
-})
-
-watch(() => modal.value.config, (newConfig) => {
-  if (!modal.value.uuid) return
-  const driver = currentDefinition.value
-  if (!driver) return
-  // Si au moins un champ non-password a changé → reset tested
-  // Pour les passwords, on reset seulement si la valeur n'est plus le masque
-  for (const [key, val] of Object.entries(newConfig)) {
-    const field = driver.fields.find((f: any) => f.key === key)
-    if (!field) continue
-    if (field.type === 'password' && val === '••••••••') continue
-    modal.value.tested = false
-    return
-  }
-}, { deep: true })
-
-async function testNewClient() {
-  modal.value.testing = true
-  modal.value.tested  = false
-  try {
-    const res = await fetch('/api/torrent-clients/test-config', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-      body: JSON.stringify({ type: modal.value.type, config: modal.value.config, uuid: modal.value.uuid }),
-    })
-    const { ok, message } = await res.json()
-    modal.value.tested = ok
-    toast(ok ? 'Connexion réussie ✓' : (message ?? 'Connexion échouée'), ok ? 'success' : 'error')
-  } catch {
-    toast('Impossible de contacter le serveur', 'error')
-  } finally {
-    modal.value.testing = false
-  }
-}
-
-async function saveClient() {
-  if (!modal.value.tested) return
-  modal.value.saving = true
-  try {
-    const isEdit = !!modal.value.uuid
-    const method = isEdit ? 'PUT' : 'POST'
-    const url = isEdit ? `/api/torrent-clients/${modal.value.uuid}` : '/api/torrent-clients'
-
-    const res = await fetch(url, {
-      method, headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-      body: JSON.stringify({
-        name  : modal.value.name || clientLabel(modal.value.type),
-        type  : modal.value.type,
-        config: modal.value.config,
-      }),
-    })
-    if (res.ok) {
-      const client = await res.json()
-      if (isEdit) {
-        const index = clients.value.findIndex(c => c.uuid === client.uuid)
-        if (index !== -1) clients.value[index] = client
-      } else {
-        clients.value.push(client)
-      }
-      refreshHealth(client.uuid)
-      closeModal()
-      toast(isEdit ? 'Client modifié ✓' : 'Client enregistré ✓', 'success')
-    } else {
-      const { error } = await res.json()
-      toast(error ?? "Erreur lors de l'enregistrement", 'error')
-    }
-  } finally {
-    modal.value.saving = false
-  }
+  refreshHealth(client.uuid)
+  closeModal()
 }
 </script>

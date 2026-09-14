@@ -31,20 +31,37 @@
         </RouterView>
       </main>
     </div>
+
+    <TourOverlay />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { Menu } from 'lucide-vue-next'
 import SidebarNav from '@/components/nav/SidebarNav.vue'
+import TourOverlay from '@/components/tour/TourOverlay.vue'
 import { useDownloadsStore } from '@/stores/downloads'
 import { useAuthStore }      from '@/stores/auth'
+import { useTourStore }      from '@/stores/tour'
 import type { NavItem, NavChild } from '@/types/nav'
 
 const mobileOpen = ref(false)
 const dlStore    = useDownloadsStore()
 const auth       = useAuthStore()
+const tour       = useTourStore()
+
+// Première visite : une seule fois par session, après l'assistant pour un admin
+let tourAutoStarted = false
+watch(() => [auth.loggedIn, auth.tourSeen, auth.onboardingDone], () => {
+  if (tourAutoStarted || tour.active) return
+  if (auth.loggedIn && !auth.tourSeen && (!auth.isAdmin || auth.onboardingDone)) {
+    tourAutoStarted = true
+    tour.start()
+  }
+}, { immediate: true })
+
+watch(() => tour.active, (active) => { if (active) mobileOpen.value = false })
 
 const navItems = computed<NavItem[]>(() => {
   const items: NavItem[] = [
@@ -52,11 +69,13 @@ const navItems = computed<NavItem[]>(() => {
       label: 'Dashboard',
       icon : 'LayoutDashboard',
       to   : '/dashboard',
+      tour : 'nav-dashboard',
     },
     {
       label   : 'Médiathèque',
       icon    : 'Tv',
       to      : '/series',
+      tour    : 'nav-series',
       children: [
         { label: 'Séries', to: '/series' },
       ],
@@ -65,6 +84,7 @@ const navItems = computed<NavItem[]>(() => {
       label: 'Demandes',
       icon : 'ClipboardList',
       to   : '/requests',
+      tour : 'nav-requests',
     },
   ]
 
@@ -73,6 +93,7 @@ const navItems = computed<NavItem[]>(() => {
       label: 'Activité',
       icon : 'Activity',
       to   : '/activity',
+      tour : 'nav-activity',
       badge: dlStore.activeCount > 0 ? dlStore.activeCount : undefined,
     })
   }
@@ -99,6 +120,7 @@ const navItems = computed<NavItem[]>(() => {
     label   : 'Paramètres',
     icon    : 'Settings',
     to      : '/settings',
+    tour    : 'nav-settings',
     children: settingsChildren,
   })
 

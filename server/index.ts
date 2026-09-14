@@ -3,8 +3,9 @@ import cookieParser from 'cookie-parser'
 import http from 'http'
 import fs from 'fs'
 import path from 'path'
-import { authStatus, authSetup, authLogin, authLogout, authMe, authChangePassword, authRegenerateToken, requireAuth, requireAdmin } from './auth.js'
+import { authStatus, authSetup, authLogin, authLogout, authMe, authChangePassword, authRegenerateToken, authTourSeen, requireAuth, requireAdmin } from './auth.js'
 import { migrateIfNeeded } from './users.js'
+import { migrateOnboarding } from './onboarding.js'
 import { readSettings } from './settings.js'
 import { registerDriver, dispatchList, dispatchRemove } from './torrent-clients/index.js'
 import qbittorrentDriver  from './torrent-clients/qbittorrent.js'
@@ -71,6 +72,7 @@ if (fs.existsSync(PUBLIC_PATH)) {
 
 // ── Migration mono-user → multi-user ──────────────────────────
 migrateIfNeeded()
+migrateOnboarding()
 
 // ── Auth ───────────────────────────────────────────────────────
 app.get ('/api/auth/status',          authStatus)
@@ -80,6 +82,7 @@ app.post('/api/auth/logout',          authLogout)
 app.get ('/api/auth/me',               requireAuth,  authMe)
 app.post('/api/auth/change-password',  requireAuth,  authChangePassword)
 app.post('/api/auth/regenerate-token', requireAuth,  authRegenerateToken)
+app.post('/api/auth/tour-seen',        requireAuth,  authTourSeen)
 
 // ── API publique v1 (auth par token) ──────────────────────────
 app.use('/api', publicApiRouter)

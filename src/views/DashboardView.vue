@@ -2,7 +2,7 @@
   <div class="px-8 py-8 max-w-4xl">
 
     <!-- Stats -->
-    <div class="grid gap-3 mb-6" :class="auth.isAdmin ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-2'">
+    <div data-tour="dashboard-stats" class="grid gap-3 mb-6" :class="auth.isAdmin ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-2'">
       <div class="settings-card flex flex-col gap-1">
         <span class="text-xs text-muted">Catalogue</span>
         <span class="text-2xl font-semibold text-primary">{{ stats.catalogue }}</span>
@@ -81,7 +81,7 @@
     </div>
 
     <!-- Widget demandes -->
-    <div class="settings-card flex flex-col gap-3 mb-6">
+    <div data-tour="dashboard-requests" class="settings-card flex flex-col gap-3 mb-6">
       <div class="flex items-center justify-between">
         <h2 class="text-sm font-medium text-secondary">
           {{ auth.isAdmin ? 'Demandes en attente' : 'Mes demandes' }}

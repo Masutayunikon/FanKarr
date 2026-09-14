@@ -18,7 +18,7 @@
     />
 
     <!-- Grille -->
-    <div class="px-4 md:px-6 py-6">
+    <div data-tour="series-grid" class="px-4 md:px-6 py-6">
 
       <div v-if="store.loadingSeries" class="flex flex-col items-center justify-center gap-3 h-64 text-muted">
         <div class="w-6 h-6 border border-border border-t-accent rounded-full animate-spin" />
@@ -37,8 +37,9 @@
       <div v-else class="grid gap-4" :style="{ gridTemplateColumns: `repeat(auto-fill, minmax(${posterSizes[posterSize]}, 1fr))` }">
         <component
             :is="selecting ? 'div' : RouterLink"
-            v-for="serie in filtered"
+            v-for="(serie, i) in filtered"
             :key="serie.id"
+            :data-tour="i === 0 ? 'series-poster' : undefined"
             v-bind="selecting ? {} : { to: `/series/${serie.id}` }"
             class="group flex flex-col gap-1.5 transition-transform duration-200 hover:-translate-y-0.5"
             :class="{

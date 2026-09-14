@@ -1,7 +1,7 @@
 <template>
   <div>
     <!-- Toolbar -->
-    <div class="shrink-0 px-4 md:px-6 py-3 border-b border-border flex flex-col gap-2">
+    <div data-tour="series-toolbar" class="shrink-0 px-4 md:px-6 py-3 border-b border-border flex flex-col gap-2">
 
       <!-- Ligne 1 : recherche + filtres -->
       <div class="flex items-center gap-2">
@@ -79,6 +79,7 @@
         <!-- Sélection multiple -->
         <button
             v-if="selectable"
+            data-tour="series-select"
             @click="emit('update:selecting', !selecting)"
             class="btn-secondary flex items-center gap-1.5 py-1.5 px-2.5 shrink-0"
             :class="selecting ? 'border-accent text-accent' : ''"
@@ -122,7 +123,7 @@
     </div>
 
     <!-- Légende barres -->
-    <div class="shrink-0 px-4 md:px-6 py-2 flex items-center gap-4 border-b border-border">
+    <div data-tour="series-legend" class="shrink-0 px-4 md:px-6 py-2 flex items-center gap-4 border-b border-border">
       <div v-for="l in legend" :key="l.label" class="flex items-center gap-1.5">
         <span class="w-3 h-1.5 rounded-full" :style="{ background: l.color }" />
         <span class="text-[11px] text-muted">{{ l.label }}</span>

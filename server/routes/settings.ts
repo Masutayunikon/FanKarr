@@ -2,8 +2,21 @@ import { Router } from 'express'
 import { requireAuth } from '../auth.js'
 import { readSettings, writeSettings } from '../settings.js'
 import { logger } from '../logger.js'
+import { readOnboarding, advanceOnboarding, isOnboardingStep } from '../onboarding.js'
 
 const router = Router()
+
+router.get('/settings/onboarding', requireAuth, (_req, res) => {
+    res.json(readOnboarding())
+})
+
+router.post('/settings/onboarding', requireAuth, (req, res) => {
+    const { step, complete } = req.body ?? {}
+    if (step !== undefined && !isOnboardingStep(step)) {
+        res.status(400).json({ error: 'Étape inconnue' }); return
+    }
+    res.json(advanceOnboarding(step, complete === true))
+})
 
 router.get('/settings', requireAuth, (_req, res) => {
     res.json(readSettings())

@@ -19,6 +19,7 @@ export interface User {
     role        : UserRole
     apiToken    : string
     createdAt   : string
+    tourSeenAt? : string | null
 }
 
 const USERS_PATH  = path.join(DATA_DIR, 'users.json')
@@ -92,6 +93,7 @@ export function createUser(username: string, password: string, role: UserRole = 
         role,
         apiToken    : crypto.randomBytes(32).toString('hex'),
         createdAt   : new Date().toISOString(),
+        tourSeenAt  : null,
     }
     writeUsers([...users, user])
     logger.info('users', `Utilisateur "${username}" créé (rôle: ${role})`)
@@ -140,6 +142,24 @@ export function changePassword(id: string, currentPassword: string, newPassword:
     user.passwordHash = bcrypt.hashSync(newPassword, SALT_ROUNDS)
     writeUsers(users)
     logger.info('users', `Mot de passe changé pour "${user.username}"`)
+}
+
+export function markTourSeen(id: string): string {
+    const users = readUsers()
+    const user  = users.find(u => u.id === id)
+    if (!user) throw new Error('Utilisateur introuvable')
+    user.tourSeenAt = user.tourSeenAt ?? new Date().toISOString()
+    writeUsers(users)
+    return user.tourSeenAt
+}
+
+export function markAllToursSeen(at: string): number {
+    const users   = readUsers()
+    const pending = users.filter(u => !u.tourSeenAt)
+    if (pending.length === 0) return 0
+    for (const u of pending) u.tourSeenAt = at
+    writeUsers(users)
+    return pending.length
 }
 
 export function regenerateApiToken(id: string): string {

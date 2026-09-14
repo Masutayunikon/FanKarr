@@ -11,34 +11,7 @@
         </p>
       </div>
 
-      <div class="settings-card flex flex-col gap-4">
-        <div>
-          <label class="settings-label mb-1.5">URL du serveur</label>
-          <input v-model="jellyfinUrl" type="url" class="settings-input" placeholder="http://jellyfin:8096" />
-          <p class="text-xs text-muted mt-1">URL accessible depuis FanKarr (réseau local ou Docker)</p>
-        </div>
-        <div>
-          <label class="settings-label mb-1.5">Token admin Jellyfin</label>
-          <input v-model="jellyfinAdminToken" type="password" class="settings-input"
-            :placeholder="hasToken ? '••••••••••••••••••••• (configuré)' : 'Tableau de bord → Clés API'" />
-          <p class="text-xs text-muted mt-1">
-            Dans Jellyfin : Tableau de bord → Clés API → Créer une clé
-          </p>
-        </div>
-
-        <div class="flex items-center gap-3 flex-wrap">
-          <button @click="save" :disabled="saving" class="btn-primary">
-            {{ saving ? 'Enregistrement…' : 'Enregistrer' }}
-          </button>
-          <button @click="testConnection" :disabled="testing" class="btn-secondary">
-            {{ testing ? 'Test…' : 'Tester la connexion' }}
-          </button>
-          <span v-if="testResult" class="text-xs" :class="testResult.ok ? 'text-green-400' : 'text-red-400'">
-            {{ testResult.ok ? `Connecté — Jellyfin ${testResult.version}` : testResult.error }}
-          </span>
-          <span v-if="saved" class="text-xs text-green-400">Enregistré.</span>
-        </div>
-      </div>
+      <JellyfinConnectionForm @change="hasToken = $event.hasToken" />
     </section>
 
     <!-- ── Synchronisation des utilisateurs ──────────────────── -->
@@ -102,15 +75,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted }  from 'vue'
+import { ref } from 'vue'
+import JellyfinConnectionForm from '@/components/settings/JellyfinConnectionForm.vue'
 
-const jellyfinUrl        = ref('')
-const jellyfinAdminToken = ref('')
 const hasToken           = ref(false)
-const saving             = ref(false)
-const saved              = ref(false)
-const testing            = ref(false)
-const testResult         = ref<{ ok: boolean; version?: string; error?: string } | null>(null)
 const syncing            = ref(false)
 const syncResult         = ref<{ created: number; skipped: number; users: string[] } | null>(null)
 const syncError          = ref<string | null>(null)
@@ -127,44 +95,6 @@ function methodClass(m: string) {
   return { GET: 'text-green-400', POST: 'text-blue-400', DELETE: 'text-red-400' }[m] ?? 'text-muted'
 }
 
-async function loadSettings() {
-  const res = await fetch('/api/jellyfin/settings', { credentials: 'include' })
-  if (res.ok) {
-    const d          = await res.json()
-    jellyfinUrl.value = d.jellyfinUrl ?? ''
-    hasToken.value    = d.hasToken ?? false
-  }
-}
-
-onMounted(() => { loadSettings() })
-
-async function save() {
-  saving.value = true
-  saved.value  = false
-  const body: Record<string, string> = { jellyfinUrl: jellyfinUrl.value }
-  if (jellyfinAdminToken.value) body.jellyfinAdminToken = jellyfinAdminToken.value
-  const res = await fetch('/api/jellyfin/settings', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-    body: JSON.stringify(body),
-  })
-  if (res.ok) {
-    const d = await res.json()
-    hasToken.value = d.hasToken
-    jellyfinAdminToken.value = ''  // vider le champ après sauvegarde
-    saved.value = true
-    setTimeout(() => { saved.value = false }, 2000)
-  }
-  saving.value = false
-}
-
-async function testConnection() {
-  testing.value    = true
-  testResult.value = null
-  const res = await fetch('/api/jellyfin/test', { method: 'POST', credentials: 'include' })
-  testResult.value = await res.json()
-  testing.value    = false
-}
-
 async function syncUsers() {
   syncing.value    = true
   syncError.value  = null
@@ -175,7 +105,4 @@ async function syncUsers() {
   else syncError.value = data.error ?? 'Erreur lors de la synchronisation'
   syncing.value = false
 }
-
-
-
 </script>

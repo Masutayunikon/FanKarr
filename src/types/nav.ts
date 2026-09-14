@@ -9,5 +9,6 @@ export interface NavItem {
     to?       : string
     children? : NavChild[]
     separator?: true
-    badge?    : string | number  // ← badge optionnel
+    badge?    : string | number
+    tour?     : string          
 }

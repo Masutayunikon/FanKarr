@@ -3,7 +3,7 @@
     <div class="px-8 py-8 max-w-4xl">
 
       <!-- Header -->
-      <div class="flex items-center justify-between mb-6">
+      <div data-tour="activity-header" class="flex items-center justify-between mb-6">
         <div class="flex items-center gap-3">
           <h1 class="text-lg font-semibold text-primary">Activité</h1>
           <div class="flex items-center gap-1.5">

@@ -57,7 +57,7 @@
     </section>
 
     <!-- ── Token API personnel ──────────────────────────────── -->
-    <section class="flex flex-col gap-4">
+    <section data-tour="profile-token" class="flex flex-col gap-4">
       <div>
         <h2 class="text-base font-semibold text-primary">Token API personnel</h2>
         <p class="text-sm text-muted mt-1">
