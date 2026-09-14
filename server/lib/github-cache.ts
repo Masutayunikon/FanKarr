@@ -8,7 +8,7 @@ const GITHUB_BASE =
 
 const CACHE_TTL_MS = 1 * 60 * 60 * 1000
 
-interface CacheEntry<T> { data: T; expiresAt: number }
+interface CacheEntry<T> { data: T; expiresAt: number; fetchedAt: number }
 const _cache = new Map<string, CacheEntry<any>>()
 
 export function cacheGet<T>(key: string): T | null {
@@ -19,7 +19,13 @@ export function cacheGet<T>(key: string): T | null {
 }
 
 export function cacheSet<T>(key: string, data: T): void {
-    _cache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS })
+    _cache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS, fetchedAt: Date.now() })
+}
+
+// Date de la dernière lecture d'une clé
+export function cacheFetchedAt(key: string): string | null {
+    const entry = _cache.get(key)
+    return entry && Date.now() <= entry.expiresAt ? new Date(entry.fetchedAt).toISOString() : null
 }
 
 export function cacheClear(): void { _cache.clear() }

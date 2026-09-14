@@ -1,190 +1,185 @@
 <template>
-  <div class="flex flex-col gap-6">
+  <div class="flex flex-col gap-4">
 
-    <div>
-      <h2 class="text-base font-semibold text-primary">Media Management</h2>
-      <p class="text-sm text-muted mt-1">Configuration des dossiers et du comportement d'import.</p>
-    </div>
+    <Teleport defer to="#settings-actions">
+      <span v-if="dirtyCount > 0" class="text-meta text-accent">{{ dirtyCount }} modification{{ dirtyCount > 1 ? 's' : '' }} non enregistrée{{ dirtyCount > 1 ? 's' : '' }}</span>
+      <button @click="save" :disabled="saving || !loaded" class="btn-primary pointer-fine:h-[38px]">
+        {{ saving ? 'Enregistrement…' : 'Enregistrer' }}
+      </button>
+    </Teleport>
 
-    <!-- Loading -->
-    <div v-if="!loaded" class="flex items-center justify-center gap-2 py-16 text-muted text-sm">
+    <!-- Chargement -->
+    <div v-if="!loaded" class="flex items-center justify-center gap-2 py-16 text-muted text-body">
       <div class="w-4 h-4 border border-border border-t-accent rounded-full animate-spin" />
     </div>
 
     <template v-else>
 
-      <!-- Chemins -->
-      <div class="settings-card flex flex-col gap-5">
-        <div>
-          <div class="flex items-center gap-2 mb-1.5">
-            <label class="settings-label">Dossier téléchargements</label>
-            <span v-if="isDocker" class="text-[10px] text-accent border border-accent/40 px-1.5 py-0.5 rounded">Docker</span>
+      <!-- Dossiers -->
+      <SettingsSection title="Dossiers" :description="isDocker ? 'Ces deux chemins sont vus depuis le conteneur FanKarr.' : 'Où FanKarr trouve les téléchargements terminés et où il range la médiathèque.'">
+        <div class="grid md:grid-cols-2 gap-4">
+          <div v-for="field in pathFields" :key="field.key" class="flex flex-col gap-[7px] min-w-0">
+            <span class="field-label flex items-center gap-2">
+              {{ field.label }}
+              <span v-if="isDocker" class="pill pill-neutral h-5 px-2 text-[10.5px]">Docker</span>
+            </span>
+            <button
+                @click="openPicker(field.key)"
+                class="field flex items-center gap-2.5 text-left h-[42px] py-0"
+                :class="isRootPath(form[field.key]) ? 'border-accent/50' : ''"
+            >
+              <span class="flex-1 truncate" :class="form[field.key] ? 'text-primary' : 'text-muted'">{{ form[field.key] || '/' }}</span>
+              <span class="text-meta text-secondary shrink-0">Parcourir</span>
+            </button>
+            <p v-if="isRootPath(form[field.key])" class="text-xs text-accent flex items-center gap-1.5">
+              <TriangleAlert :size="13" /> Chemin non configuré : cliquez pour choisir un dossier
+            </p>
+            <p v-else class="text-xs text-muted">{{ field.hint }}</p>
           </div>
-          <button @click="openPicker('completePath')" class="settings-input text-left font-mono truncate w-full"
-                  :class="isRootPath(form.completePath) ? 'text-yellow-500 border-yellow-500/40' : form.completePath ? 'text-primary' : 'text-muted'">
-            {{ form.completePath || '/' }}
-          </button>
-          <p v-if="isRootPath(form.completePath)" class="text-xs text-yellow-500 mt-1.5 flex items-center gap-1">
-            <span>⚠</span> Chemin non configuré — cliquez pour sélectionner un dossier
-          </p>
-          <p v-else class="text-xs text-muted mt-1.5">Dossier où sont déposés les fichiers téléchargés</p>
         </div>
-
-        <div>
-          <div class="flex items-center gap-2 mb-1.5">
-            <label class="settings-label">Médiathèque Fankai</label>
-            <span v-if="isDocker" class="text-[10px] text-accent border border-accent/40 px-1.5 py-0.5 rounded">Docker</span>
-          </div>
-          <button @click="openPicker('mediaPath')" class="settings-input text-left font-mono truncate w-full"
-                  :class="isRootPath(form.mediaPath) ? 'text-yellow-500 border-yellow-500/40' : form.mediaPath ? 'text-primary' : 'text-muted'">
-            {{ form.mediaPath || '/' }}
-          </button>
-          <p v-if="isRootPath(form.mediaPath)" class="text-xs text-yellow-500 mt-1.5 flex items-center gap-1">
-            <span>⚠</span> Chemin non configuré — cliquez pour sélectionner un dossier
-          </p>
-          <p v-else class="text-xs text-muted mt-1.5">Dossier racine de votre médiathèque (Jellyfin, Kodi, Plex…)</p>
-        </div>
-      </div>
+      </SettingsSection>
 
       <!-- Alerte chemins non configurés -->
-      <div v-if="hasUnconfiguredPaths" class="flex items-start gap-3 px-4 py-3 rounded-lg border border-yellow-500/40 bg-yellow-500/5">
-        <span class="text-yellow-500 text-sm mt-0.5">⚠</span>
-        <div class="flex flex-col gap-0.5">
-          <p class="text-sm text-yellow-500 font-medium">Chemins non configurés</p>
-          <p class="text-xs text-muted">
-            L'import automatique est désactivé tant que les dossiers ne sont pas configurés.
-            Configurez-les ci-dessus avant de sauvegarder.
+      <div v-if="hasUnconfiguredPaths" class="rounded-card border border-accent/30 bg-accent/5 px-5 py-4 flex items-start gap-3.5">
+        <TriangleAlert :size="18" :stroke-width="1.75" class="text-accent shrink-0 mt-0.5" />
+        <div class="flex flex-col gap-1">
+          <p class="card-title text-accent">Chemins non configurés</p>
+          <p class="text-meta text-secondary">
+            L'import automatique est désactivé tant que les dossiers ne sont pas configurés. Configurez-les ci-dessus avant d'enregistrer.
           </p>
         </div>
       </div>
 
-      <!-- Mode import -->
-      <div class="settings-card flex flex-col gap-2">
-        <label class="settings-label">Mode d'import</label>
-        <div class="flex gap-2">
-          <button
-              v-for="mode in (['hardlink', 'copy', 'move'] as const)"
-              :key="mode"
-              @click="form.organizeMode = mode"
-              class="px-4 py-2 text-xs rounded-lg border transition-colors capitalize"
-              :class="form.organizeMode === mode
-              ? 'border-accent text-accent bg-accent-muted'
-              : 'border-border text-muted hover:border-secondary'"
-          >
-            {{ mode === 'hardlink' ? 'Hardlink' : mode === 'copy' ? 'Copier' : 'Déplacer' }}
-          </button>
+      <!-- Import -->
+      <SettingsSection title="Import" description="Ce que FanKarr fait des fichiers une fois le téléchargement terminé.">
+        <div class="flex items-center gap-x-[18px] gap-y-3 flex-wrap">
+          <div class="segmented segmented-lg" role="group" aria-label="Mode d'import">
+            <button
+                v-for="mode in (['hardlink', 'copy', 'move'] as const)"
+                :key="mode"
+                type="button"
+                @click="form.organizeMode = mode"
+                class="segmented-item"
+                :class="{ 'is-active': form.organizeMode === mode }"
+                :aria-pressed="form.organizeMode === mode"
+            >
+              {{ mode === 'hardlink' ? 'Hardlink' : mode === 'copy' ? 'Copier' : 'Déplacer' }}
+            </button>
+          </div>
+          <span class="text-meta text-muted">Le hardlink, recommandé, garde le fichier dans le client torrent pour le ratio, sans occuper deux fois la place.</span>
         </div>
-        <p class="text-xs text-muted">
-          <span class="text-primary">Hardlink recommandé</span> — le fichier reste dans le client torrent pour le ratio
-        </p>
-      </div>
-
-      <!-- Toggles -->
-      <div class="settings-card flex flex-col gap-5">
+        <div class="h-px bg-hover" />
         <SettingsToggle
             v-model="form.autoImport"
             label="Import automatique"
-            description="Importer automatiquement dès qu'un téléchargement est terminé. Vérifie toutes les 5 minutes."
+            description="Importe dès qu'un téléchargement est terminé. Vérifie toutes les 5 minutes."
         />
         <SettingsToggle
             :model-value="form.nfoSupport"
             @update:model-value="onNfoToggle"
-            label="NFO / Métadonnées"
-            description="Télécharge les NFO et images depuis GitLab lors de l'import (Infuse, etc.)."
+            label="NFO et métadonnées"
+            description="Télécharge les NFO et les images depuis GitLab à l'import, pour Infuse ou un lecteur qui lit les NFO locaux."
         />
         <SettingsToggle
             v-if="form.organizeMode === 'move'"
             v-model="form.deleteTorrentOnMove"
             label="Supprimer le torrent après déplacement"
-            description="Supprime automatiquement le torrent du client après un import en mode Déplacer."
+            description="Retire automatiquement le torrent du client après un import en mode Déplacer."
         />
         <SettingsToggle
             v-model="form.autoUnimportMissing"
-            label="Désimporter si fichier manquant"
-            description="Si un fichier importé n'est plus trouvé sur le disque lors du scan, il est automatiquement retiré de la bibliothèque."
+            label="Désimporter si le fichier a disparu"
+            description="Au scan, retire de la bibliothèque les épisodes dont le fichier n'est plus sur le disque."
         />
         <SettingsToggle
             v-model="form.englishDirectory"
-            label="Utilise 'Season' au lieu de 'Saison' dans les dossiers"
-            description="Si activé, les dossiers de saisons seront nommés 'Season 01' au lieu de 'Saison 01'."
+            label="Dossiers « Season » plutôt que « Saison »"
+            description="Les dossiers de saisons seront nommés « Season 01 » au lieu de « Saison 01 »."
         />
-      </div>
+      </SettingsSection>
 
-      <!-- Plex -->
-      <div class="settings-card flex items-center justify-between gap-4">
-        <div>
-          <p class="settings-label">Plex</p>
-          <p class="text-xs text-muted mt-0.5">
-            Créez une bibliothèque Plex connectée à l'agent de métadonnées Fankai.
-            Requiert Plex Media Server 1.43+ pour la configuration automatique de l'agent.
-          </p>
+      <!-- Serveurs média -->
+      <SettingsSection title="Serveurs média" description="Les applications qui liront la médiathèque.">
+        <div class="flex items-center gap-5 flex-wrap sm:flex-nowrap">
+          <div class="flex-1 min-w-0 flex flex-col gap-[3px]">
+            <span class="flex items-center gap-2.5 text-sm font-medium text-primary">
+              Jellyfin
+              <span class="pill h-5 px-[9px] text-[11px]" :class="jellyfinConfigured ? 'pill-ok' : 'pill-muted'">{{ jellyfinConfigured ? 'Configuré' : 'Non configuré' }}</span>
+            </span>
+            <span class="text-meta text-muted">Synchronisation des comptes et connexion depuis le plugin FanKarr Search.</span>
+          </div>
+          <RouterLink to="/settings/jellyfin" class="btn-secondary btn-sm pointer-fine:h-[34px] shrink-0">Réglages Jellyfin</RouterLink>
         </div>
-        <button @click="plexOpen = true" class="btn-secondary shrink-0">Configurer Plex</button>
-      </div>
+        <div class="h-px bg-hover" />
+        <div class="flex items-center gap-5 flex-wrap sm:flex-nowrap">
+          <div class="flex-1 min-w-0 flex flex-col gap-[3px]">
+            <span class="text-sm font-medium text-primary">Plex</span>
+            <span class="text-meta text-muted">Crée une bibliothèque Plex reliée à l'agent de métadonnées Fankai. Nécessite Plex Media Server 1.43 ou plus récent pour configurer l'agent automatiquement.</span>
+          </div>
+          <button @click="plexOpen = true" class="btn-secondary btn-sm pointer-fine:h-[34px] shrink-0">Configurer Plex</button>
+        </div>
+      </SettingsSection>
 
-      <!-- Actions -->
-      <div class="flex items-center gap-3">
-        <button @click="save" :disabled="saving" class="btn-primary">
-          {{ saving ? '...' : 'Sauvegarder' }}
+      <!-- Scan -->
+      <div class="flex items-center gap-3 flex-wrap">
+        <button @click="scan" :disabled="scanning" class="btn-secondary pointer-fine:h-[38px]">
+          <Loader v-if="scanning" :size="15" class="animate-spin" />
+          <ScanSearch v-else :size="15" />
+          {{ scanning ? 'Analyse…' : 'Analyser la médiathèque' }}
         </button>
-        <button @click="scan" :disabled="scanning" class="btn-secondary">
-          {{ scanning ? 'Scan...' : 'Analyser médiathèque' }}
-        </button>
-        <span v-if="scanResult" class="text-xs" :class="scanResult.added > 0 ? 'text-green-400' : 'text-muted'">
-          {{ scanResult.found }} fichiers · {{ scanResult.added }} ajoutés
+        <span v-if="lastScan" class="text-meta text-muted">
+          Dernier scan {{ formatRelative(lastScan.at) }} · {{ lastScan.found }} fichier{{ lastScan.found > 1 ? 's' : '' }} trouvé{{ lastScan.found > 1 ? 's' : '' }}<template v-if="lastScan.added"> · {{ lastScan.added }} ajouté{{ lastScan.added > 1 ? 's' : '' }}</template>
         </span>
       </div>
 
     </template>
-  </div>
 
-  <!-- Folder Picker -->
-  <FolderPicker
-      v-if="picker.open"
-      :initial-path="picker.currentPath"
-      @select="onPickerSelect"
-      @cancel="picker.open = false"
-  />
+    <!-- Choix de dossier -->
+    <FolderPicker
+        v-if="picker.open"
+        :initial-path="picker.currentPath"
+        @select="onPickerSelect"
+        @cancel="picker.open = false"
+    />
 
-  <!-- Plex Wizard -->
-  <PlexWizard
-      v-if="plexOpen"
-      :media-path="form.mediaPath"
-      @close="plexOpen = false"
-  />
+    <!-- Assistant Plex -->
+    <PlexWizard
+        v-if="plexOpen"
+        :media-path="form.mediaPath"
+        @close="plexOpen = false"
+    />
 
-  <!-- Confirmation NFO -->
-  <Teleport to="body">
-    <div
-        v-if="nfoConfirmOpen"
-        class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4"
-        @click.self="nfoConfirmOpen = false"
-    >
-      <div class="bg-card border border-border rounded-xl w-full max-w-sm p-6 flex flex-col gap-4">
-        <div class="flex flex-col gap-1.5">
-          <h3 class="text-sm font-semibold text-primary">Activer les NFO / Métadonnées ?</h3>
-          <p class="text-xs text-muted leading-relaxed">
-            Si vous utilisez l'agent Fankai sur <span class="text-primary">Jellyfin, Plex, Emby ou Kodi</span>,
-            les métadonnées sont déjà gérées directement par l'agent — activer les NFO est inutile
-            et peut créer des conflits.
-          </p>
-          <p class="text-xs text-muted leading-relaxed">
-            Activez cette option uniquement si vous utilisez <span class="text-primary">Infuse</span>
-            ou un lecteur qui lit les fichiers NFO locaux.
-          </p>
-        </div>
-        <div class="flex gap-2 pt-1">
-          <button @click="confirmNfo" class="btn-primary text-xs">Oui, activer quand même</button>
-          <button @click="nfoConfirmOpen = false" class="btn-secondary text-xs">Annuler</button>
+    <!-- Confirmation NFO -->
+    <Teleport to="body">
+      <div v-if="nfoConfirmOpen" class="modal-backdrop" @click.self="nfoConfirmOpen = false">
+        <div class="modal max-w-sm" role="dialog" aria-modal="true" aria-labelledby="nfo-title">
+          <div class="flex flex-col gap-2">
+            <h3 id="nfo-title" class="card-title">Activer les NFO et métadonnées ?</h3>
+            <p class="text-meta text-secondary leading-relaxed">
+              Si vous utilisez l'agent Fankai sur <span class="text-primary">Jellyfin, Plex, Emby ou Kodi</span>,
+              les métadonnées sont déjà gérées par l'agent : activer les NFO est inutile et peut créer des conflits.
+            </p>
+            <p class="text-meta text-secondary leading-relaxed">
+              Activez cette option seulement si vous utilisez <span class="text-primary">Infuse</span> ou un lecteur qui lit les fichiers NFO locaux.
+            </p>
+          </div>
+          <div class="flex gap-2.5 justify-end">
+            <button @click="nfoConfirmOpen = false" class="btn-ghost">Annuler</button>
+            <button @click="confirmNfo" class="btn-primary">Activer quand même</button>
+          </div>
         </div>
       </div>
-    </div>
-  </Teleport>
+    </Teleport>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { RouterLink } from 'vue-router'
+import { Loader, ScanSearch, TriangleAlert } from 'lucide-vue-next'
 import { useToast } from '@/composables/useToast'
+import { formatRelative } from '@/utils/format'
+import SettingsSection from '@/components/settings/SettingsSection.vue'
 import FolderPicker from '@/components/FolderPicker.vue'
 import SettingsToggle from '@/components/settings/SettingsToggle.vue'
 import PlexWizard from '@/components/settings/PlexWizard.vue'
@@ -197,7 +192,14 @@ const isDocker       = ref(false)
 const loaded         = ref(false)
 const plexOpen       = ref(false)
 const nfoConfirmOpen = ref(false)
-const scanResult     = ref<{ found: number; added: number } | null>(null)
+const lastScan       = ref<{ at: string; found: number; added: number } | null>(null)
+const jellyfinConfigured = ref(false)
+const savedSnapshot  = ref('')
+
+const pathFields = [
+  { key: 'completePath', label: 'Dossier des téléchargements terminés', hint: 'Là où le client torrent dépose ses fichiers.' },
+  { key: 'mediaPath',    label: 'Médiathèque Fankai',                   hint: 'Racine de la bibliothèque lue par Jellyfin, Plex ou Kodi.' },
+] as const
 
 function onNfoToggle(val: boolean) {
   if (val && !form.value.nfoSupport) {
@@ -229,6 +231,13 @@ const picker = ref<{ open: boolean; field: 'completePath' | 'mediaPath'; current
 
 function isRootPath(p: string): boolean { return !p || p === '/' }
 
+// Réglages modifiés
+const dirtyCount = computed(() => {
+  if (!savedSnapshot.value) return 0
+  const saved = JSON.parse(savedSnapshot.value)
+  return (Object.keys(form.value) as (keyof typeof form.value)[]).filter(k => saved[k] !== form.value[k]).length
+})
+
 const hasUnconfiguredPaths = computed(() =>
     isRootPath(form.value.completePath) || isRootPath(form.value.mediaPath)
 )
@@ -249,7 +258,7 @@ async function save() {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify(form.value),
     })
-    if (res.ok) toast('Configuration sauvegardée', 'success')
+    if (res.ok) { toast('Configuration enregistrée', 'success'); savedSnapshot.value = JSON.stringify(form.value) }
     else        toast('Erreur lors de la sauvegarde', 'error')
   } finally {
     saving.value = false
@@ -258,12 +267,11 @@ async function save() {
 
 async function scan() {
   scanning.value   = true
-  scanResult.value = null
   try {
     const res = await fetch('/api/scan', { method: 'POST', credentials: 'include' })
     if (res.ok) {
       const data = await res.json()
-      scanResult.value = { found: data.found, added: data.added }
+      lastScan.value = { at: new Date().toISOString(), found: data.found, added: data.added }
       toast(data.added > 0 ? `${data.found} fichiers analysés — ${data.added} ajoutés` : `${data.found} fichiers analysés — rien de nouveau`, 'success')
     } else {
       toast("Erreur lors de l'analyse", 'error')
@@ -276,12 +284,19 @@ async function scan() {
 }
 
 onMounted(async () => {
-  const [settingsRes, systemRes, infoRes] = await Promise.all([
+  const [settingsRes, systemRes, infoRes, scanRes] = await Promise.all([
     fetch('/api/settings',     { credentials: 'include' }),
     fetch('/api/system',       { credentials: 'include' }),
     fetch('/api/system/info',  { credentials: 'include' }),
+    fetch('/api/scan',         { credentials: 'include' }),
   ])
-  if (settingsRes.ok) Object.assign(form.value, await settingsRes.json())
+  if (settingsRes.ok) {
+    const s = await settingsRes.json()
+    for (const k of Object.keys(form.value) as (keyof typeof form.value)[]) if (k in s) (form.value as any)[k] = s[k]
+    jellyfinConfigured.value = !!s.jellyfinUrl
+    savedSnapshot.value = JSON.stringify(form.value)
+  }
+  if (scanRes.ok)     lastScan.value = (await scanRes.json()).lastScan ?? null
   if (systemRes.ok)   isDocker.value = (await systemRes.json()).isDocker
   if (infoRes.ok)     picker.value.currentPath = (await infoRes.json()).defaultPath ?? '/'
   loaded.value = true

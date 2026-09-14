@@ -20,6 +20,7 @@ export interface User {
     apiToken    : string
     createdAt   : string
     tourSeenAt? : string | null
+    lastLoginAt?: string | null
 }
 
 const USERS_PATH  = path.join(DATA_DIR, 'users.json')
@@ -142,6 +143,15 @@ export function changePassword(id: string, currentPassword: string, newPassword:
     user.passwordHash = bcrypt.hashSync(newPassword, SALT_ROUNDS)
     writeUsers(users)
     logger.info('users', `Mot de passe changé pour "${user.username}"`)
+}
+
+export function markLogin(id: string): string | null {
+    const users = readUsers()
+    const user  = users.find(u => u.id === id)
+    if (!user) return null
+    user.lastLoginAt = new Date().toISOString()
+    writeUsers(users)
+    return user.lastLoginAt
 }
 
 export function markTourSeen(id: string): string {

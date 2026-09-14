@@ -22,6 +22,7 @@ import { readAvailable, readInfohashMap } from './lib/github-cache.js'
 import { loadCatalog } from './lib/serie-helpers.js'
 import { ORGANIZED_PATH, readOrganized, writeOrganized } from './lib/organized-store.js'
 import { pushNotif } from './lib/notifs.js'
+import { AUTO_IMPORT_INTERVAL_MS, autoImportSchedule, planNextAutoImport } from './lib/schedule.js'
 import { readRequests, completeRequest } from './requests.js'
 import { checkNfoUpdates } from './lib/nfo.js'
 import { runJellyfinSync } from './routes/jellyfin.js'
@@ -96,7 +97,7 @@ const ADMIN_PREFIXES = [
     '/users', '/jellyfin', '/settings', '/torrent-clients',
     '/downloads', '/download', '/organize', '/import',
     '/system', '/nfo-updates', '/plex', '/rss-sync',
-    '/torrent', '/manual-import', '/organized', '/organized-summary',
+    '/torrent', '/manual-import', '/organized', '/organized-summary', '/organized-folders',
     '/rename-episode', '/rename-all', '/purge-nfo',
     '/logs', '/browse', '/browse-files', '/update', '/scan', '/debug',
 ]
@@ -119,10 +120,9 @@ app.use('/api', systemRouter)
 app.use('/api', nfoUpdatesRouter)
 app.use('/api', plexRouter)
 app.use('/api', rssSyncRouter)
+app.use('/api', invitesRouter)
 app.use('/api', requireAuth, seriesRouter)
 app.use('/api', requireAuth, requestsRouter)
-// Invites : mix public + admin (le router gère ses propres middlewares)
-app.use('/api', invitesRouter)
 
 // ── Catch-all SPA ──────────────────────────────────────────────
 if (fs.existsSync(PUBLIC_PATH)) {
@@ -188,6 +188,8 @@ server.listen(PORT, async () => {
         .catch(err => logger.error('api', `Scan initial échoué : ${err instanceof Error ? err.message : err}`))
 
     const autoOrganize = async () => {
+        autoImportSchedule.lastRunAt = new Date().toISOString()
+        planNextAutoImport()
         try {
             const { category } = readSettings()
             const infohashMap  = await readInfohashMap()
@@ -230,9 +232,10 @@ server.listen(PORT, async () => {
         }
     }
 
+    planNextAutoImport(10_000)
     setTimeout(() => {
         autoOrganize()
-        setInterval(autoOrganize, 5 * 60_000)
+        setInterval(autoOrganize, AUTO_IMPORT_INTERVAL_MS)
     }, 10_000)
 
     setTimeout(() => {

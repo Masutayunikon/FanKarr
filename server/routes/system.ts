@@ -9,9 +9,9 @@ import { systemInfo, checkPaths } from '../system.js'
 import { scanMediaPath, syncFilenameChanges, migrateOrganizedEpisodeIds, dedupeOrganizedEpisodes } from '../organize.js'
 import { readAvailable, cacheClear } from '../lib/github-cache.js'
 import { loadCatalog } from '../lib/serie-helpers.js'
-import { cacheSize } from '../lib/github-cache.js'
+import { cacheSize, cacheFetchedAt } from '../lib/github-cache.js'
 import { recentOrganized } from '../lib/notifs.js'
-import { workerRunning } from '../organize.js'
+import { workerRunning, lastScan } from '../organize.js'
 
 const router = Router()
 
@@ -129,7 +129,7 @@ router.get('/browse-files', requireAuth, (req, res) => {
 router.get('/torrents/status', requireAuth, async (_req, res) => {
     try {
         const available = await readAvailable()
-        res.json({ exists: available.length > 0, count: available.length, empty: available.length === 0 })
+        res.json({ exists: available.length > 0, count: available.length, empty: available.length === 0, syncedAt: cacheFetchedAt('available.json') })
     } catch { res.json({ exists: false, count: 0, empty: true }) }
 })
 
@@ -173,6 +173,10 @@ router.post('/update', requireAuth, async (req, res) => {
     }
 })
 
+router.get('/scan', requireAuth, (_req, res) => {
+    res.json({ lastScan })
+})
+
 router.post('/scan', requireAuth, async (_req, res) => {
     try {
         const { mediaPath } = readSettings()
@@ -188,8 +192,6 @@ router.post('/scan', requireAuth, async (_req, res) => {
 
 // ── Debug ──────────────────────────────────────────────────────
 router.get('/debug/stats', requireAuth, (req, res) => {
-    const { devMode } = readSettings()
-    if (!devMode) { res.status(403).json({ error: 'Dev mode désactivé' }); return }
     const mem     = process.memoryUsage()
     const uptimeS = Math.floor(process.uptime())
     const h       = Math.floor(uptimeS / 3600)
@@ -205,7 +207,7 @@ router.get('/debug/stats', requireAuth, (req, res) => {
     } catch {}
     res.json({
         memory   : { heapUsed: Math.round(mem.heapUsed / 1024 / 1024), heapTotal: Math.round(mem.heapTotal / 1024 / 1024), rss: Math.round(mem.rss / 1024 / 1024) },
-        cache    : { entries: cacheSize(), ttlHours: 6 },
+        cache    : { entries: cacheSize(), ttlHours: 1 },
         uptime   : `${h}h ${m}m ${s}s`,
         uptimeSeconds: uptimeS,
         worker   : { running: workerRunning },

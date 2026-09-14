@@ -8,25 +8,25 @@
     <template v-else>
       <!-- Clients existants -->
       <div v-if="clients.length > 0" class="flex flex-col gap-2">
-        <div v-for="client in clients" :key="client.uuid" class="settings-card flex items-center gap-3">
+        <div v-for="client in clients" :key="client.uuid" class="card flex items-center gap-3">
           <span
               class="w-2 h-2 rounded-full shrink-0"
-              :class="health[client.uuid] === true ? 'bg-green-500' : health[client.uuid] === false ? 'bg-red-500' : 'bg-border'"
+              :class="health[client.uuid] === true ? 'bg-ok' : health[client.uuid] === false ? 'bg-err' : 'bg-border'"
           />
           <div class="flex-1 min-w-0">
             <p class="text-sm text-primary font-medium truncate">{{ client.name }}</p>
-            <p class="text-xs text-muted mt-0.5">
+            <p class="text-meta text-muted mt-0.5">
               {{ labelOf(client.type) }}
-              <template v-if="health[client.uuid] === false"> · <span class="text-red-400">injoignable</span></template>
-              <template v-else-if="health[client.uuid] === true"> · <span class="text-green-400">connecté</span></template>
+              <template v-if="health[client.uuid] === false"> · <span class="text-err">injoignable</span></template>
+              <template v-else-if="health[client.uuid] === true"> · <span class="text-ok">connecté</span></template>
             </p>
           </div>
-          <button @click="edit(client)" class="btn-ghost text-xs">Modifier</button>
+          <button @click="edit(client)" class="btn-ghost btn-sm">Modifier</button>
         </div>
       </div>
 
       <!-- Formulaire -->
-      <div v-if="formOpen" class="settings-card flex flex-col gap-4">
+      <div v-if="formOpen" class="card flex flex-col gap-4">
         <p class="text-sm font-semibold text-primary">{{ editing ? 'Modifier le client' : 'Ajouter un client' }}</p>
         <TorrentClientForm
             :key="formKey"
@@ -42,22 +42,22 @@
       </button>
 
       <!-- Rappel chemins -->
-      <div class="flex items-start gap-3 px-4 py-3 rounded-lg border border-border bg-card/50">
+      <div class="flex items-start gap-3 px-4 py-3 rounded-field border border-border bg-card/50">
         <Info :size="15" class="text-muted mt-0.5 shrink-0" />
-        <p class="text-xs text-muted leading-relaxed">
+        <p class="text-meta text-muted leading-relaxed">
           Le client doit enregistrer ses téléchargements dans un dossier que FanKarr voit
-          <template v-if="settings.completePath">(<code class="font-mono text-secondary">{{ settings.completePath }}</code>)</template>.
+          <template v-if="settings.completePath">(<span class="text-secondary">{{ settings.completePath }}</span>)</template>.
           S'il tourne sur une autre machine ou dans un autre conteneur, renseignez
           <span class="text-secondary">Chemin distant</span> et <span class="text-secondary">Chemin local</span>
           dans les paramètres avancés du client.
         </p>
       </div>
 
-      <div v-if="warnSkip" class="flex items-start gap-3 px-4 py-3 rounded-lg border border-yellow-500/40 bg-yellow-500/5" role="alert">
-        <TriangleAlert :size="15" class="text-yellow-500 mt-0.5 shrink-0" />
+      <div v-if="warnSkip" class="flex items-start gap-3 px-4 py-3 rounded-field border border-accent/30 bg-accent/5" role="alert">
+        <TriangleAlert :size="15" class="text-accent mt-0.5 shrink-0" />
         <div class="flex flex-col gap-0.5">
-          <p class="text-sm text-yellow-500 font-medium">Aucun client configuré</p>
-          <p class="text-xs text-muted">
+          <p class="text-body text-accent font-medium">Aucun client configuré</p>
+          <p class="text-meta text-muted">
             Sans client, FanKarr ne pourra rien télécharger. Cliquez à nouveau sur « Suivant » pour continuer quand même,
             vous pourrez l'ajouter plus tard dans Paramètres → Clients de téléchargement.
           </p>

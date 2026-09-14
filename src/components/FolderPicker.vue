@@ -1,32 +1,30 @@
 <template>
   <Teleport to="body">
-    <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4" @click.self="$emit('cancel')">
-      <div class="bg-card border border-border rounded-xl w-full max-w-lg flex flex-col" style="max-height: 70vh">
+    <div class="modal-backdrop" @click.self="$emit('cancel')">
+      <div class="bg-card border border-border rounded-card w-full max-w-lg flex flex-col max-h-[70vh] shadow-[0_24px_60px_rgb(0_0_0/0.55)]" role="dialog" aria-modal="true" aria-label="Choisir un dossier">
 
         <!-- Header -->
-        <div class="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
-          <div>
-            <p class="text-xs text-accent font-medium mb-0.5">Choisir un dossier</p>
-            <p class="text-xs text-muted font-mono truncate max-w-xs">{{ current }}</p>
+        <div class="flex items-center justify-between gap-4 px-5 py-4 border-b border-hover shrink-0">
+          <div class="min-w-0">
+            <p class="card-title">Choisir un dossier</p>
+            <p class="text-meta text-muted truncate">{{ current }}</p>
           </div>
-          <button @click="$emit('cancel')" class="text-muted hover:text-primary transition-colors text-lg leading-none">✕</button>
+          <button @click="$emit('cancel')" class="btn-icon btn-sm border-transparent" aria-label="Fermer"><X :size="16" /></button>
         </div>
 
         <!-- Chemin éditable -->
-        <div class="px-5 py-3 border-b border-border shrink-0 flex gap-2">
-          <button @click="navigateTo('/')" class="btn-secondary px-2 text-muted hover:text-primary" :title="drivesRoot ? 'Lecteurs' : 'Retour à la racine'">
-            <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
-              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-              <polyline points="9 22 9 12 15 12 15 22"/>
-            </svg>
+        <div class="px-5 py-3 border-b border-hover shrink-0 flex gap-2">
+          <button @click="navigateTo('/')" class="btn-icon h-[42px] w-[42px]" :title="drivesRoot ? 'Lecteurs' : 'Retour à la racine'" :aria-label="drivesRoot ? 'Lecteurs' : 'Retour à la racine'">
+            <House :size="15" />
           </button>
           <input
               v-model="inputPath"
               @keydown.enter="navigateTo(inputPath)"
-              class="settings-input flex-1 font-mono text-xs"
+              class="field flex-1"
               placeholder="/"
+              aria-label="Chemin"
           />
-          <button @click="navigateTo(inputPath)" class="btn-secondary px-3 text-xs">
+          <button @click="navigateTo(inputPath)" class="btn-secondary h-[42px]">
             OK
           </button>
         </div>
@@ -35,39 +33,35 @@
         <div v-if="parent !== null" class="px-5 shrink-0">
           <button
               @click="navigateTo(parent)"
-              class="flex items-center gap-2 w-full py-2.5 text-xs text-muted hover:text-primary transition-colors border-b border-border"
+              class="flex items-center gap-2 w-full py-2.5 text-meta text-secondary hover:text-primary transition-colors border-b border-hover"
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
-              <path d="M19 12H5M12 5l-7 7 7 7"/>
-            </svg>
+            <ArrowLeft :size="14" />
             ..
           </button>
         </div>
 
         <!-- Liste dossiers -->
         <div class="overflow-y-auto flex-1">
-          <div v-if="loading" class="flex items-center justify-center py-10 text-muted text-xs gap-2">
+          <div v-if="loading" class="flex items-center justify-center py-10 text-muted text-meta gap-2">
             <div class="w-4 h-4 border border-border border-t-accent rounded-full animate-spin" />
-            Chargement...
+            Chargement…
           </div>
-          <div v-else-if="error" class="px-5 py-4 text-xs text-red-400">{{ error }}</div>
-          <div v-else-if="dirs.length === 0" class="px-5 py-4 text-xs text-muted">Aucun sous-dossier</div>
+          <div v-else-if="error" class="px-5 py-4 text-meta text-err">{{ error }}</div>
+          <div v-else-if="dirs.length === 0" class="px-5 py-4 text-meta text-muted">Aucun sous-dossier</div>
           <button
               v-for="dir in dirs"
               :key="dir"
               @click="navigateTo(joinPath(current, dir))"
-              class="flex items-center gap-3 w-full px-5 py-2.5 text-xs text-primary hover:bg-hover transition-colors border-b border-border/50 text-left"
+              class="flex items-center gap-3 w-full px-5 min-h-10 py-2 text-body text-primary hover:bg-hover transition-colors border-b border-hover text-left"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" fill="none">
-              <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>
-            </svg>
+            <Folder :size="15" :stroke-width="1.75" class="text-muted shrink-0" />
             {{ dir }}
           </button>
         </div>
 
         <!-- Footer -->
-        <div class="flex items-center justify-between px-5 py-4 border-t border-border shrink-0">
-          <span class="text-xs text-muted font-mono truncate max-w-xs">{{ current }}</span>
+        <div class="flex items-center justify-between gap-4 px-5 py-4 border-t border-hover shrink-0">
+          <span class="text-meta text-muted truncate">{{ current }}</span>
           <!-- FIX : regex sortie dans selectCurrent() pour éviter l'erreur de parsing Vue -->
           <button @click="selectCurrent()" class="btn-primary">
             Choisir
@@ -81,6 +75,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { ArrowLeft, Folder, House, X } from 'lucide-vue-next'
 
 const props = defineProps<{ initialPath?: string }>()
 const emit  = defineEmits<{ select: [path: string]; cancel: [] }>()
@@ -93,7 +88,6 @@ const loading    = ref(false)
 const error      = ref('')
 const drivesRoot = ref(false)   // true quand la liste affiche les lecteurs Windows
 
-// FIX : la regex /\/+$/ dans un @click inline fait planter le parser Vue
 function selectCurrent() {
   emit('select', current.value.replace(/\/+$/, '') || '/')
 }

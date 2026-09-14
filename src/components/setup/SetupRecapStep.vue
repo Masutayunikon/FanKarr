@@ -1,7 +1,7 @@
 <template>
   <div class="flex flex-col gap-6">
 
-    <ul class="settings-card p-0 divide-y divide-border">
+    <ul class="card p-0 divide-y divide-border">
       <li v-for="row in rows" :key="row.label" class="flex items-center gap-3 px-4 py-3">
         <span class="w-6 h-6 rounded-full flex items-center justify-center shrink-0" :class="stateClass[row.state]">
           <span v-if="row.state === 'loading'" class="w-3 h-3 border border-border border-t-accent rounded-full animate-spin" />
@@ -12,14 +12,14 @@
         </span>
         <div class="flex-1 min-w-0">
           <p class="text-sm text-primary">{{ row.label }}</p>
-          <p class="text-xs text-muted truncate" :title="row.value">{{ row.value }}</p>
+          <p class="text-meta text-muted truncate" :title="row.value">{{ row.value }}</p>
         </div>
-        <button @click="context.goto(row.step)" class="btn-ghost text-xs shrink-0">Modifier</button>
+        <button @click="context.goto(row.step)" class="btn-ghost btn-sm shrink-0">Modifier</button>
       </li>
     </ul>
 
     <div class="flex flex-col sm:flex-row gap-2">
-      <button @click="done(true)" :disabled="finishing || !settings.mediaPath" class="btn-primary flex items-center justify-center gap-1.5">
+      <button @click="done(true)" :disabled="finishing || !settings.mediaPath" class="btn-primary">
         <Compass :size="15" />
         {{ context.relaunch ? 'Revoir la visite guidée' : "Terminer et découvrir l'interface" }}
       </button>
@@ -27,7 +27,7 @@
         {{ context.relaunch ? 'Fermer' : 'Terminer sans la visite' }}
       </button>
     </div>
-    <p v-if="!context.relaunch" class="text-xs text-muted -mt-3">
+    <p v-if="!context.relaunch" class="text-meta text-muted -mt-3">
       La visite guidée présente chaque écran en une minute. Vous pourrez la relancer depuis le bouton « ? » de la barre latérale.
     </p>
 
@@ -49,9 +49,9 @@ const finishing = ref(false)
 
 const stateClass: Record<RowState, string> = {
   loading: 'bg-hover',
-  ok     : 'bg-green-500/15 text-green-400',
-  warn   : 'bg-yellow-500/15 text-yellow-500',
-  error  : 'bg-red-500/15 text-red-400',
+  ok     : 'bg-ok/15 text-ok',
+  warn   : 'bg-accent-muted text-accent',
+  error  : 'bg-err/15 text-err',
   neutral: 'bg-hover text-muted',
 }
 

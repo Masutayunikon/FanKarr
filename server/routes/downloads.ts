@@ -50,6 +50,7 @@ router.get('/downloads', requireAuth, async (_req, res) => {
             const orgFiles = organized[t.hash] ?? {}
             let totalFiles = 1
             let serieName: string | undefined
+            let serieId: number | undefined
             let episodes: any[] = []
             try {
                 const availableIds = await readAvailable()
@@ -61,6 +62,7 @@ router.get('/downloads', requireAuth, async (_req, res) => {
                         const resolved = buildResolvedEpisodes(sd, match.infohash, match.season_number)
                         totalFiles = resolved.length || 1
                         serieName  = sd.title ?? sd.show_title
+                        serieId    = sd.id
                         episodes   = resolved
                         break
                     }
@@ -68,8 +70,9 @@ router.get('/downloads', requireAuth, async (_req, res) => {
             } catch {}
             const doneFiles = Object.keys(orgFiles).length
             const organizeState: 'none' | 'partial' | 'done' = doneFiles >= totalFiles ? 'done' : doneFiles > 0 ? 'partial' : 'none'
-            const notif = recentOrganized.find(n => n.hash === t.hash)
-            return { ...t, organizeState, organizeProgress: { done: doneFiles, total: totalFiles }, errorFiles: notif?.errorFiles ?? [], serieName, episodes }
+            const notif    = recentOrganized.find(n => n.hash === t.hash)
+            const imported = recentOrganized.find(n => n.hash === t.hash && n.done > 0)
+            return { ...t, organizeState, organizeProgress: { done: doneFiles, total: totalFiles }, errorFiles: notif?.errorFiles ?? [], importedAt: imported?.at ?? null, serieId, serieName, episodes }
         }))
         res.json(enriched)
     } catch (err) {

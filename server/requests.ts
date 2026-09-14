@@ -170,6 +170,26 @@ export function deleteRequest(id: string): void {
     writeRequests(requests.filter(r => r.id !== id))
 }
 
+/** Retire un utilisateur surune demande en attente et la demande disparaît s'il était seul demandeur */
+export function withdrawRequest(id: string, userId: string): { deleted: boolean; request: SerieRequest | null } {
+    const requests = readRequests()
+    const req = requests.find(r => r.id === id)
+    if (!req || !req.requesters.some(r => r.userId === userId)) throw new Error('Demande introuvable')
+    if (req.status !== 'pending') throw new Error('Seule une demande en attente peut être annulée')
+
+    const username = req.requesters.find(r => r.userId === userId)!.username
+    req.requesters = req.requesters.filter(r => r.userId !== userId)
+    if (req.requesters.length === 0) {
+        writeRequests(requests.filter(r => r.id !== id))
+        logger.info('requests', `Demande "${req.serieName}" annulée par "${username}"`)
+        return { deleted: true, request: null }
+    }
+    req.updatedAt = new Date().toISOString()
+    writeRequests(requests)
+    logger.info('requests', `"${username}" retiré de la demande "${req.serieName}"`)
+    return { deleted: false, request: req }
+}
+
 export function getRequestsForUser(userId: string): SerieRequest[] {
     return readRequests().filter(r => r.requesters.some(req => req.userId === userId))
 }

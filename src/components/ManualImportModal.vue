@@ -1,87 +1,84 @@
 <template>
   <Teleport to="body">
-    <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4" @click.self="$emit('close')">
-      <div class="bg-card border border-border rounded-xl w-full max-w-3xl flex flex-col" style="max-height: 85vh">
+    <div class="modal-backdrop" @click.self="$emit('close')">
+      <div class="bg-card border border-border rounded-card w-full max-w-3xl flex flex-col shadow-[0_24px_60px_rgb(0_0_0/0.55)] max-h-[85vh]" role="dialog" aria-modal="true" aria-labelledby="manual-import-title">
 
-        <!-- Header -->
-        <div class="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
-          <div>
-            <h3 class="text-sm font-semibold text-primary">Import manuel — {{ serieName }}</h3>
-            <p class="text-xs text-muted font-mono mt-0.5 truncate">{{ serieFolder }}</p>
+        <!-- En-tête -->
+        <div class="flex items-start justify-between gap-4 px-6 py-4 border-b border-hover shrink-0">
+          <div class="min-w-0 flex flex-col gap-1">
+            <h3 id="manual-import-title" class="font-display text-xl font-bold text-primary">Import manuel <span class="font-sans text-body font-normal text-muted">— {{ serieName }}</span></h3>
+            <p class="text-meta text-muted truncate" :title="serieFolder">{{ serieFolder }}</p>
           </div>
-          <button @click="$emit('close')" class="text-muted hover:text-primary transition-colors text-lg leading-none">✕</button>
+          <button @click="$emit('close')" class="btn-icon btn-sm border-transparent" aria-label="Fermer"><X :size="16" /></button>
         </div>
 
-        <!-- Loading -->
+        <!-- Chargement -->
         <div v-if="scanning" class="flex flex-col items-center justify-center gap-3 py-16 text-muted">
           <div class="w-5 h-5 border border-border border-t-accent rounded-full animate-spin" />
-          <p class="text-sm">Scan du dossier…</p>
+          <p class="text-body">Scan du dossier…</p>
         </div>
 
         <!-- Dossier vide / introuvable -->
         <div v-else-if="!scanning && items.length === 0 && !scanError" class="flex flex-col items-center gap-3 py-16 text-center px-6">
-          <p class="text-sm text-muted">{{ folderMissing ? 'Ce dossier n\'existe pas encore.' : 'Aucun fichier vidéo trouvé dans ce dossier.' }}</p>
-          <p class="text-xs text-muted">
-            {{ folderMissing ? 'Créez' : 'Placez vos fichiers dans' }} <span class="font-mono text-primary">{{ serieFolder }}</span>{{ folderMissing ? ', placez-y vos fichiers' : '' }} puis réessayez.
+          <p class="text-body text-primary">{{ folderMissing ? 'Ce dossier n\'existe pas encore.' : 'Aucun fichier vidéo trouvé dans ce dossier.' }}</p>
+          <p class="text-meta text-muted">
+            {{ folderMissing ? 'Créez' : 'Placez vos fichiers dans' }} <span class="text-secondary break-all">{{ serieFolder }}</span>{{ folderMissing ? ', placez-y vos fichiers' : '' }} puis réessayez.
           </p>
-          <button @click="scan" class="btn-secondary mt-2">Rescanner</button>
+          <button @click="scan" class="btn-secondary btn-sm mt-2"><RefreshCw :size="14" /> Rescanner</button>
         </div>
 
         <!-- Erreur -->
         <div v-else-if="scanError" class="flex flex-col items-center gap-3 py-16 text-center px-6">
-          <p class="text-sm text-red-400">{{ scanError }}</p>
-          <button @click="scan" class="btn-secondary">Réessayer</button>
+          <p class="text-body text-err">{{ scanError }}</p>
+          <button @click="scan" class="btn-secondary btn-sm">Réessayer</button>
         </div>
 
-        <!-- Liste fichiers -->
+        <!-- Liste des fichiers -->
         <template v-else-if="items.length > 0 && step !== 'done'">
 
-          <!-- Toolbar -->
-          <div class="flex items-center justify-between px-6 py-3 border-b border-border shrink-0 gap-3">
-            <p class="text-xs text-muted">
-              <span class="text-primary font-medium">{{ items.length }}</span> fichier{{ items.length > 1 ? 's' : '' }}
-              <span v-if="alreadyImportedCount > 0"> · <span class="text-blue-400">{{ alreadyImportedCount }} déjà importé{{ alreadyImportedCount > 1 ? 's' : '' }}</span></span>
-              · <span class="text-green-400">{{ newMatchedCount }} nouveau{{ newMatchedCount > 1 ? 'x' : '' }}</span>
-              <span v-if="unmatchedCount > 0"> · <span class="text-yellow-500">{{ unmatchedCount }} non associé{{ unmatchedCount > 1 ? 's' : '' }}</span></span>
+          <div class="flex items-center justify-between px-6 py-3 border-b border-hover shrink-0 gap-3 flex-wrap">
+            <p class="text-meta text-muted">
+              <span class="text-primary font-bold">{{ items.length }}</span> fichier{{ items.length > 1 ? 's' : '' }}
+              <span v-if="alreadyImportedCount > 0"> · <span class="text-ok">{{ alreadyImportedCount }} déjà importé{{ alreadyImportedCount > 1 ? 's' : '' }}</span></span>
+              · <span class="text-accent">{{ newMatchedCount }} nouveau{{ newMatchedCount > 1 ? 'x' : '' }}</span>
+              <span v-if="unmatchedCount > 0"> · {{ unmatchedCount }} non associé{{ unmatchedCount > 1 ? 's' : '' }}</span>
             </p>
-            <button @click="scan" class="text-xs text-muted hover:text-primary transition-colors">↺ Rescanner</button>
+            <button @click="scan" class="text-meta text-secondary hover:text-primary transition-colors flex items-center gap-1.5"><RefreshCw :size="13" /> Rescanner</button>
           </div>
 
-          <!-- Fichiers -->
           <div class="overflow-y-auto flex-1 px-6 py-3 flex flex-col gap-2">
             <div
                 v-for="(item, i) in items"
                 :key="item.file.path"
-                class="flex items-center gap-3 p-3 rounded-lg border transition-colors"
+                class="flex items-center gap-3 px-3.5 py-3 rounded-field border transition-colors flex-wrap sm:flex-nowrap"
                 :class="item.alreadyImported
-                  ? 'border-blue-500/20 bg-blue-500/5'
+                  ? 'border-ok/25 bg-ok/5'
                   : item.episode_id
-                    ? 'border-green-500/20 bg-green-500/5'
-                    : 'border-border bg-shell'"
+                    ? 'border-accent/30 bg-accent/5'
+                    : 'border-border-light bg-main'"
             >
-              <!-- Icône -->
-              <div class="w-5 h-5 rounded-md flex items-center justify-center shrink-0"
-                   :class="item.alreadyImported ? 'bg-blue-500/15 text-blue-400' :
-                           item.episode_id ? 'bg-green-500/15 text-green-400' : 'bg-border text-muted'">
-                <svg v-if="item.alreadyImported || item.episode_id" width="10" height="10" viewBox="0 0 12 12" stroke="currentColor" stroke-width="2.5" fill="none"><polyline points="2 6 5 9 10 3"/></svg>
-                <svg v-else width="10" height="10" viewBox="0 0 12 12" stroke="currentColor" stroke-width="2" fill="none"><line x1="6" y1="2" x2="6" y2="7"/><circle cx="6" cy="9.5" r="0.5" fill="currentColor"/></svg>
-              </div>
+              <span
+                  class="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
+                  :class="item.alreadyImported ? 'bg-ok/15 text-ok' : item.episode_id ? 'bg-accent-muted text-accent' : 'bg-hover text-muted'"
+              >
+                <Check v-if="item.alreadyImported || item.episode_id" :size="12" :stroke-width="3" />
+                <Minus v-else :size="12" :stroke-width="3" />
+              </span>
 
-              <!-- Nom + taille -->
               <div class="flex-1 min-w-0">
-                <p class="text-xs text-primary font-mono truncate">{{ item.file.name }}</p>
-                <p class="text-[11px] text-muted mt-0.5">
+                <p class="text-body text-primary truncate" :title="item.file.name">{{ item.file.name }}</p>
+                <p class="text-xs text-muted mt-0.5">
                   {{ formatSize(item.file.size) }}
-                  <span v-if="item.alreadyImported" class="text-blue-400 ml-1">— déjà importé</span>
-                  <span v-else-if="item.willRename" class="text-accent ml-1">— sera renommé</span>
+                  <span v-if="item.alreadyImported" class="text-ok"> · déjà importé</span>
+                  <span v-else-if="item.willRename" class="text-accent"> · sera renommé</span>
                 </p>
               </div>
 
-              <!-- Sélecteur épisode -->
               <select
                   v-model="item.episode_id"
-                  class="settings-input text-xs py-1 max-w-[260px] shrink-0"
+                  class="field py-2 text-meta w-full sm:w-auto sm:max-w-[280px] shrink-0"
                   @change="onEpisodeChange(i)"
+                  :aria-label="`Épisode associé à ${item.file.name}`"
               >
                 <option :value="null">— Non associé —</option>
                 <optgroup v-for="season in seasons" :key="season.id" :label="season.season_number === 0 ? 'Spéciaux' : `Saison ${season.season_number}`">
@@ -96,18 +93,16 @@
                   </option>
                 </optgroup>
               </select>
-
             </div>
           </div>
 
-          <!-- Footer -->
-          <div class="flex items-center justify-between px-6 py-4 border-t border-border shrink-0">
-            <p v-if="importError" class="text-xs text-red-400">{{ importError }}</p>
-            <p v-else class="text-xs text-muted">
-              Les fichiers dans ce dossier seront <span class="text-accent">renommés sur place</span>.
+          <div class="flex items-center justify-between gap-4 px-6 py-4 border-t border-hover shrink-0 flex-wrap">
+            <p v-if="importError" class="text-meta text-err">{{ importError }}</p>
+            <p v-else class="text-meta text-muted">
+              Les fichiers de ce dossier seront <span class="text-accent">renommés sur place</span>.
             </p>
-            <div class="flex gap-2">
-              <button @click="$emit('close')" class="btn-secondary">Annuler</button>
+            <div class="flex gap-2.5">
+              <button @click="$emit('close')" class="btn-ghost">Annuler</button>
               <button
                   @click="doImport"
                   :disabled="newMatchedCount === 0 || importing"
@@ -121,28 +116,30 @@
         </template>
 
         <!-- Résultat -->
-        <div v-else-if="step === 'done'" class="flex flex-col items-center gap-4 px-6 py-10 text-center">
-          <div class="w-12 h-12 rounded-full flex items-center justify-center"
-               :class="importResult.errors.length === 0 ? 'bg-green-500/10' : 'bg-yellow-500/10'">
-            <svg v-if="importResult.errors.length === 0" width="20" height="20" viewBox="0 0 24 24" stroke="#22c55e" stroke-width="2.5" fill="none"><polyline points="20 6 9 17 4 12"/></svg>
-            <svg v-else width="20" height="20" viewBox="0 0 24 24" stroke="#eab308" stroke-width="2" fill="none"><path d="M12 2l9.27 16H2.73L12 2z"/><line x1="12" y1="9" x2="12" y2="13"/><circle cx="12" cy="16.5" r=".5" fill="currentColor"/></svg>
-          </div>
-          <div>
-            <p class="text-sm font-semibold text-primary">Import terminé</p>
-            <p class="text-xs text-muted mt-1">
+        <div v-else-if="step === 'done'" class="flex flex-col items-center gap-4 px-6 py-10 text-center overflow-y-auto">
+          <span
+              class="w-12 h-12 rounded-full flex items-center justify-center"
+              :class="importResult.errors.length === 0 ? 'bg-ok/10 text-ok' : 'bg-err/10 text-err'"
+          >
+            <Check v-if="importResult.errors.length === 0" :size="22" :stroke-width="2.5" />
+            <TriangleAlert v-else :size="22" :stroke-width="2" />
+          </span>
+          <div class="flex flex-col gap-1">
+            <p class="font-display text-xl font-bold text-primary">Import terminé</p>
+            <p class="text-body text-secondary">
               {{ importResult.done }} fichier{{ importResult.done > 1 ? 's' : '' }} importé{{ importResult.done > 1 ? 's' : '' }}
-              <span v-if="importResult.errors.length > 0" class="text-red-400">
+              <span v-if="importResult.errors.length > 0" class="text-err">
                 · {{ importResult.errors.length }} erreur{{ importResult.errors.length > 1 ? 's' : '' }}
               </span>
             </p>
           </div>
-          <div v-if="importResult.errors.length > 0" class="w-full text-left bg-red-500/5 border border-red-500/20 rounded-lg p-3">
-            <p class="text-xs text-red-400 font-medium mb-1.5">Erreurs</p>
-            <div v-for="e in importResult.errors" :key="e.file" class="text-xs text-muted mb-1">
-              <span class="text-primary font-mono">{{ e.file }}</span> — {{ e.error }}
-            </div>
+          <div v-if="importResult.errors.length > 0" class="w-full text-left rounded-field border border-err/25 bg-err/5 px-4 py-3">
+            <p class="tag-label text-err mb-1.5">Erreurs</p>
+            <p v-for="e in importResult.errors" :key="e.file" class="text-meta text-secondary mb-1 break-words">
+              <span class="text-primary">{{ e.file }}</span> — {{ e.error }}
+            </p>
           </div>
-          <div class="flex gap-2">
+          <div class="flex gap-2.5">
             <button @click="backToList" class="btn-secondary">Voir les fichiers</button>
             <button @click="$emit('close')" class="btn-primary">Fermer</button>
           </div>
@@ -156,6 +153,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useToast } from '@/composables/useToast'
+import { Check, Minus, RefreshCw, TriangleAlert, X } from 'lucide-vue-next'
 import { matchEpisodeFile } from '@/utils/episode-match'
 
 const { add: toast } = useToast()

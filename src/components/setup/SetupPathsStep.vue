@@ -1,84 +1,84 @@
 <template>
   <div class="flex flex-col gap-6">
 
-    <div class="settings-card flex flex-col gap-5">
+    <div class="card flex flex-col gap-5">
       <div v-for="field in fields" :key="field.key">
         <div class="flex items-center gap-2 mb-1.5">
-          <label :for="`setup-${field.key}`" class="settings-label">
+          <label :for="`setup-${field.key}`" class="field-label">
             {{ field.label }}
-            <span v-if="field.required" class="text-red-400 ml-0.5">*</span>
+            <span v-if="field.required" class="text-err ml-0.5">*</span>
           </label>
-          <span v-if="!field.required" class="text-[10px] text-muted border border-border px-1.5 py-0.5 rounded">recommandé</span>
+          <span v-if="!field.required" class="pill pill-neutral h-5 px-2 text-[10.5px]">recommandé</span>
         </div>
         <div class="flex gap-2">
           <input
               :id="`setup-${field.key}`"
               v-model.trim="form[field.key]"
               :placeholder="field.placeholder"
-              class="settings-input font-mono"
+              class="field"
               spellcheck="false"
           />
-          <button @click="openPicker(field.key)" class="btn-secondary shrink-0 flex items-center gap-1.5" :title="`Parcourir — ${field.label}`">
+          <button @click="openPicker(field.key)" class="btn-secondary shrink-0" :title="`Parcourir — ${field.label}`">
             <FolderOpen :size="14" /> <span class="hidden sm:inline">Parcourir</span>
           </button>
         </div>
 
-        <p v-if="checking && form[field.key]" class="text-xs text-muted mt-1.5">Vérification…</p>
-        <p v-else-if="statusOf(field.key)?.error" class="text-xs text-red-400 mt-1.5 flex items-center gap-1.5">
+        <p v-if="checking && form[field.key]" class="text-meta text-muted mt-1.5">Vérification…</p>
+        <p v-else-if="statusOf(field.key)?.error" class="text-meta text-err mt-1.5 flex items-center gap-1.5">
           <X :size="12" class="shrink-0" /> {{ statusOf(field.key)?.error }}
         </p>
-        <p v-else-if="statusOf(field.key)?.writable" class="text-xs text-green-400 mt-1.5 flex items-center gap-1.5">
+        <p v-else-if="statusOf(field.key)?.writable" class="text-meta text-ok mt-1.5 flex items-center gap-1.5">
           <Check :size="12" class="shrink-0" /> Dossier accessible en écriture
         </p>
-        <p v-else class="text-xs text-muted mt-1.5">{{ field.help }}</p>
+        <p v-else class="text-meta text-muted mt-1.5">{{ field.help }}</p>
       </div>
 
-      <p v-if="result?.relation === 'same'" class="text-xs text-red-400 flex items-start gap-1.5">
+      <p v-if="result?.relation === 'same'" class="text-meta text-err flex items-start gap-1.5">
         <X :size="12" class="shrink-0 mt-0.5" /> La médiathèque doit être distincte du dossier de téléchargements.
       </p>
-      <p v-else-if="result?.relation === 'nested'" class="text-xs text-yellow-500 flex items-start gap-1.5">
+      <p v-else-if="result?.relation === 'nested'" class="text-meta text-accent flex items-start gap-1.5">
         <TriangleAlert :size="12" class="shrink-0 mt-0.5" />
         Un dossier est à l'intérieur de l'autre : ça fonctionne, mais le scan de la médiathèque verra aussi les téléchargements.
       </p>
     </div>
 
     <!-- Mode d'import -->
-    <div class="settings-card flex flex-col gap-3">
-      <label class="settings-label">Mode d'import</label>
+    <div class="card flex flex-col gap-3">
+      <label class="field-label">Mode d'import</label>
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <button
             v-for="mode in modes"
             :key="mode.id"
             @click="form.organizeMode = mode.id"
             :aria-pressed="form.organizeMode === mode.id"
-            class="p-3 rounded-lg border text-left transition-colors"
-            :class="form.organizeMode === mode.id ? 'border-accent bg-accent-muted' : 'border-border hover:border-secondary'"
+            class="flex flex-col justify-start px-3.5 py-3 rounded-field border text-left transition-colors"
+            :class="form.organizeMode === mode.id ? 'border-accent/50 bg-accent-muted' : 'border-border-light hover:bg-hover'"
         >
           <p class="text-sm font-medium" :class="form.organizeMode === mode.id ? 'text-accent' : 'text-primary'">
             {{ mode.label }}
-            <span v-if="mode.id === 'hardlink'" class="text-[10px] font-normal text-muted ml-1">recommandé</span>
+            <span v-if="mode.id === 'hardlink'" class="text-meta font-normal text-muted ml-1">recommandé</span>
           </p>
-          <p class="text-xs text-muted mt-1 leading-relaxed">{{ mode.text }}</p>
+          <p class="text-meta text-muted mt-1 leading-relaxed">{{ mode.text }}</p>
         </button>
       </div>
 
       <!-- Résultat du test hardlink -->
-      <div v-if="result && form.organizeMode === 'hardlink'" class="text-xs">
-        <p v-if="result.hardlink.tested && result.hardlink.ok" class="text-green-400 flex items-center gap-1.5">
+      <div v-if="result && form.organizeMode === 'hardlink'" class="text-meta">
+        <p v-if="result.hardlink.tested && result.hardlink.ok" class="text-ok flex items-center gap-1.5">
           <Check :size="12" class="shrink-0" /> {{ result.hardlink.message }}
         </p>
-        <div v-else-if="result.hardlink.tested" class="flex flex-col gap-2 px-3 py-2.5 rounded-lg border border-yellow-500/40 bg-yellow-500/5">
-          <p class="text-yellow-500 flex items-start gap-1.5">
+        <div v-else-if="result.hardlink.tested" class="flex flex-col gap-2 px-3 py-2.5 rounded-field border border-accent/30 bg-accent/5">
+          <p class="text-accent flex items-start gap-1.5">
             <TriangleAlert :size="12" class="shrink-0 mt-0.5" /> {{ result.hardlink.message }}
           </p>
           <p class="text-muted">Sans hardlink, FanKarr copiera les fichiers (espace disque doublé).</p>
-          <button @click="form.organizeMode = 'copy'" class="btn-secondary text-xs self-start">Passer en mode Copier</button>
+          <button @click="form.organizeMode = 'copy'" class="btn-secondary btn-sm self-start">Passer en mode Copier</button>
         </div>
         <p v-else class="text-muted">{{ result.hardlink.message }}</p>
       </div>
     </div>
 
-    <p v-if="error" class="text-sm text-red-400" role="alert">{{ error }}</p>
+    <p v-if="error" class="text-body text-err" role="alert">{{ error }}</p>
 
   </div>
 

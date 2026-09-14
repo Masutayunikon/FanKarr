@@ -8,7 +8,7 @@ import { DATA_DIR }   from './config.js'
 import { logger }     from './logger.js'
 import {
     findByUsername, findById, findByApiToken,
-    createUser, changePassword, regenerateApiToken, safeUser, hasUsers, markTourSeen,
+    createUser, changePassword, regenerateApiToken, safeUser, hasUsers, markTourSeen, markLogin,
     type User,
 } from './users.js'
 import { readSettings } from './settings.js'
@@ -34,6 +34,7 @@ function signToken(user: User): string {
 }
 
 function setCookieAndRespond(res: Response, user: User): void {
+    user.lastLoginAt = markLogin(user.id) ?? user.lastLoginAt
     const token = signToken(user)
     res.cookie('fankarr_token', token, { httpOnly: true, sameSite: 'lax' })
     res.json({ success: true, user: safeUser(user) })

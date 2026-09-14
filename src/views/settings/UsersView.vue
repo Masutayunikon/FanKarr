@@ -1,224 +1,226 @@
 <template>
-  <div class="flex flex-col gap-8">
+  <div class="flex flex-col gap-4">
 
-    <!-- ── Utilisateurs ─────────────────────────────────────── -->
-    <section class="flex flex-col gap-4">
-      <div class="flex items-center justify-between">
-        <div>
-          <h2 class="text-base font-semibold text-primary">Utilisateurs</h2>
-          <p class="text-sm text-muted mt-1">Gérez les comptes ayant accès à FanKarr.</p>
-        </div>
-        <button @click="openCreateUser" class="btn-secondary">+ Créer</button>
-      </div>
+    <Teleport defer to="#settings-actions">
+      <button @click="openCreateInvite" class="btn-primary pointer-fine:h-[38px]">
+        <Plus :size="15" :stroke-width="2.25" /> Créer une invitation
+      </button>
+    </Teleport>
 
-      <div v-if="users.length === 0" class="settings-card text-sm text-muted">
-        Aucun utilisateur.
-      </div>
-
-      <div v-else class="flex flex-col gap-2">
-        <div
-            v-for="u in users" :key="u.id"
-            class="settings-card flex items-center justify-between"
-        >
-          <div class="flex items-center gap-3">
-            <span
-                class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
-                :class="u.role === 'admin' ? 'bg-accent/20 text-accent' : 'bg-border text-muted'"
-            >
-              {{ u.username.charAt(0).toUpperCase() }}
-            </span>
-            <div>
-              <p class="text-sm text-primary font-medium">{{ u.username }}</p>
-              <p class="text-xs text-muted mt-0.5">
-                {{ u.role === 'admin' ? 'Administrateur' : 'Utilisateur' }}
-                · créé le {{ formatDate(u.createdAt) }}
-              </p>
-            </div>
-          </div>
-          <div class="flex items-center gap-1">
-            <button @click="openEditUser(u)" class="btn-ghost text-xs text-blue-400 hover:text-blue-300">Modifier</button>
-            <button
-                @click="confirmDelete(u)"
-                :disabled="u.id === currentUserId"
-                class="btn-ghost text-xs text-red-400 hover:text-red-300 disabled:opacity-30 disabled:cursor-not-allowed"
-            >Supprimer</button>
-          </div>
+    <!-- ── Comptes ────────────────────────────────────────────── -->
+    <section class="bg-card rounded-card">
+      <div class="flex items-center justify-between gap-4 flex-wrap px-5 pt-4 pb-3.5 border-b border-hover">
+        <h3 class="card-title">Comptes <span class="font-normal text-muted">· {{ users.length }}</span></h3>
+        <div class="flex items-center gap-3 flex-wrap">
+          <span class="text-meta text-muted hidden sm:inline">Le jeton sert à l'API publique et aux applications tierces.</span>
+          <button @click="openCreateUser" class="btn-secondary btn-sm"><UserPlus :size="14" /> Créer un compte</button>
         </div>
       </div>
-    </section>
 
-    <!-- ── Invitations ──────────────────────────────────────── -->
-    <section class="flex flex-col gap-4">
-      <div class="flex items-center justify-between">
-        <div>
-          <h2 class="text-base font-semibold text-primary">Invitations</h2>
-          <p class="text-sm text-muted mt-1">Générez des liens pour permettre à de nouveaux utilisateurs de s'inscrire.</p>
-        </div>
-        <button @click="openCreateInvite" class="btn-secondary">+ Générer</button>
+      <div class="hidden md:grid grid-cols-[minmax(0,1fr)_150px_150px_210px_40px] items-center h-[34px] px-5 border-b border-hover tag-label tracking-[0.12em]">
+        <span>Utilisateur</span><span>Rôle</span><span>Dernier accès</span><span>Jeton API</span><span />
       </div>
 
-      <div v-if="invites.length === 0" class="settings-card text-sm text-muted">
-        Aucun lien d'invitation actif.
-      </div>
+      <p v-if="users.length === 0" class="text-body text-muted px-5 py-5">Aucun utilisateur.</p>
 
-      <div v-else class="flex flex-col gap-2">
-        <div
-            v-for="inv in invites" :key="inv.code"
-            class="settings-card flex items-center justify-between gap-4"
-            :class="{ 'opacity-50': isExpired(inv) || isExhausted(inv) }"
-        >
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 mb-1">
-              <span v-if="isExpired(inv) || isExhausted(inv)" class="text-xs text-muted">[Invalide]</span>
-              <span v-if="inv.note" class="text-sm text-primary font-medium truncate">{{ inv.note }}</span>
-              <span v-else class="text-sm text-muted italic">Sans note</span>
-            </div>
-            <p class="text-xs text-muted">
-              {{ inv.uses }}/{{ inv.maxUses ?? '∞' }} utilisations
-              <template v-if="inv.expiresAt"> · expire {{ formatDate(inv.expiresAt) }}</template>
-              <template v-else> · sans expiration</template>
-            </p>
-            <div class="flex items-center gap-2 mt-1.5">
-              <code class="text-xs text-muted bg-shell px-2 py-0.5 rounded truncate max-w-xs">
-                {{ inviteUrl(inv.code) }}
-              </code>
-              <button @click="copyInvite(inv.code)" class="btn-ghost text-xs shrink-0">
-                {{ copied === inv.code ? 'Copié !' : 'Copier' }}
-              </button>
-            </div>
+      <div
+          v-for="u in users" :key="u.id"
+          class="grid grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1fr)_150px_150px_210px_40px] items-center gap-x-3 gap-y-2 px-5 py-3 md:py-0 md:min-h-[58px] border-b border-hover last:border-b-0"
+      >
+        <div class="flex items-center gap-3 min-w-0">
+          <span class="w-8 h-8 rounded-full bg-hover flex items-center justify-center font-display text-[15px] font-bold shrink-0" :class="u.role === 'admin' ? 'text-accent' : 'text-secondary'">
+            {{ u.username.charAt(0).toUpperCase() }}
+          </span>
+          <div class="flex flex-col gap-px min-w-0">
+            <span class="text-sm font-semibold text-primary truncate">{{ u.username }}</span>
+            <span class="text-xs text-muted truncate">{{ userSubtitle(u) }}</span>
           </div>
-          <button @click="deleteInvite(inv.code)" class="btn-ghost text-xs text-red-400 hover:text-red-300 shrink-0">
-            Révoquer
+        </div>
+
+        <span class="pill w-fit order-3 md:order-none" :class="u.role === 'admin' ? 'pill-wait' : 'pill-neutral'">
+          {{ u.role === 'admin' ? 'Administrateur' : 'Invité' }}
+        </span>
+        <span class="text-[13px] text-secondary order-4 md:order-none">
+          <span class="md:hidden text-muted">Dernier accès : </span>{{ u.lastLoginAt ? formatRelative(u.lastLoginAt) : 'jamais' }}
+        </span>
+        <div class="flex items-center gap-2.5 min-w-0 order-5 md:order-none col-span-2 md:col-span-1">
+          <span class="text-meta text-muted truncate">{{ maskToken(u.apiToken) }}</span>
+          <button @click="copyToken(u)" class="text-meta text-secondary hover:text-primary transition-colors shrink-0">
+            {{ copied === `token-${u.id}` ? 'Copié' : 'Copier' }}
           </button>
         </div>
-      </div>
-    </section>
 
-    <!-- ── Téléchargement automatique des demandes ──────────── -->
-    <section class="flex flex-col gap-4">
-      <div>
-        <h2 class="text-base font-semibold text-primary">Téléchargement automatique</h2>
-        <p class="text-sm text-muted mt-1">
-          Quand une demande est approuvée, lancer automatiquement le téléchargement pour les utilisateurs sélectionnés.
-        </p>
-      </div>
-
-      <div class="settings-card flex flex-col gap-4">
-        <!-- Tous les utilisateurs -->
-        <label class="flex items-center gap-3 cursor-pointer">
-          <input
-              type="checkbox"
-              :checked="autoDownloadAll"
-              @change="toggleAutoDownloadAll"
-              class="w-4 h-4 rounded border-border accent-accent"
-          />
-          <div>
-            <p class="text-sm text-primary font-medium">Tous les utilisateurs</p>
-            <p class="text-xs text-muted">Chaque approbation déclenche un téléchargement, quel que soit le demandeur.</p>
-          </div>
-        </label>
-
-        <!-- Séparateur -->
-        <div v-if="!autoDownloadAll && users.length > 0" class="border-t border-border/50" />
-
-        <!-- Par utilisateur -->
-        <template v-if="!autoDownloadAll">
-          <label
-              v-for="u in users" :key="u.id"
-              class="flex items-center gap-3 cursor-pointer"
+        <div class="relative justify-self-end order-2 md:order-none" @click.stop>
+          <button
+              @click="userMenu = userMenu === u.id ? null : u.id"
+              class="w-[30px] h-[30px] rounded-full flex items-center justify-center text-muted hover:text-primary hover:bg-hover transition-colors"
+              :aria-label="`Actions pour ${u.username}`" aria-haspopup="menu" :aria-expanded="userMenu === u.id"
           >
-            <input
-                type="checkbox"
-                :checked="autoDownloadUserIds.includes(u.id)"
-                @change="toggleAutoDownloadUser(u.id)"
-                class="w-4 h-4 rounded border-border accent-accent"
-            />
-            <div class="flex items-center gap-2">
-              <span
-                  class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
-                  :class="u.role === 'admin' ? 'bg-accent/20 text-accent' : 'bg-border text-muted'"
-              >{{ u.username.charAt(0).toUpperCase() }}</span>
-              <span class="text-sm text-primary">{{ u.username }}</span>
-              <span class="text-xs text-muted">{{ u.role === 'admin' ? 'Admin' : 'Utilisateur' }}</span>
-            </div>
-          </label>
-          <p v-if="users.length === 0" class="text-xs text-muted">Aucun utilisateur.</p>
-        </template>
-
-        <p v-if="autoDownloadSaved" class="text-xs text-green-400">Paramètre sauvegardé.</p>
+            <Ellipsis :size="16" />
+          </button>
+          <div v-if="userMenu === u.id" class="menu absolute right-0 top-full mt-1.5 w-48 z-20" role="menu">
+            <button role="menuitem" class="menu-item" @click="userMenu = null; openEditUser(u)"><Pencil :size="14" /> Modifier</button>
+            <button
+                role="menuitem"
+                class="menu-item text-err hover:text-err"
+                :disabled="u.id === currentUserId"
+                :title="u.id === currentUserId ? 'Vous ne pouvez pas supprimer votre propre compte' : undefined"
+                @click="userMenu = null; confirmDelete(u)"
+            ><Trash2 :size="14" /> Supprimer</button>
+          </div>
+        </div>
       </div>
     </section>
 
-    <!-- ── Modal créer/modifier utilisateur ─────────────────── -->
+    <!-- ── Invitations ────────────────────────────────────────── -->
+    <section class="bg-card rounded-card">
+      <div class="flex items-center justify-between gap-4 flex-wrap px-5 pt-4 pb-3.5 border-b border-hover">
+        <h3 class="card-title">Invitations <span class="font-normal text-muted">· {{ activeInvites }} lien{{ activeInvites > 1 ? 's' : '' }} actif{{ activeInvites > 1 ? 's' : '' }}</span></h3>
+        <span class="text-meta text-muted">Un lien crée un compte à chaque utilisation, dans la limite fixée.</span>
+      </div>
+
+      <p v-if="invites.length === 0" class="text-body text-muted px-5 py-5">Aucun lien d'invitation. Créez-en un pour inviter quelqu'un.</p>
+
+      <div
+          v-for="inv in invites" :key="inv.code"
+          class="flex items-center gap-4 flex-wrap sm:flex-nowrap px-5 py-3.5 border-b border-hover last:border-b-0"
+      >
+        <span class="w-8 h-8 rounded-full border border-dashed flex items-center justify-center shrink-0 text-muted" :class="isInvalid(inv) ? 'border-border-light opacity-60' : 'border-border'">
+          <Link2 :size="15" />
+        </span>
+        <div class="flex-1 min-w-0 flex flex-col gap-[3px]">
+          <span class="text-body truncate" :class="isInvalid(inv) ? 'text-muted' : 'text-primary'">
+            <template v-if="inv.note">{{ inv.note }} · </template>{{ inviteUrl(inv.code).replace(/^https?:\/\//, '') }}
+          </span>
+          <span class="text-meta text-muted">
+            <template v-if="isExhausted(inv)">utilisations épuisées ({{ inv.uses }}/{{ inv.maxUses }})</template>
+            <template v-else-if="isExpired(inv)">expirée {{ formatRelative(inv.expiresAt!) }}</template>
+            <template v-else>
+              créée {{ formatRelative(inv.createdAt) }} · {{ inv.uses }}/{{ inv.maxUses ?? '∞' }} utilisation{{ (inv.maxUses ?? 2) > 1 ? 's' : '' }}
+              · {{ inv.expiresAt ? `expire ${formatFuture(inv.expiresAt)}` : 'sans expiration' }}
+            </template>
+          </span>
+        </div>
+        <button v-if="!isInvalid(inv)" @click="copyInvite(inv.code)" class="btn-secondary btn-sm">
+          <Check v-if="copied === inv.code" :size="14" class="text-ok" />
+          <Copy v-else :size="14" />
+          {{ copied === inv.code ? 'Lien copié' : 'Copier le lien' }}
+        </button>
+        <button
+            @click="deleteInvite(inv.code)"
+            class="w-8 h-8 rounded-full border border-border-light text-muted flex items-center justify-center hover:text-err hover:border-err/30 transition-colors"
+            title="Révoquer le lien" aria-label="Révoquer le lien"
+        >
+          <Trash2 :size="14" />
+        </button>
+      </div>
+    </section>
+
+    <!-- ── Téléchargement auto ────────────── -->
+    <SettingsSection
+        title="Téléchargement automatique"
+        description="Quand une demande est approuvée, lancer automatiquement le téléchargement pour les utilisateurs sélectionnés."
+    >
+      <template #actions>
+        <span v-if="autoDownloadSaved" class="text-meta text-ok flex items-center gap-1.5"><Check :size="14" /> Enregistré</span>
+      </template>
+
+      <SettingsToggle
+          :model-value="autoDownloadAll"
+          @update:model-value="setAutoDownloadAll"
+          label="Tous les utilisateurs"
+          description="Chaque approbation déclenche un téléchargement, quel que soit le demandeur."
+      />
+
+      <template v-if="!autoDownloadAll">
+        <div class="h-px bg-hover" />
+        <div v-for="u in users" :key="u.id" class="flex items-center justify-between gap-4">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <span class="w-6 h-6 rounded-full bg-hover flex items-center justify-center font-display text-xs font-bold shrink-0" :class="u.role === 'admin' ? 'text-accent' : 'text-secondary'">{{ u.username.charAt(0).toUpperCase() }}</span>
+            <span class="text-body text-primary truncate">{{ u.username }}</span>
+            <span class="text-meta text-muted">{{ u.role === 'admin' ? 'Administrateur' : 'Invité' }}</span>
+          </div>
+          <button
+              type="button" role="switch"
+              :aria-checked="autoDownloadUserIds.includes(u.id)"
+              :aria-label="`Téléchargement automatique pour ${u.username}`"
+              @click="toggleAutoDownloadUser(u.id)"
+              class="switch"
+          ><span class="switch-knob" /></button>
+        </div>
+        <p v-if="users.length === 0" class="text-meta text-muted">Aucun utilisateur.</p>
+      </template>
+    </SettingsSection>
+
+    <!-- ── Modal créer/modifier utilisateur ───────────────────── -->
     <Teleport to="body">
-      <div v-if="userModal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center px-4" @click.self="userModal = null">
-        <div class="settings-card w-full max-w-sm flex flex-col gap-5 p-6">
-          <h3 class="text-base font-semibold text-primary">
-            {{ userModal.mode === 'create' ? 'Créer un utilisateur' : 'Modifier l\'utilisateur' }}
+      <div v-if="userModal" class="modal-backdrop" @click.self="userModal = null">
+        <div class="modal max-w-sm" role="dialog" aria-modal="true" aria-labelledby="user-modal-title">
+          <h3 id="user-modal-title" class="card-title">
+            {{ userModal.mode === 'create' ? 'Créer un compte' : 'Modifier le compte' }}
           </h3>
 
           <div class="flex flex-col gap-4">
-            <div>
-              <label class="settings-label mb-1.5">Identifiant</label>
-              <input v-model="userModal.username" type="text" class="settings-input" placeholder="username" />
+            <div class="flex flex-col gap-[7px]">
+              <label for="user-name" class="field-label">Identifiant</label>
+              <input id="user-name" v-model="userModal.username" type="text" class="field" placeholder="nom d'utilisateur" autocomplete="off" />
             </div>
-            <div>
-              <label class="settings-label mb-1.5">
-                {{ userModal.mode === 'create' ? 'Mot de passe' : 'Nouveau mot de passe' }}
-              </label>
-              <input v-model="userModal.password" type="password" class="settings-input"
+            <div class="flex flex-col gap-[7px]">
+              <label for="user-pwd" class="field-label">{{ userModal.mode === 'create' ? 'Mot de passe' : 'Nouveau mot de passe' }}</label>
+              <input id="user-pwd" v-model="userModal.password" type="password" class="field" autocomplete="new-password"
                 :placeholder="userModal.mode === 'edit' ? 'Laisser vide pour ne pas changer' : '••••••••'" />
             </div>
-            <div>
-              <label class="settings-label mb-1.5">Rôle</label>
-              <select v-model="userModal.role" class="settings-input">
-                <option value="user">Utilisateur</option>
-                <option value="admin">Administrateur</option>
-              </select>
+            <div class="flex flex-col gap-[7px]">
+              <span class="field-label">Rôle</span>
+              <div class="segmented w-fit">
+                <button type="button" class="segmented-item" :class="{ 'is-active': userModal.role === 'user' }" @click="userModal.role = 'user'">Invité</button>
+                <button type="button" class="segmented-item" :class="{ 'is-active': userModal.role === 'admin' }" @click="userModal.role = 'admin'">Administrateur</button>
+              </div>
             </div>
           </div>
 
-          <p v-if="userModal.error" class="text-xs text-red-400">{{ userModal.error }}</p>
+          <p v-if="userModal.error" class="text-meta text-err">{{ userModal.error }}</p>
 
-          <div class="flex gap-2 justify-end">
+          <div class="flex gap-2.5 justify-end">
             <button @click="userModal = null" class="btn-ghost">Annuler</button>
             <button @click="submitUserModal" :disabled="userModal.loading" class="btn-primary">
-              {{ userModal.loading ? '...' : userModal.mode === 'create' ? 'Créer' : 'Enregistrer' }}
+              {{ userModal.loading ? '…' : userModal.mode === 'create' ? 'Créer' : 'Enregistrer' }}
             </button>
           </div>
         </div>
       </div>
     </Teleport>
 
-    <!-- ── Modal créer invitation ────────────────────────────── -->
+    <!-- ── Modal créer invitation ─────────────────────────────── -->
     <Teleport to="body">
-      <div v-if="inviteModal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center px-4" @click.self="inviteModal = null">
-        <div class="settings-card w-full max-w-sm flex flex-col gap-5 p-6">
-          <h3 class="text-base font-semibold text-primary">Générer une invitation</h3>
+      <div v-if="inviteModal" class="modal-backdrop" @click.self="inviteModal = null">
+        <div class="modal max-w-sm" role="dialog" aria-modal="true" aria-labelledby="invite-modal-title">
+          <h3 id="invite-modal-title" class="card-title">Créer une invitation</h3>
 
           <div class="flex flex-col gap-4">
-            <div>
-              <label class="settings-label mb-1.5">Note (optionnelle)</label>
-              <input v-model="inviteModal.note" type="text" class="settings-input" placeholder="Pour qui est ce lien ?" />
+            <div class="flex flex-col gap-[7px]">
+              <label for="invite-note" class="field-label">Note (facultative)</label>
+              <input id="invite-note" v-model="inviteModal.note" type="text" class="field" placeholder="Pour qui est ce lien ?" />
             </div>
-            <div>
-              <label class="settings-label mb-1.5">Utilisations max</label>
-              <input v-model.number="inviteModal.maxUses" type="number" min="1" class="settings-input" placeholder="1" />
-              <p class="text-xs text-muted mt-1">Laisser vide pour illimité</p>
+            <div class="grid grid-cols-2 gap-3">
+              <div class="flex flex-col gap-[7px]">
+                <label for="invite-uses" class="field-label">Utilisations max</label>
+                <input id="invite-uses" v-model.number="inviteModal.maxUses" type="number" min="1" class="field" placeholder="∞" />
+              </div>
+              <div class="flex flex-col gap-[7px]">
+                <label for="invite-hours" class="field-label">Expire dans (heures)</label>
+                <input id="invite-hours" v-model.number="inviteModal.expiresInHours" type="number" min="1" class="field" placeholder="∞" />
+              </div>
             </div>
-            <div>
-              <label class="settings-label mb-1.5">Expire dans (heures)</label>
-              <input v-model.number="inviteModal.expiresInHours" type="number" min="1" class="settings-input" placeholder="24" />
-              <p class="text-xs text-muted mt-1">Laisser vide pour pas d'expiration</p>
-            </div>
+            <p class="text-xs text-muted">Laisser un champ vide pour ne pas fixer de limite.</p>
           </div>
 
-          <p v-if="inviteModal.error" class="text-xs text-red-400">{{ inviteModal.error }}</p>
+          <p v-if="inviteModal.error" class="text-meta text-err">{{ inviteModal.error }}</p>
 
-          <div class="flex gap-2 justify-end">
+          <div class="flex gap-2.5 justify-end">
             <button @click="inviteModal = null" class="btn-ghost">Annuler</button>
             <button @click="submitInviteModal" :disabled="inviteModal.loading" class="btn-primary">
-              {{ inviteModal.loading ? '...' : 'Générer' }}
+              {{ inviteModal.loading ? '…' : 'Créer le lien' }}
             </button>
           </div>
         </div>
@@ -229,16 +231,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted }  from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { Check, Copy, Ellipsis, Link2, Pencil, Plus, Trash2, UserPlus } from 'lucide-vue-next'
 import { useAuthStore }    from '@/stores/auth'
 import { copyToClipboard } from '@/composables/useClipboard'
+import { formatRelative, plural } from '@/utils/format'
+import SettingsSection from '@/components/settings/SettingsSection.vue'
+import SettingsToggle  from '@/components/settings/SettingsToggle.vue'
 
 interface User {
-  id       : string
-  username : string
-  role     : 'admin' | 'user'
-  apiToken : string
-  createdAt: string
+  id          : string
+  username    : string
+  role        : 'admin' | 'user'
+  apiToken    : string
+  createdAt   : string
+  lastLoginAt?: string | null
 }
 
 interface Invite {
@@ -252,11 +259,13 @@ interface Invite {
 }
 
 const auth          = useAuthStore()
-const currentUserId = auth.username  // utilisé pour désactiver la suppression de soi-même
+const currentUserId = computed(() => auth.userId)  // pas de suppression de son propre compte
 
 const users   = ref<User[]>([])
 const invites = ref<Invite[]>([])
 const copied  = ref<string | null>(null)
+const pendingByUser = ref<Map<string, number>>(new Map())
+const userMenu = ref<string | null>(null)
 
 // ── Téléchargement auto des demandes ──────────────────────────
 const autoDownloadAll     = ref(false)
@@ -294,6 +303,16 @@ async function loadInvites() {
   if (res.ok) invites.value = await res.json()
 }
 
+async function loadPendingRequests() {
+  const res = await fetch('/api/requests', { credentials: 'include' })
+  if (!res.ok) return
+  const counts = new Map<string, number>()
+  for (const r of await res.json())
+    if (r.status === 'pending')
+      for (const q of r.requesters) counts.set(q.userId, (counts.get(q.userId) ?? 0) + 1)
+  pendingByUser.value = counts
+}
+
 async function loadAutoDownloadSetting() {
   const res = await fetch('/api/settings', { credentials: 'include' })
   if (!res.ok) return
@@ -321,8 +340,8 @@ async function saveAutoDownloadSetting() {
   autoDownloadTimer = setTimeout(() => { autoDownloadSaved.value = false }, 2000)
 }
 
-function toggleAutoDownloadAll(e: Event) {
-  autoDownloadAll.value = (e.target as HTMLInputElement).checked
+function setAutoDownloadAll(value: boolean) {
+  autoDownloadAll.value = value
   if (autoDownloadAll.value) autoDownloadUserIds.value = []
   saveAutoDownloadSetting()
 }
@@ -334,7 +353,13 @@ function toggleAutoDownloadUser(userId: string) {
   saveAutoDownloadSetting()
 }
 
-onMounted(() => { loadUsers(); loadInvites(); loadAutoDownloadSetting() })
+const closeUserMenu = () => { userMenu.value = null }
+
+onMounted(() => {
+  loadUsers(); loadInvites(); loadAutoDownloadSetting(); loadPendingRequests()
+  document.addEventListener('click', closeUserMenu)
+})
+onUnmounted(() => document.removeEventListener('click', closeUserMenu))
 
 // ── Users ─────────────────────────────────────────────────────
 function openCreateUser() {
@@ -373,7 +398,30 @@ async function confirmDelete(u: User) {
   loadUsers()
 }
 
+function userSubtitle(u: User) {
+  const pending = pendingByUser.value.get(u.id) ?? 0
+  const parts: string[] = []
+  if (u.id === currentUserId.value) parts.push('vous')
+  if (pending > 0) parts.push(`${plural(pending, 'demande')} en attente`)
+  if (parts.length === 0) parts.push(`créé le ${formatDate(u.createdAt)}`)
+  return parts.join(' · ')
+}
+
+function maskToken(token: string) {
+  return token ? `${token.slice(0, 4)}••••••••••${token.slice(-4)}` : '—'
+}
+
+async function copyToken(u: User) {
+  try {
+    await copyToClipboard(u.apiToken)
+    copied.value = `token-${u.id}`
+    setTimeout(() => { copied.value = null }, 2000)
+  } catch {}
+}
+
 // ── Invites ───────────────────────────────────────────────────
+const activeInvites = computed(() => invites.value.filter(inv => !isInvalid(inv)).length)
+
 function openCreateInvite() {
   inviteModal.value = { note: '', maxUses: 1, expiresInHours: 24, error: null, loading: false }
 }
@@ -416,7 +464,14 @@ async function copyInvite(code: string) {
 
 // ── Helpers ───────────────────────────────────────────────────
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+// « dans 5 j », « dans 3 h »
+function formatFuture(iso: string) {
+  const diff = new Date(iso).getTime() - Date.now()
+  const h = Math.round(diff / 3_600_000)
+  return h < 24 ? `dans ${Math.max(1, h)} h` : `dans ${Math.round(h / 24)} j`
 }
 
 function isExpired(inv: Invite) {
@@ -425,5 +480,9 @@ function isExpired(inv: Invite) {
 
 function isExhausted(inv: Invite) {
   return inv.maxUses !== null && inv.uses >= inv.maxUses
+}
+
+function isInvalid(inv: Invite) {
+  return isExpired(inv) || isExhausted(inv)
 }
 </script>

@@ -3,8 +3,10 @@ import { requireAuth } from '../auth.js'
 import { logger } from '../logger.js'
 import { organizeTorrent, migrateOrganizedEpisodeIds } from '../organize.js'
 import { loadCatalog } from '../lib/serie-helpers.js'
-import { recentOrganized, pushNotif } from '../lib/notifs.js'
+import { recentOrganized, pushNotif, clearNotifs } from '../lib/notifs.js'
 import { dispatchGetFiles } from '../torrent-clients/index.js'
+import { AUTO_IMPORT_INTERVAL_MS, autoImportSchedule } from '../lib/schedule.js'
+import { readSettings } from '../settings.js'
 import { DATA_DIR } from '../config.js'
 import path from 'path'
 
@@ -23,11 +25,15 @@ router.post('/organize/migrate-ids', requireAuth, async (_req, res) => {
 })
 
 router.get('/organize/recent', requireAuth, (_req, res) => {
-    res.json(recentOrganized)
+    res.json(recentOrganized.slice(0, 20))
+})
+
+router.get('/organize/schedule', requireAuth, (_req, res) => {
+    res.json({ autoImport: readSettings().autoImport, intervalMs: AUTO_IMPORT_INTERVAL_MS, ...autoImportSchedule })
 })
 
 router.post('/organize/recent/clear', requireAuth, (_req, res) => {
-    recentOrganized.length = 0
+    clearNotifs()
     logger.info('api', 'Historique des imports effacé')
     res.json({ ok: true })
 })
@@ -45,7 +51,7 @@ router.post('/organize', requireAuth, async (req, res) => {
 
         const result = await organizeTorrent(hash, name, save_path, seriesData, files)
         if (result.done > 0 || result.errors.length > 0) {
-            pushNotif({ hash, name, done: result.done, skipped: result.skipped, errors: result.errors.length, errorFiles: result.errors, at: new Date().toISOString() })
+            pushNotif({ hash, name, serieId: result.serieId ?? null, done: result.done, skipped: result.skipped, errors: result.errors.length, errorFiles: result.errors, at: new Date().toISOString() })
         }
         res.json(result)
     } catch (err) {

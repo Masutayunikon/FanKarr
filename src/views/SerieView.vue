@@ -4,155 +4,130 @@
     <!-- Loading -->
     <div v-if="store.loadingDetail" class="flex flex-col items-center justify-center gap-3 h-64 text-muted">
       <div class="w-6 h-6 border border-border border-t-accent rounded-full animate-spin" />
-      <p class="text-sm">Chargement…</p>
+      <p class="text-body">Chargement…</p>
     </div>
 
     <!-- Error -->
     <div v-else-if="store.error" class="flex flex-col items-center justify-center gap-3 h-64">
-      <p class="text-sm text-red-400">{{ store.error }}</p>
+      <p class="text-body text-err">{{ store.error }}</p>
       <button class="btn-primary" @click="load">Réessayer</button>
     </div>
 
     <template v-else-if="data">
-      <!-- Hero — poster, titre, métadonnées, synopsis -->
-      <SerieHero :serie="data.serie" />
+      <!-- Bandeau : affiche, titre, progression et actions -->
+      <SerieHero
+          :serie="data.serie"
+          :season-count="seasonCount"
+          :episode-count="episodeCount"
+          :organized-count="organizedCount"
+          :organized-label="auth.isAdmin ? 'importé' : 'disponible'"
+          :watched="auth.isAdmin && rssSync"
+      >
+        <template #actions>
+          <!-- Admin -->
+          <template v-if="auth.isAdmin">
+            <div v-if="hasSomethingToDownload" class="relative max-sm:flex-1 max-sm:min-w-0" @click.stop>
+              <button
+                  :disabled="downloadingAll"
+                  class="btn-primary max-sm:w-full"
+                  @click="data.torrents_integrale.length > 1 ? (downloadMenuOpen = !downloadMenuOpen) : downloadAll()"
+              >
+                <Loader v-if="downloadingAll" :size="16" class="animate-spin" />
+                <Download v-else :size="16" :stroke-width="2.25" />
+                {{ downloadingAll ? 'Envoi…' : 'Tout télécharger' }}
+                <ChevronDown v-if="data.torrents_integrale.length > 1" :size="13" :stroke-width="2.5" />
+              </button>
 
-      <!-- Barre d'actions admin -->
-      <div v-if="auth.isAdmin" class="px-4 md:px-8 py-3 flex items-center justify-between gap-3 border-b border-border flex-wrap">
+              <!-- Le choix -->
+              <div v-if="downloadMenuOpen && data.torrents_integrale.length > 1" class="menu absolute left-0 top-full mt-1.5 w-80 max-w-[90vw] z-20" role="menu">
+                <button
+                    v-for="(t, i) in data.torrents_integrale"
+                    :key="i"
+                    role="menuitem"
+                    :disabled="isAlreadyQueued(t) && !hasUncoveredByIntegrale(i)"
+                    class="menu-item"
+                    :class="(isDownloaded(`integrale-${i}`) && !hasUncoveredByIntegrale(i)) ? 'opacity-40 cursor-not-allowed' : ''"
+                    :title="t.raw ?? ''"
+                    @click="downloadAll(i); downloadMenuOpen = false"
+                >
+                  <Download :size="14" class="shrink-0" />
+                  <span class="truncate">{{ integraleGroupLabels()[i] }}</span>
+                </button>
+              </div>
+            </div>
 
-        <!-- Gauche : gestion bibliothèque -->
-        <div class="flex items-center gap-2">
-          <!-- Import manuel -->
-          <button
-              @click="openManualImport"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-accent-muted text-accent border border-accent/20 hover:bg-accent/20 transition"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="17 8 12 3 7 8"/>
-              <line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
-            Import manuel
-          </button>
-
-          <!-- Supprimer série -->
-          <button
-              v-if="Object.keys(organizedByEpisode).length > 0"
-              @click="openUnimportSerieModal"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
-              <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>
-            </svg>
-            Supprimer
-          </button>
-        </div>
-
-        <!-- Droite : téléchargements -->
-        <div class="flex flex-wrap items-center gap-2">
-          <!-- Bouton RSS sync -->
-          <button
-              @click="toggleRssSync"
-              :title="rssSync ? 'Surveillance activée — cliquer pour désactiver' : 'Surveiller les nouveaux épisodes'"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition"
-              :class="rssSync
-                ? 'bg-green-500/10 text-green-400 border-green-500/20 hover:bg-green-500/20'
-                : 'bg-shell text-muted border-border hover:text-primary hover:bg-hover'"
-          >
-            <!-- Icône antenne RSS -->
-            <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
-              <path d="M4 11a9 9 0 0 1 9 9"/>
-              <path d="M4 4a16 16 0 0 1 16 16"/>
-              <circle cx="5" cy="19" r="1" fill="currentColor" stroke="none"/>
-            </svg>
-            {{ rssSync ? 'Surveillé' : 'Surveiller' }}
-          </button>
-
-          <!-- Bouton unique "Tout télécharger" — dropdown si plusieurs intégrales -->
-          <div v-if="hasSomethingToDownload" class="relative" @click.stop>
-            <button
-                :disabled="downloadingAll"
-                class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg bg-accent text-white hover:bg-accent-hover transition"
-                :class="downloadingAll ? 'opacity-50 cursor-not-allowed' : ''"
-                @click="data.torrents_integrale.length > 1 ? (downloadMenuOpen = !downloadMenuOpen) : downloadAll()"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" :class="downloadingAll ? 'animate-spin' : ''">
-                <path v-if="!downloadingAll" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline v-if="!downloadingAll" points="7 10 12 15 17 10"/><line v-if="!downloadingAll" x1="12" y1="15" x2="12" y2="3"/>
-                <path v-else d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.36-2.64M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.36 2.64"/>
-              </svg>
-              {{ downloadingAll ? 'Envoi…' : 'Tout télécharger' }}
-              <span v-if="data.torrents_integrale.length > 1" class="opacity-70">▾</span>
+            <button @click="openManualImport" class="btn-secondary font-medium max-sm:w-11 max-sm:px-0 max-sm:shrink-0" title="Import manuel" aria-label="Import manuel">
+              <Upload :size="15" :stroke-width="2" /> <span class="max-sm:hidden">Import manuel</span>
             </button>
 
-            <!-- Dropdown choix d'intégrale -->
-            <div v-if="downloadMenuOpen && data.torrents_integrale.length > 1"
-                 class="absolute right-0 bottom-full mb-1 bg-card border border-border rounded-xl p-1 z-20 w-56 shadow-xl flex flex-col gap-0.5">
-              <button
-                  v-for="(t, i) in data.torrents_integrale"
-                  :key="i"
-                  :disabled="isAlreadyQueued(t) && !hasUncoveredByIntegrale(i)"
-                  class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-primary hover:bg-hover transition-colors text-left"
-                  :class="(isDownloaded(`integrale-${i}`) && !hasUncoveredByIntegrale(i)) ? 'opacity-40 cursor-not-allowed' : ''"
-                  @click="downloadAll(i); downloadMenuOpen = false"
-              >
-                <svg width="11" height="11" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                {{ integraleGroupLabels()[i] }}
+            <div class="relative" @click.stop>
+              <button @click="moreMenuOpen = !moreMenuOpen" class="btn-icon" aria-label="Plus d'actions" aria-haspopup="menu" :aria-expanded="moreMenuOpen">
+                <Ellipsis :size="16" />
               </button>
+              <div v-if="moreMenuOpen" class="menu absolute right-0 sm:right-auto sm:left-0 top-full mt-1.5 w-64 z-20" role="menu">
+                <button role="menuitem" class="menu-item" @click="toggleRssSync(); moreMenuOpen = false">
+                  <Rss :size="14" class="shrink-0" />
+                  {{ rssSync ? 'Ne plus surveiller' : 'Surveiller les nouveaux épisodes' }}
+                </button>
+                <button
+                    v-if="Object.keys(organizedByEpisode).length > 0"
+                    role="menuitem"
+                    class="menu-item text-err hover:text-err"
+                    @click="openUnimportSerieModal(); moreMenuOpen = false"
+                >
+                  <Trash2 :size="14" class="shrink-0" /> Supprimer la série…
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
-      </div>
+          </template>
 
-      <!-- Série absente du scraper -->
-      <div v-if="auth.isAdmin && !data.scraper_synced" class="mx-4 md:mx-8 mt-4 flex items-start gap-3 px-4 py-3 rounded-lg border border-yellow-500/40 bg-yellow-500/5">
-        <span class="text-yellow-500 text-sm mt-0.5">⚠</span>
-        <div class="flex flex-col gap-0.5">
-          <p class="text-sm text-yellow-500 font-medium">Série absente du scraper</p>
-          <p class="text-xs text-muted">
-            Téléchargements indisponibles pour le moment. L'import manuel et le renommage s'appuient sur l'API Fankai en attendant la prochaine synchronisation.
-          </p>
-        </div>
-      </div>
+          <!-- Invité -->
+          <template v-else>
+            <button v-if="canRequestMore" @click="openRequestModal()" class="btn-primary max-sm:flex-1 max-sm:min-w-0">
+              <Clock3 :size="16" :stroke-width="2.25" />
+              {{ myRequest ? 'Demander les saisons manquantes' : 'Demander la série' }}
+            </button>
+            <span v-if="myRequest" class="min-h-10 py-2 px-4 rounded-full border border-accent/30 text-accent text-[13px] font-semibold flex items-center gap-[9px]">
+              <Clock3 :size="15" :stroke-width="2" />
+              {{ myRequest.status === 'approved' ? 'Demande approuvée · bientôt là' : 'Demande en attente' }}<template v-if="myScopeLabel"> · {{ myScopeLabel }}</template>
+            </span>
+            <span v-else-if="allOrganized" class="h-10 px-1 flex items-center gap-2 text-body font-semibold text-ok">
+              <Check :size="16" :stroke-width="2.5" /> Toute la série est disponible
+            </span>
+          </template>
+        </template>
+      </SerieHero>
 
-      <!-- Dossier série à renommer -->
-      <div v-if="auth.isAdmin && staleFolders.length > 0" class="mx-4 md:mx-8 mt-4 flex items-center justify-between gap-3 flex-wrap px-4 py-3 rounded-lg border border-yellow-500/40 bg-yellow-500/5">
-        <div class="flex items-start gap-3 min-w-0">
-          <span class="text-yellow-500 text-sm mt-0.5">⚠</span>
-          <div class="flex flex-col gap-0.5 min-w-0">
-            <p class="text-sm text-yellow-500 font-medium">Dossier différent du titre de la série</p>
-            <p class="text-xs text-muted break-all">
-              <span class="font-mono text-primary">{{ staleFolders.map(f => basename(f.path)).join(', ') }}</span>
-              → <span class="font-mono text-primary">{{ folderTarget }}</span>
+      <div class="px-4 md:px-10 pt-5 pb-16 flex flex-col gap-4">
+
+        <!-- Série absente du scraper -->
+        <div v-if="auth.isAdmin && !data.scraper_synced" class="rounded-card border border-accent/30 bg-accent/5 px-5 py-4 flex items-start gap-3.5">
+          <TriangleAlert :size="18" :stroke-width="1.75" class="text-accent shrink-0 mt-0.5" />
+          <div class="flex flex-col gap-1">
+            <p class="card-title text-accent">Série absente du scraper</p>
+            <p class="text-meta text-secondary">
+              Téléchargements indisponibles pour le moment. L'import manuel et le renommage s'appuient sur l'API Fankai en attendant la prochaine synchronisation.
             </p>
           </div>
         </div>
-        <button @click="renameFolder" :disabled="renamingFolder" class="btn-secondary text-xs shrink-0">
-          {{ renamingFolder ? 'Renommage…' : 'Renommer le dossier' }}
-        </button>
-      </div>
 
-      <!-- Barre utilisateur (mode demande) -->
-      <div v-if="!auth.isAdmin" class="px-4 md:px-8 py-3 flex items-center justify-between gap-3 border-b border-border flex-wrap">
-        <div v-if="myRequest" class="flex items-center gap-3">
-          <span class="text-xs px-2 py-1 rounded border" :class="requestStatusClass(myRequest.status)">
-            {{ requestStatusLabel(myRequest.status) }}
-          </span>
-          <span v-if="myRequest.status === 'rejected' && myRequest.rejectionMessage" class="text-xs text-muted">
-            {{ myRequest.rejectionMessage }}
-          </span>
+        <!-- Dossier série à renommer -->
+        <div v-if="auth.isAdmin && staleFolders.length > 0" class="rounded-card border border-accent/30 bg-accent/5 px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
+          <div class="flex items-start gap-3.5 min-w-0">
+            <Folder :size="18" :stroke-width="1.75" class="text-accent shrink-0 mt-0.5" />
+            <div class="flex flex-col gap-1 min-w-0">
+              <p class="card-title">Dossier différent du titre de la série</p>
+              <p class="text-meta text-secondary break-all">
+                {{ staleFolders.map(f => basename(f.path)).join(', ') }} → <span class="text-primary">{{ folderTarget }}</span>
+              </p>
+            </div>
+          </div>
+          <button @click="renameFolder" :disabled="renamingFolder" class="btn-secondary btn-sm shrink-0">
+            {{ renamingFolder ? 'Renommage…' : 'Renommer le dossier' }}
+          </button>
         </div>
-        <div v-else class="text-xs text-muted">Cliquez sur une saison ou un épisode pour faire une demande</div>
-        <button
-            v-if="!myRequest || myRequest.status === 'rejected' || myRequest.status === 'completed'"
-            @click="openRequestModal()"
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-accent text-white hover:bg-accent-hover transition"
-        >
-          Demander la série
-        </button>
-      </div>
 
-      <!-- Saisons -->
-      <div class="px-4 md:px-8 pb-16 flex flex-col gap-4 pt-4">
+        <!-- Saisons -->
         <SerieSeasonCard
             v-for="season in data.seasons"
             :key="season.id"
@@ -168,6 +143,7 @@
             :request-mode="!auth.isAdmin"
             :requested-seasons="requestedSeasonNumbers"
             :requested-episodes="requestedEpisodeIds"
+            :request-status="myRequest?.status"
             @toggle="toggleSeason"
             @download="(key, url, magnet, fi, fp, ih) => download(key, url, magnet, fi, fp, ih)"
             @download-season="(s, h) => downloadSeason(s, h)"
@@ -181,34 +157,34 @@
 
       <!-- Modal demande (utilisateurs) -->
       <Teleport to="body">
-        <div v-if="requestModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4" @click.self="requestModal = false">
-          <div class="bg-card border border-border rounded-xl w-full max-w-sm p-6 flex flex-col gap-5">
-            <div>
-              <p class="text-sm font-semibold text-primary">Demander une série</p>
-              <p class="text-xs text-muted mt-1 truncate">{{ data?.serie?.title }}</p>
+        <div v-if="requestModal" class="modal-backdrop" @click.self="requestModal = false">
+          <div class="modal max-w-sm" role="dialog" aria-modal="true" aria-labelledby="request-title">
+            <div class="flex flex-col gap-1">
+              <h2 id="request-title" class="card-title">Demander une série</h2>
+              <p class="text-meta text-muted truncate">{{ data?.serie?.title }}</p>
             </div>
-            <div class="flex flex-col gap-2">
-              <p class="text-xs text-muted font-medium">Saisons demandées</p>
+            <div class="flex flex-col gap-1">
+              <p class="tag-label mb-1.5">Saisons demandées</p>
               <label
                   v-for="season in data?.seasons"
                   :key="season.id"
-                  class="flex items-center gap-3 cursor-pointer select-none"
+                  class="flex items-center gap-3 min-h-9 cursor-pointer select-none"
               >
                 <input
                     type="checkbox"
                     :value="season.season_number"
                     v-model="requestSeasons"
-                    class="w-4 h-4 rounded border-border accent-accent"
+                    class="w-4 h-4 rounded"
                 />
-                <span class="text-sm text-primary">
+                <span class="text-body text-primary">
                   {{ season.season_number === 0 ? 'Spéciaux' : `Saison ${season.season_number}` }}
-                  <span v-if="season.title && season.title !== `Saison ${season.season_number}`" class="text-muted font-normal">— {{ season.title }}</span>
+                  <span v-if="season.title && season.title !== `Saison ${season.season_number}`" class="text-muted">— {{ season.title }}</span>
                 </span>
               </label>
             </div>
-            <div class="flex items-center justify-end gap-2">
-              <button @click="requestModal = false" class="btn-secondary text-xs">Annuler</button>
-              <button @click="submitRequest" :disabled="requestSeasons.length === 0" class="btn-primary text-xs disabled:opacity-50">
+            <div class="flex items-center justify-end gap-2.5">
+              <button @click="requestModal = false" class="btn-ghost">Annuler</button>
+              <button @click="submitRequest" :disabled="requestSeasons.length === 0" class="btn-primary">
                 Envoyer la demande
               </button>
             </div>
@@ -219,19 +195,19 @@
 
     <!-- Modal désimport série -->
     <Teleport to="body">
-      <div v-if="unimportSerieModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4" @click.self="unimportSerieModal = false">
-        <div class="bg-card border border-border rounded-xl w-full max-w-sm p-6 flex flex-col gap-5">
-          <div>
-            <p class="text-sm font-semibold text-primary">Supprimer la série</p>
-            <p class="text-xs text-muted mt-1 truncate">{{ data?.serie?.title }}</p>
+      <div v-if="unimportSerieModal" class="modal-backdrop" @click.self="unimportSerieModal = false">
+        <div class="modal max-w-sm" role="dialog" aria-modal="true" aria-labelledby="unimport-serie-title">
+          <div class="flex flex-col gap-1">
+            <h2 id="unimport-serie-title" class="card-title">Supprimer la série</h2>
+            <p class="text-meta text-muted truncate">{{ data?.serie?.title }}</p>
           </div>
           <label class="flex items-center gap-3 cursor-pointer select-none">
-            <input type="checkbox" v-model="deleteSerieFiles" class="w-4 h-4 rounded border-border accent-accent" />
-            <span class="text-xs text-muted">Supprimer également les fichiers physiques du disque</span>
+            <input type="checkbox" v-model="deleteSerieFiles" class="w-4 h-4 rounded" />
+            <span class="text-body text-secondary">Supprimer également les fichiers physiques du disque</span>
           </label>
-          <div class="flex items-center justify-end gap-2">
-            <button @click="unimportSerieModal = false" class="btn-secondary text-xs">Annuler</button>
-            <button @click="confirmUnimportSerie" class="px-4 py-2 rounded-lg border border-red-500/30 text-red-400 bg-red-500/10 hover:bg-red-500/20 transition-colors text-xs font-medium">
+          <div class="flex items-center justify-end gap-2.5">
+            <button @click="unimportSerieModal = false" class="btn-ghost">Annuler</button>
+            <button @click="confirmUnimportSerie" class="btn-danger">
               {{ deleteSerieFiles ? 'Supprimer les fichiers' : 'Supprimer' }}
             </button>
           </div>
@@ -260,6 +236,9 @@ import { useRoute } from 'vue-router'
 import { useSeriesStore } from '@/stores/series'
 import { useAuthStore }   from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
+import { Check, ChevronDown, Clock3, Download, Ellipsis, Folder, Loader, Rss, Trash2, TriangleAlert, Upload } from 'lucide-vue-next'
+import { seasonsLabel } from '@/utils/requests'
+import { plural } from '@/utils/format'
 import ManualImportModal from '@/components/ManualImportModal.vue'
 import SerieHero from '@/components/serie/SerieHero.vue'
 import SerieSeasonCard from '@/components/serie/SerieSeasonCard.vue'
@@ -379,17 +358,13 @@ async function submitRequest() {
   } catch { toast('Impossible de contacter le serveur', 'error') }
 }
 
-function requestStatusLabel(status: string) {
-  return { pending: 'En attente', approved: 'Approuvée', rejected: 'Refusée', completed: 'Disponible' }[status] ?? status
-}
-function requestStatusClass(status: string) {
-  return {
-    pending  : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
-    approved : 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-    rejected : 'bg-red-500/10 text-red-400 border-red-500/20',
-    completed: 'bg-green-500/10 text-green-400 border-green-500/20',
-  }[status] ?? ''
-}
+// Portée de ma demande en cours : « saisons 3 et 4 », « 2 épisodes »
+const myScopeLabel = computed(() => {
+  const r = myRequest.value?.requesters?.find((r: any) => r.userId === auth.userId)
+  if (!r) return ''
+  if ((r.episodes ?? []).length > 0) return plural(r.episodes.length, 'épisode')
+  return seasonsLabel(r.seasons).toLowerCase()
+})
 
 const collapsedSeasons   = ref<Set<number>>(new Set())
 const downloading        = ref<string[]>([])
@@ -402,6 +377,7 @@ const epActionLoading    = ref<Record<number, boolean>>({})
 const unimportSerieModal = ref(false)
 const deleteSerieFiles   = ref(false)
 const downloadMenuOpen   = ref(false)
+const moreMenuOpen       = ref(false)
 const downloadingAll     = ref(false)
 const downloadingSeason  = ref<Record<number, boolean>>({})
 const rssSync            = ref(false)
@@ -422,6 +398,18 @@ const _prevFileProgresses = new Map<string, number>()   // hash:index → progre
 const _recentlyOrganized  = new Set<string>()           // hash:fileIndex ou hash seul
 
 const data = computed(() => store.currentSerie)
+
+const seasonCount    = computed(() => data.value?.seasons.filter(s => s.season_number > 0).length ?? 0)
+const episodeCount   = computed(() => data.value?.seasons.reduce((n, s) => n + s.episodes.length, 0) ?? 0)
+const organizedCount = computed(() => data.value?.seasons.reduce((n, s) => n + s.episodes.filter(e => e.organized).length, 0) ?? 0)
+const allOrganized   = computed(() => episodeCount.value > 0 && organizedCount.value >= episodeCount.value)
+
+// Invité : reste-t-il des saisons à demander ?
+const canRequestMore = computed(() => {
+  if (!data.value || allOrganized.value) return false
+  if (!myRequest.value) return true
+  return data.value.seasons.some(s => s.organized_state !== 'complete' && !requestedSeasonNumbers.value.includes(s.season_number))
+})
 
 // ── Helpers intégrale ─────────────────────────────────────────
 function integraleGroupLabels(): string[] {
@@ -817,7 +805,7 @@ async function unimportEpisode(ep: any, _season: any, deleteFile: boolean) {
   finally { epActionLoading.value[ep.id] = false }
 }
 
-const closeMenus = () => { downloadMenuOpen.value = false }
+const closeMenus = () => { downloadMenuOpen.value = false; moreMenuOpen.value = false }
 
 onMounted(() => {
   load()

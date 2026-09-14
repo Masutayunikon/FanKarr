@@ -1,42 +1,43 @@
 <template>
-  <div class="min-h-screen bg-shell flex items-center justify-center px-4">
-    <div class="w-full max-w-sm">
+  <div class="relative min-h-screen bg-main flex items-center justify-center px-4 py-10 overflow-hidden">
+    <div class="dot-grid [--dot-grid-angle:160deg] [--dot-grid-fade:45%]" />
+    <div class="relative w-full max-w-sm">
 
       <!-- Logo -->
-      <div class="flex items-center justify-center gap-2.5 mb-8">
-        <FankarrLogo class="w-8 h-8" />
-        <span class="text-2xl font-bold text-primary tracking-wide">FanKarr</span>
+      <div class="flex items-center justify-center gap-3 mb-8">
+        <FankarrLogo class="w-9 h-9" />
+        <span class="font-display text-[30px] font-bold text-primary tracking-[0.01em]">FanKarr</span>
       </div>
 
       <!-- Card -->
-      <div class="settings-card p-8 flex flex-col gap-5">
-        <div>
-          <p class="text-xs text-accent font-medium mb-1">
+      <div class="card px-7 py-7 flex flex-col gap-5 shadow-[0_24px_60px_rgb(0_0_0/0.4)]">
+        <div class="flex flex-col gap-1">
+          <p class="tag-label text-accent">
             {{ isSetup ? 'Première connexion' : 'Connexion' }}
           </p>
-          <h1 class="text-lg font-semibold text-primary">
+          <h1 class="font-display text-[26px] font-bold text-primary leading-tight">
             {{ isSetup ? 'Créer un compte' : 'Bon retour' }}
           </h1>
         </div>
 
         <div class="flex flex-col gap-4">
-          <div>
-            <label class="settings-label mb-1.5">Identifiant</label>
-            <input v-model="username" type="text" placeholder="admin" class="settings-input" @keyup.enter="submit" />
+          <div class="flex flex-col gap-[7px]">
+            <label for="auth-username" class="field-label">Identifiant</label>
+            <input id="auth-username" v-model="username" type="text" placeholder="admin" class="field" @keyup.enter="submit" />
           </div>
-          <div>
-            <label class="settings-label mb-1.5">Mot de passe</label>
-            <input v-model="password" type="password" placeholder="••••••••" class="settings-input" @keyup.enter="submit" />
+          <div class="flex flex-col gap-[7px]">
+            <label for="auth-password" class="field-label">Mot de passe</label>
+            <input id="auth-password" v-model="password" type="password" placeholder="••••••••" class="field" @keyup.enter="submit" />
           </div>
           <div v-if="isSetup">
-            <label class="settings-label mb-1.5">Confirmer</label>
-            <input v-model="confirm" type="password" placeholder="••••••••" class="settings-input" @keyup.enter="submit" />
+            <label class="field-label mb-1.5">Confirmer</label>
+            <input v-model="confirm" type="password" placeholder="••••••••" class="field" @keyup.enter="submit" />
           </div>
 
-          <p v-if="error" class="text-xs text-red-400">{{ error }}</p>
+          <p v-if="error" class="text-meta text-err" role="alert">{{ error }}</p>
 
-          <button @click="submit" :disabled="submitting" class="btn-primary w-full py-2.5 mt-1">
-            {{ submitting ? '...' : isSetup ? 'Créer le compte' : 'Se connecter' }}
+          <button @click="submit" :disabled="submitting" class="btn-primary w-full h-11 mt-1">
+            {{ submitting ? '…' : isSetup ? 'Créer le compte' : 'Se connecter' }}
           </button>
         </div>
       </div>

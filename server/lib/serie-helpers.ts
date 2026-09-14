@@ -212,12 +212,20 @@ export function buildResolvedEpisodes(sd: any, hash: string, seasonFilter?: numb
     return resolved
 }
 
-export function computeSerieDownloadState(serieData: any | null, organized: Record<string, Record<string, any>>, activeTorrents: Set<string>): 'none' | 'downloading' | 'partial' | 'complete' {
+export function computeSerieDownloadState(
+    serieData     : any | null,
+    organized     : Record<string, Record<string, any>>,
+    activeTorrents: Set<string>,
+    counts        = serieData ? countOrganizedEpisodes(serieData, organized) : { total: 0, organized: 0 },
+): 'none' | 'downloading' | 'partial' | 'complete' {
     if (!serieData) return 'none'
-    const allTorrents = extractTorrentsFromSerieData(serieData)
+    if (extractTorrentsFromSerieData(serieData).some(t => t.infohash && activeTorrents.has(t.infohash.toLowerCase()))) return 'downloading'
+    if (counts.total === 0 || counts.organized === 0) return 'none'
+    if (counts.organized >= counts.total) return 'complete'
+    return 'partial'
+}
 
-    if (allTorrents.some(t => t.infohash && activeTorrents.has(t.infohash.toLowerCase()))) return 'downloading'
-
+export function countOrganizedEpisodes(serieData: any, organized: Record<string, Record<string, any>>): { total: number; organized: number } {
     // Dédoublonnage : épisodes uniques par (season_number, episode_number)
     // pour éviter de compter x264 + x265 comme deux épisodes distincts
     const uniqueEpKeys = new Set<string>()
@@ -232,7 +240,7 @@ export function computeSerieDownloadState(serieData: any | null, organized: Reco
 
     const organizedEpKeys = new Set<string>()
 
-    for (const t of allTorrents) {
+    for (const t of extractTorrentsFromSerieData(serieData)) {
         const hash = t.infohash?.toLowerCase()
         if (!hash) continue
         const orgFiles = organized[hash] ?? {}
@@ -250,7 +258,5 @@ export function computeSerieDownloadState(serieData: any | null, organized: Reco
     for (const [id, key] of epIdToKey)
         if (trackedIds.has(String(id))) organizedEpKeys.add(key)
 
-    if (uniqueEpKeys.size === 0 || organizedEpKeys.size === 0) return 'none'
-    if (organizedEpKeys.size >= uniqueEpKeys.size) return 'complete'
-    return 'partial'
+    return { total: uniqueEpKeys.size, organized: organizedEpKeys.size }
 }

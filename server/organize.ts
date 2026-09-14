@@ -22,6 +22,7 @@ function resolveWorkerPath(): string {
 }
 
 export interface OrganizeResult {
+    serieId?: number | null
     total   : number
     skipped : number
     done    : number
@@ -84,6 +85,8 @@ function swapExt(filename: string, ext: string): string {
     if (!cur || cur === ext) return filename
     return filename.slice(0, -cur.length) + ext
 }
+
+export let lastScan: { at: string; found: number; added: number } | null = null
 
 export async function scanMediaPath(
     mediaPath    : string,
@@ -288,6 +291,7 @@ export async function scanMediaPath(
         writeOrganized(organized, organizedPath)
     }
 
+    lastScan = { at: new Date().toISOString(), ...result }
     logger.info('organize', `Scan terminé — ${result.found} fichiers, ${result.added} ajoutés, ${removed} orphelins supprimés${autoRemoved > 0 ? `, ${autoRemoved} désimportés auto (fichier manquant)` : ''}${noMatch > 0 ? `, ${noMatch} non matchés` : ''}`)
 
     return result
@@ -637,6 +641,7 @@ export async function organizeTorrent(
         _pendingManual.delete(key)
         try {
             await runWorker([fakeTorrent], seriesData, msg => {
+                result.serieId = msg.serieId ?? null
                 result.total   = msg.total
                 result.skipped = msg.skipped
                 result.done    = msg.done

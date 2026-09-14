@@ -1,38 +1,41 @@
 <template>
   <Teleport to="body">
-    <div class="fixed bottom-4 right-4 z-[70] flex flex-col gap-2">
+    <div class="fixed bottom-4 right-4 left-4 sm:left-auto z-[70] flex flex-col items-end gap-2 pointer-events-none" role="status" aria-live="polite">
       <TransitionGroup name="toast">
         <div
             v-for="t in toasts"
             :key="t.id"
             @click="remove(t.id)"
-            class="flex items-center gap-3 px-4 py-3 rounded-xl border text-sm cursor-pointer min-w-64 max-w-sm"
+            class="pointer-events-auto flex items-center gap-3 pl-3.5 pr-4 py-3 rounded-card border bg-card cursor-pointer w-full sm:w-auto sm:min-w-72 max-w-sm shadow-[0_16px_40px_rgb(0_0_0/0.5)]"
             :class="{
-            'bg-card border-green-500/30 text-green-400' : t.type === 'success',
-            'bg-card border-red-500/30   text-red-400'   : t.type === 'error',
-            'bg-card border-accent/30    text-accent'    : t.type === 'info',
+            'border-ok/30'     : t.type === 'success',
+            'border-err/35'    : t.type === 'error',
+            'border-accent/35' : t.type === 'info',
           }"
         >
-          <svg v-if="t.type === 'success'" width="14" height="14" viewBox="0 0 14 14" stroke="currentColor" stroke-width="2" fill="none" class="shrink-0">
-            <polyline points="2 7 5.5 10.5 12 3"/>
-          </svg>
-          <svg v-else-if="t.type === 'error'" width="14" height="14" viewBox="0 0 14 14" stroke="currentColor" stroke-width="2" fill="none" class="shrink-0">
-            <line x1="3" y1="3" x2="11" y2="11"/><line x1="11" y1="3" x2="3" y2="11"/>
-          </svg>
-          <svg v-else width="14" height="14" viewBox="0 0 14 14" stroke="currentColor" stroke-width="2" fill="none" class="shrink-0">
-            <circle cx="7" cy="7" r="5"/><line x1="7" y1="5" x2="7" y2="7.5"/><circle cx="7" cy="9.5" r="0.5" fill="currentColor"/>
-          </svg>
+          <span
+              class="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
+              :class="{
+              'bg-ok/15 text-ok'            : t.type === 'success',
+              'bg-err/15 text-err'          : t.type === 'error',
+              'bg-accent-muted text-accent' : t.type === 'info',
+            }"
+          >
+            <Check v-if="t.type === 'success'" :size="13" :stroke-width="2.75" />
+            <X v-else-if="t.type === 'error'" :size="13" :stroke-width="2.75" />
+            <Info v-else :size="13" :stroke-width="2.5" />
+          </span>
 
-          <span class="flex-1 text-xs leading-snug">{{ t.message }}</span>
+          <span class="flex-1 text-meta text-primary leading-snug">{{ t.message }}</span>
 
-          <!-- Badge count si groupé -->
+          <!-- Nbre de messages regroupés -->
           <span
               v-if="t.count && t.count > 1"
-              class="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full"
+              class="shrink-0 pill h-5 px-2 text-[10.5px]"
               :class="{
-              'bg-green-500/20 text-green-400' : t.type === 'success',
-              'bg-red-500/20   text-red-400'   : t.type === 'error',
-              'bg-accent/20    text-accent'     : t.type === 'info',
+              'pill-ok'     : t.type === 'success',
+              'pill-err'    : t.type === 'error',
+              'pill-active' : t.type === 'info',
             }"
           >
             ×{{ t.count }}
@@ -44,6 +47,7 @@
 </template>
 
 <script setup lang="ts">
+import { Check, Info, X } from 'lucide-vue-next'
 import { useToast } from '@/composables/useToast'
 const { toasts, remove } = useToast()
 </script>

@@ -1,18 +1,18 @@
 <template>
-  <div class="flex items-start justify-between gap-4">
-    <div>
-      <p class="text-sm text-primary">{{ label }}</p>
-      <p class="text-xs text-muted mt-0.5">{{ description }}</p>
+  <div class="flex items-center justify-between gap-5">
+    <div class="flex-1 min-w-0 flex flex-col gap-[3px]">
+      <p class="text-sm font-medium text-primary">{{ label }}</p>
+      <p v-if="description" class="text-meta text-muted">{{ description }}</p>
     </div>
     <button
+        type="button"
+        role="switch"
+        :aria-checked="modelValue"
+        :aria-label="label"
         @click="$emit('update:modelValue', !modelValue)"
-        class="relative shrink-0 w-10 h-[22px] rounded-full transition-colors duration-200 mt-0.5"
-        :class="modelValue ? 'bg-accent' : 'bg-border'"
+        class="switch"
     >
-      <span
-          class="absolute top-[3px] left-[3px] w-4 h-4 rounded-full bg-white transition-transform duration-200"
-          :class="modelValue ? 'translate-x-[18px]' : 'translate-x-0'"
-      />
+      <span class="switch-knob" />
     </button>
   </div>
 </template>

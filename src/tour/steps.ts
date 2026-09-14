@@ -19,36 +19,31 @@ const help = (isAdmin: boolean): TourStep => ({
   id: 'help', target: ['help'], placement: 'right',
   title: 'Besoin d\'aide ?',
   body: isAdmin
-    ? 'Ce bouton relance la visite ou l\'assistant de configuration à tout moment (menu ☰ sur mobile).'
-    : 'Ce bouton relance la visite à tout moment (menu ☰ sur mobile).',
+    ? 'Ce bouton relance la visite ou l\'assistant de configuration à tout moment. Sur mobile, ouvrez le menu de votre avatar en haut de l\'Accueil.'
+    : 'Ce bouton relance la visite à tout moment. Sur mobile, ouvrez le menu de votre avatar en haut de l\'Accueil.',
 })
 
 const adminSteps: TourStep[] = [
   welcome,
   {
-    id: 'dashboard', route: '/dashboard', target: ['dashboard-stats'], placement: 'bottom',
-    title: 'Tableau de bord',
-    body: 'Taille du catalogue, séries importées, téléchargements en cours et erreurs, en un coup d\'œil.',
+    id: 'dashboard', route: '/dashboard', target: ['dashboard-stats'], placement: 'top',
+    title: 'Accueil',
+    body: 'Le dernier import en grand, les séries ajoutées récemment, et les chiffres du catalogue : séries dans la médiathèque et séries surveillées.',
   },
   {
-    id: 'dashboard-requests', route: '/dashboard', target: ['dashboard-requests'], placement: 'top',
-    title: 'Demandes en attente',
-    body: 'Les demandes de vos utilisateurs arrivent ici, qu\'elles viennent de FanKarr ou du plugin Jellyfin.',
+    id: 'dashboard-requests', route: '/dashboard', target: ['dashboard-requests'], placement: 'left',
+    title: 'À traiter',
+    body: 'Demandes en attente, imports en erreur et dossiers à renommer : chaque ligne porte son action. Les demandes arrivent de FanKarr ou du plugin Jellyfin.',
   },
   {
     id: 'series', route: '/series', target: ['series-poster', 'series-grid'], placement: 'right',
     title: 'Médiathèque',
-    body: 'Tout le catalogue Fankai. Cliquez sur une affiche pour ouvrir la fiche : saisons, épisodes, téléchargement et surveillance.',
+    body: 'Tout le catalogue Fankai. L\'état est écrit sur l\'affiche : importée, partielle, en téléchargement, erreur, dossier à renommer ou sans torrent. Cliquez pour ouvrir la fiche.',
   },
   {
     id: 'series-toolbar', route: '/series', target: ['series-toolbar'], placement: 'bottom',
     title: 'Recherche et filtres',
-    body: 'Cherchez une série, filtrez par disponibilité ou état d\'import, triez et changez la taille des affiches.',
-  },
-  {
-    id: 'series-legend', route: '/series', target: ['series-legend'], placement: 'bottom',
-    title: 'Barres d\'état',
-    body: 'La barre sous chaque affiche indique où en est la série : importée, en cours, partielle ou pas encore là.',
+    body: 'Chaque filtre affiche son nombre de séries ; « Plus » garde les filtres secondaires. Triez, et changez la taille des affiches.',
   },
   {
     id: 'series-select', route: '/series', target: ['series-select'], placement: 'bottom',
@@ -58,17 +53,17 @@ const adminSteps: TourStep[] = [
   {
     id: 'requests', route: '/requests', target: ['requests-header'], placement: 'bottom',
     title: 'Demandes',
-    body: 'Approuvez ou refusez les demandes. L\'approbation lance le téléchargement si des torrents existent.',
+    body: '« Approuver et télécharger » lance le téléchargement ; une demande sans torrent est signalée avant d\'être approuvée. Les demandes avec torrent s\'approuvent aussi en une fois.',
   },
   {
     id: 'activity', route: '/activity', target: ['activity-header'], placement: 'bottom',
     title: 'Activité',
-    body: 'Suivi en direct des torrents FanKarr, import manuel et relance quand un fichier n\'a pas été reconnu.',
+    body: 'Une ligne par torrent, du téléchargement à l\'import. Les onglets séparent ce qui est en cours, à importer ou en erreur ; une erreur d\'import s\'affiche dans sa ligne, avec de quoi relancer.',
   },
   {
-    id: 'settings', route: '/settings/download-client', target: ['nav-settings'], placement: 'right',
+    id: 'settings', route: '/settings/download-client', target: ['settings-menu', 'nav-settings'], placement: 'right',
     title: 'Paramètres',
-    body: 'Clients torrent, dossiers et mode d\'import, gestion des séries, catalogue, journaux, utilisateurs et Jellyfin.',
+    body: 'Les réglages sont rangés en quatre groupes : Compte (profil, utilisateurs), Médias (dossiers, séries, catalogue), Services (clients torrent, Jellyfin) et Système (journaux, avancé).',
   },
   help(true),
 ]
@@ -76,34 +71,34 @@ const adminSteps: TourStep[] = [
 const userSteps: TourStep[] = [
   welcome,
   {
-    id: 'dashboard', route: '/dashboard', target: ['dashboard-stats'], placement: 'bottom',
-    title: 'Tableau de bord',
-    body: 'Le catalogue Fankai et les séries déjà disponibles au visionnage.',
+    id: 'dashboard', route: '/dashboard', target: ['dashboard-stats'], placement: 'top',
+    title: 'Accueil',
+    body: 'Les nouveautés de la médiathèque et le nombre de séries prêtes à regarder.',
   },
   {
-    id: 'dashboard-requests', route: '/dashboard', target: ['dashboard-requests'], placement: 'top',
+    id: 'dashboard-requests', route: '/dashboard', target: ['dashboard-requests'], placement: 'left',
     title: 'Mes demandes',
-    body: 'L\'état de vos dernières demandes.',
+    body: 'L\'état de vos dernières demandes. Juste en dessous, « Pas encore là » propose des séries à demander en un clic.',
   },
   {
     id: 'series', route: '/series', target: ['series-poster', 'series-grid'], placement: 'right',
     title: 'Médiathèque',
-    body: 'Ouvrez une fiche puis « Demander la série », ou choisissez une saison précise.',
+    body: 'Toutes les séries du catalogue. Celles qui ne sont pas encore là sont assombries : ouvrez la fiche pour demander la série, une saison ou un épisode.',
   },
   {
     id: 'series-toolbar', route: '/series', target: ['series-toolbar'], placement: 'bottom',
     title: 'Recherche et filtres',
-    body: 'Retrouvez rapidement une série et filtrez celles qui sont déjà disponibles.',
+    body: 'Retrouvez une série et filtrez : prêtes à regarder, bientôt là, pas encore là ou vos demandes.',
   },
   {
     id: 'requests', route: '/requests', target: ['requests-header'], placement: 'bottom',
-    title: 'Demandes',
-    body: 'Suivez vos demandes : en attente, approuvée, disponible ou refusée.',
+    title: 'Mes demandes',
+    body: 'Suivez vos demandes : en attente, bientôt là, disponible ou refusée. Une demande en attente peut encore être annulée.',
   },
   {
     id: 'profile-token', route: '/settings/profile', target: ['profile-token'], placement: 'top',
-    title: 'Token API',
-    body: 'Ce token relie le plugin Jellyfin FanKarr Search à votre compte pour faire vos demandes depuis Jellyfin.',
+    title: 'Jeton d’API',
+    body: 'Ce jeton relie le plugin Jellyfin FanKarr Search à votre compte pour faire vos demandes depuis Jellyfin. Le choix de l’accent de couleur se fait juste à côté.',
   },
   help(false),
 ]

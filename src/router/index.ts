@@ -35,11 +35,10 @@ const router = createRouter({
             path: '/',
             component: AppLayout,
             children: [
-                // Redirections des anciennes URLs
-                { path: '',        redirect: '/series' },
+                { path: '',        redirect: '/dashboard' },
                 { path: 'downloads', redirect: '/activity' },
 
-                // Dashboard
+                // Accueil
                 {
                     path: 'dashboard',
                     name: 'dashboard',
@@ -58,14 +57,14 @@ const router = createRouter({
                     component: () => import('@/views/SerieView.vue'),
                 },
 
-                // Activité (ex-downloads)
+                // Activité
                 {
                     path: 'activity',
                     name: 'activity',
                     component: () => import('@/views/DownloadsView.vue'),
                 },
 
-                // Paramètres — layout imbriqué avec sous-routes
+                // Paramètres
                 {
                     path: 'settings',
                     component: () => import('@/views/settings/SettingsLayout.vue'),
@@ -149,11 +148,11 @@ router.beforeEach(async (to) => {
     // Redirige vers /auth si non connecté
     if (!to.meta.public && !auth.loggedIn) return '/auth'
 
-    // Redirige vers /series si déjà connecté et tente d'accéder à /auth
-    if (to.path === '/auth' && auth.loggedIn) return '/series'
+    // Redirige vers l'accueil si déjà connecté et tente d'accéder à /auth
+    if (to.path === '/auth' && auth.loggedIn) return '/dashboard'
 
     // Redirige les non-admins hors des pages admin
-    if (to.meta.adminOnly && !auth.isAdmin) return '/series'
+    if (to.meta.adminOnly && !auth.isAdmin) return '/dashboard'
 
     // Premier lancement : l'assistant de configuration est obligatoire
     if (auth.loggedIn && auth.isAdmin && !auth.onboardingDone

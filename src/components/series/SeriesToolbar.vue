@@ -1,156 +1,140 @@
 <template>
-  <div>
-    <!-- Toolbar -->
-    <div data-tour="series-toolbar" class="shrink-0 px-4 md:px-6 py-3 border-b border-border flex flex-col gap-2">
+  <div data-tour="series-toolbar" class="flex flex-col gap-[18px]">
 
-      <!-- Ligne 1 : recherche + filtres -->
-      <div class="flex items-center gap-2">
+    <header class="flex items-center justify-between gap-x-4 gap-y-3 flex-wrap min-h-11">
+      <div class="flex items-baseline gap-3.5">
+        <h1 class="page-title tracking-[0.01em]">Médiathèque</h1>
+        <span class="text-[13px] text-muted">{{ count }} série{{ count > 1 ? 's' : '' }}</span>
+      </div>
 
-        <div class="relative flex-1">
-          <Search class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" :size="14" />
+      <div class="flex items-center gap-2.5 w-full md:w-auto">
+        <label class="flex-1 md:flex-none md:w-[320px] h-10 rounded-full bg-card border border-border-light flex items-center gap-2.5 pl-4 pr-2 cursor-text focus-within:border-accent transition-colors">
+          <Search :size="16" :stroke-width="1.75" class="text-muted shrink-0" />
           <input
+              data-library-search
               :value="search"
               @input="emit('update:search', ($event.target as HTMLInputElement).value)"
+              @keydown.esc="emit('update:search', '')"
               type="text"
-              placeholder="Rechercher…"
-              class="settings-input pl-9 w-full py-1.5 text-sm"
+              :placeholder="selectable ? 'Rechercher dans la médiathèque' : 'Rechercher une série'"
+              aria-label="Rechercher une série"
+              class="flex-1 min-w-0 bg-transparent outline-none text-sm text-primary placeholder:text-muted"
           />
-        </div>
-
-        <!-- Filtres -->
-        <div class="relative shrink-0" ref="filterRef">
-          <button
-              @click="filterOpen = !filterOpen"
-              class="btn-secondary flex items-center gap-1.5 py-1.5 px-2.5 relative"
-              :class="hasActiveFilter ? 'border-accent text-accent' : ''"
-              title="Filtres"
-          >
-            <SlidersHorizontal :size="15" />
-            <span class="hidden md:inline text-xs">Filtres</span>
-            <ChevronDown class="hidden md:inline transition-transform" :size="12" :class="filterOpen ? 'rotate-180' : ''" />
-            <span v-if="hasActiveFilter" class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-accent" />
+          <button v-if="search" @click="emit('update:search', '')" aria-label="Effacer la recherche" class="w-7 h-7 rounded-full flex items-center justify-center text-muted hover:text-primary hover:bg-hover transition-colors">
+            <X :size="14" />
           </button>
+        </label>
 
-          <div
-              v-if="filterOpen"
-              class="absolute top-full right-0 mt-1 bg-card border border-border rounded-xl p-3 z-20 w-52 flex flex-col gap-3 shadow-xl"
-          >
-            <div>
-              <p class="text-xs text-muted mb-1.5">Disponibilité</p>
-              <div class="flex flex-col gap-1">
-                <button
-                    v-for="f in filtersDisponibilite" :key="f.value"
-                    @click="emit('update:activeFilter', f.value)"
-                    class="flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-colors"
-                    :class="activeFilter === f.value ? 'bg-active text-primary' : 'text-secondary hover:bg-hover'"
-                >
-                  {{ f.label }}
-                  <span v-if="activeFilter === f.value" class="w-1.5 h-1.5 rounded-full bg-accent" />
-                </button>
-              </div>
-            </div>
-            <div class="border-t border-border pt-3">
-              <p class="text-xs text-muted mb-1.5">État import</p>
-              <div class="flex flex-col gap-1">
-                <button
-                    v-for="f in filtersImport" :key="f.value"
-                    @click="emit('update:activeFilter', f.value)"
-                    class="flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-colors"
-                    :class="activeFilter === f.value ? 'bg-active text-primary' : 'text-secondary hover:bg-hover'"
-                >
-                  <div class="flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full shrink-0" :style="{ background: f.color }" />
-                    {{ f.label }}
-                  </div>
-                  <span v-if="activeFilter === f.value" class="w-1.5 h-1.5 rounded-full bg-accent" />
-                </button>
-              </div>
-            </div>
-            <button
-                v-if="hasActiveFilter"
-                @click="emit('update:activeFilter', 'all')"
-                class="text-xs text-muted hover:text-primary transition-colors text-left pt-1 border-t border-border"
-            >
-              Effacer les filtres
-            </button>
-          </div>
-        </div>
-
-        <!-- Sélection multiple -->
         <button
             v-if="selectable"
             data-tour="series-select"
             @click="emit('update:selecting', !selecting)"
-            class="btn-secondary flex items-center gap-1.5 py-1.5 px-2.5 shrink-0"
-            :class="selecting ? 'border-accent text-accent' : ''"
-            title="Sélectionner plusieurs séries"
+            class="h-10 px-4 rounded-full border text-body font-medium flex items-center gap-2 shrink-0 transition-colors"
+            :class="selecting ? 'border-accent text-accent bg-accent-muted' : 'border-border-light text-secondary hover:text-primary hover:bg-hover'"
+            :title="selecting ? 'Quitter la sélection' : 'Sélectionner plusieurs séries'"
         >
-          <ListChecks :size="15" />
-          <span class="hidden md:inline text-xs">Sélection</span>
+          <SquareCheck :size="16" :stroke-width="1.75" />
+          <span class="hidden sm:inline">Sélectionner</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Filtres, tri et taille  -->
+    <div ref="rowRef" class="relative">
+      <div class="chip-row md:justify-between md:gap-x-4 md:gap-y-2.5" @scroll="moreOpen = false; sortOpen = false">
+        <div class="flex items-center gap-1.5 md:flex-wrap md:shrink md:min-w-0">
+          <button
+              v-for="f in filters" :key="f.value"
+              @click="emit('update:activeFilter', f.value)"
+              class="chip shrink-0"
+              :class="{ 'is-active': activeFilter === f.value }"
+              :aria-pressed="activeFilter === f.value"
+          >
+            {{ f.label }}<span class="chip-count" :class="{ 'text-accent! font-bold': f.attention && f.count > 0 && activeFilter !== f.value }">{{ f.count }}</span>
+          </button>
+
+          <button
+              v-if="moreFilters.length"
+              ref="moreBtnRef"
+              @click="toggleMore"
+              class="chip shrink-0 pr-3"
+              :class="{ 'is-active': activeMore }"
+              aria-haspopup="menu"
+              :aria-expanded="moreOpen"
+          >
+            {{ activeMore ? activeMore.label : 'Plus' }}<span v-if="activeMore" class="chip-count">{{ activeMore.count }}</span>
+            <ChevronDown :size="14" class="transition-transform" :class="{ 'rotate-180': moreOpen }" />
+          </button>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button ref="sortBtnRef" @click="toggleSort" class="chip shrink-0 pr-3" aria-haspopup="menu" :aria-expanded="sortOpen">
+            {{ sortOptions.find(s => s.value === activeSort)?.label }}
+            <ChevronDown :size="14" class="transition-transform" :class="{ 'rotate-180': sortOpen }" />
+          </button>
+
+          <!-- Sur mobile, la grille garde deux colonnes -->
+          <div class="segmented max-sm:hidden" role="group" aria-label="Taille des affiches">
+            <button
+                v-for="(_, size) in posterSizes" :key="size"
+                @click="emit('update:posterSize', size)"
+                class="segmented-item w-[34px] justify-center px-0 text-[11.5px] font-bold"
+                :class="posterSize === size ? 'bg-hover text-primary' : 'text-muted'"
+                :aria-pressed="posterSize === size"
+                :title="`Affiches ${size}`"
+            >
+              {{ size }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="moreOpen" ref="moreMenuRef" role="menu" class="menu absolute top-full mt-1.5 w-56 z-20" :style="{ left: `${menuLeft}px` }">
+        <button
+            v-for="f in moreFilters" :key="f.value"
+            role="menuitem"
+            @click="emit('update:activeFilter', activeFilter === f.value ? 'all' : f.value); moreOpen = false"
+            class="menu-item justify-between"
+            :class="{ 'text-primary! bg-hover': activeFilter === f.value }"
+        >
+          {{ f.label }}<span class="text-meta text-muted">{{ f.count }}</span>
         </button>
       </div>
 
-      <!-- Ligne 2 : tri + taille + count -->
-      <div class="flex items-center gap-2 flex-wrap">
-        <div class="flex items-center gap-1">
-          <button
-              v-for="s in sortOptions" :key="s.value"
-              @click="emit('update:activeSort', s.value)"
-              class="px-2.5 py-1 text-xs rounded-lg border transition-colors"
-              :class="activeSort === s.value
-              ? 'border-accent text-accent bg-accent-muted'
-              : 'border-border text-muted hover:border-secondary'"
-          >
-            {{ s.label }}
-          </button>
-        </div>
-
-        <div class="flex items-center gap-1 border-l border-border pl-2 ml-auto">
-          <button
-              v-for="(_, size) in posterSizes" :key="size"
-              @click="emit('update:posterSize', size)"
-              class="w-7 h-7 text-[10px] rounded-md border transition-colors flex items-center justify-center"
-              :class="posterSize === size
-              ? 'border-accent text-accent bg-accent-muted'
-              : 'border-border text-muted hover:border-secondary'"
-          >
-            {{ size }}
-          </button>
-        </div>
-
-        <span class="text-xs text-muted">{{ count }} série{{ count > 1 ? 's' : '' }}</span>
-      </div>
-    </div>
-
-    <!-- Légende barres -->
-    <div data-tour="series-legend" class="shrink-0 px-4 md:px-6 py-2 flex items-center gap-4 border-b border-border">
-      <div v-for="l in legend" :key="l.label" class="flex items-center gap-1.5">
-        <span class="w-3 h-1.5 rounded-full" :style="{ background: l.color }" />
-        <span class="text-[11px] text-muted">{{ l.label }}</span>
+      <div v-if="sortOpen" ref="sortMenuRef" role="menu" class="menu absolute top-full mt-1.5 w-44 z-20" :style="{ left: `${menuLeft}px` }">
+        <button
+            v-for="s in sortOptions" :key="s.value"
+            role="menuitem"
+            @click="emit('update:activeSort', s.value); sortOpen = false"
+            class="menu-item justify-between"
+            :class="{ 'text-primary! bg-hover': activeSort === s.value }"
+        >
+          {{ s.label }}<Check v-if="activeSort === s.value" :size="14" class="text-accent" />
+        </button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { Search, SlidersHorizontal, ChevronDown, ListChecks } from 'lucide-vue-next'
+import { ref, computed } from 'vue'
+import { Check, ChevronDown, Search, SquareCheck, X } from 'lucide-vue-next'
 import { onClickOutside } from '@vueuse/core'
 
-defineProps<{
-  search              : string
-  activeFilter        : string
-  activeSort          : string
-  posterSize          : string
-  posterSizes         : Record<string, string>
-  count               : number
-  hasActiveFilter     : boolean
-  filtersDisponibilite: { label: string; value: string }[]
-  filtersImport       : { label: string; value: string; color: string }[]
-  sortOptions         : { label: string; value: string }[]
-  legend              : { label: string; color: string }[]
-  selectable?         : boolean
-  selecting?          : boolean
+export interface LibraryFilter { value: string; label: string; count: number; attention?: boolean }
+
+const props = defineProps<{
+  search       : string
+  activeFilter : string
+  activeSort   : string
+  posterSize   : string
+  posterSizes  : Record<string, string>
+  count        : number
+  filters      : LibraryFilter[]
+  moreFilters  : LibraryFilter[]
+  sortOptions  : { label: string; value: string }[]
+  selectable?  : boolean
+  selecting?   : boolean
 }>()
 
 const emit = defineEmits<{
@@ -161,8 +145,38 @@ const emit = defineEmits<{
   'update:selecting'   : [value: boolean]
 }>()
 
-const filterOpen = ref(false)
-const filterRef  = ref<HTMLElement | null>(null)
+const activeMore = computed(() => props.moreFilters.find(f => f.value === props.activeFilter) ?? null)
 
-onClickOutside(filterRef, () => { filterOpen.value = false })
+const moreOpen    = ref(false)
+const sortOpen    = ref(false)
+const rowRef      = ref<HTMLElement | null>(null)
+const moreBtnRef  = ref<HTMLElement | null>(null)
+const sortBtnRef  = ref<HTMLElement | null>(null)
+const moreMenuRef = ref<HTMLElement | null>(null)
+const sortMenuRef = ref<HTMLElement | null>(null)
+const menuLeft    = ref(0)
+
+onClickOutside(moreMenuRef, () => { moreOpen.value = false }, { ignore: [moreBtnRef] })
+onClickOutside(sortMenuRef, () => { sortOpen.value = false }, { ignore: [sortBtnRef] })
+
+// Menu sous son bouton, aligné à droite s'il déborde de la ligne
+function placeMenu(btn: HTMLElement | null, width: number) {
+  if (!btn || !rowRef.value) return
+  const row = rowRef.value.getBoundingClientRect()
+  const b   = btn.getBoundingClientRect()
+  const left = b.left - row.left + width > row.width ? b.right - row.left - width : b.left - row.left
+  menuLeft.value = Math.max(0, left)
+}
+
+function toggleMore() {
+  sortOpen.value = false
+  moreOpen.value = !moreOpen.value
+  if (moreOpen.value) placeMenu(moreBtnRef.value, 224)
+}
+
+function toggleSort() {
+  moreOpen.value = false
+  sortOpen.value = !sortOpen.value
+  if (sortOpen.value) placeMenu(sortBtnRef.value, 176)
+}
 </script>

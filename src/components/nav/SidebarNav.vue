@@ -1,53 +1,11 @@
 <template>
-  <aside class="flex flex-col h-full bg-sidebar border-r border-border">
+  <aside class="flex flex-col h-full bg-sidebar border-r border-card px-3.5 pt-[22px] pb-[18px]">
 
-    <!-- Logo + logout -->
-    <div class="flex items-center gap-2.5 px-4 py-3.5 border-b border-border min-h-[56px]">
-      <FankarrLogo class="w-7 h-7 shrink-0" />
-      <RouterLink to="/series" class="text-[15px] font-semibold text-primary tracking-wide flex-1 hover:text-accent transition-colors">
-        FanKarr
+    <div class="flex items-center gap-2 pl-2 pb-7">
+      <RouterLink to="/dashboard" class="flex-1 min-w-0 flex items-center gap-[11px]">
+        <FankarrLogo class="w-[30px] h-[31px] shrink-0" />
+        <span class="font-display text-[23px] font-bold tracking-[0.01em] text-primary">FanKarr</span>
       </RouterLink>
-      <button
-          @click="logout"
-          title="Se déconnecter"
-          class="text-muted hover:text-red-400 transition-colors p-1 rounded-md hover:bg-hover"
-      >
-        <LogOut :size="15" />
-      </button>
-    </div>
-
-    <!-- Navigation -->
-    <nav class="flex-1 overflow-y-auto overflow-x-hidden px-2 py-3 flex flex-col gap-0.5">
-      <template v-for="(item, i) in items" :key="i">
-        <hr v-if="item.separator" class="border-border my-2 mx-1" />
-        <SidebarNavItem v-else :item="item" />
-      </template>
-    </nav>
-
-    <!-- Nouvelle version disponible -->
-    <a
-        v-if="updateAvailable"
-        :href="latestReleaseUrl"
-        target="_blank"
-        rel="noopener"
-        class="mx-2 mb-2 flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-accent/30 bg-accent/5 hover:bg-accent/10 transition-colors group"
-    >
-      <div class="w-1.5 h-1.5 rounded-full bg-accent animate-pulse shrink-0" />
-      <div class="flex-1 min-w-0">
-        <p class="text-xs font-medium text-accent">Mise à jour disponible</p>
-        <p class="text-[11px] text-muted truncate">{{ latestVersion }} est disponible</p>
-      </div>
-      <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"
-           class="shrink-0 text-muted group-hover:text-accent transition-colors">
-        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-        <polyline points="15 3 21 3 21 9"/>
-        <line x1="10" y1="14" x2="21" y2="3"/>
-      </svg>
-    </a>
-
-    <!-- Version actuelle + aide -->
-    <div class="px-3 pb-1 pt-0.5 flex items-center justify-between gap-2">
-      <p class="text-[10px] text-muted/50 font-mono">{{ currentVersion }}</p>
       <div ref="helpRef" class="relative">
         <button
             data-tour="help"
@@ -55,41 +13,79 @@
             aria-haspopup="menu"
             :aria-expanded="helpOpen"
             title="Aide"
-            class="text-muted hover:text-primary transition-colors p-1 rounded-md hover:bg-hover"
+            class="w-8 h-8 rounded-full flex items-center justify-center text-muted hover:text-primary hover:bg-hover transition-colors"
         >
-          <CircleQuestionMark :size="15" />
+          <CircleQuestionMark :size="16" :stroke-width="1.75" />
         </button>
         <div
             v-if="helpOpen"
             role="menu"
-            class="absolute bottom-full right-0 mb-1 w-52 bg-card border border-border rounded-lg shadow-xl p-1 z-20 flex flex-col"
+            class="menu absolute top-full left-0 mt-2 w-60 z-30"
             @keydown.esc="helpOpen = false"
         >
-          <button role="menuitem" @click="startTour" class="flex items-center gap-2 px-2.5 py-2 rounded-md text-xs text-secondary hover:bg-hover hover:text-primary text-left">
-            <Compass :size="14" class="shrink-0" /> Visite guidée
+          <button role="menuitem" @click="startTour" class="menu-item">
+            <Compass :size="15" class="shrink-0" /> Visite guidée
           </button>
-          <button v-if="auth.isAdmin" role="menuitem" @click="openSetup" class="flex items-center gap-2 px-2.5 py-2 rounded-md text-xs text-secondary hover:bg-hover hover:text-primary text-left">
-            <Wand :size="14" class="shrink-0" /> Assistant de configuration
+          <button v-if="auth.isAdmin" role="menuitem" @click="openSetup" class="menu-item">
+            <Wand :size="15" class="shrink-0" /> Assistant de configuration
           </button>
         </div>
       </div>
     </div>
 
-    <!-- Thème -->
-    <ThemeSwitcher />
+    <nav class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col gap-0.5">
+      <template v-for="(item, i) in items" :key="i">
+        <div v-if="item.separator" class="h-px bg-card mx-2 my-3.5 shrink-0" />
+        <SidebarNavItem v-else :item="item" />
+      </template>
+    </nav>
+
+    <!-- Nouvelle version disponible -->
+    <a
+        v-if="auth.isAdmin && updateAvailable"
+        :href="latestReleaseUrl"
+        target="_blank"
+        rel="noopener"
+        class="mb-3 flex items-center gap-2.5 px-3 py-2.5 rounded-field bg-accent-muted hover:bg-accent/20 transition-colors group"
+    >
+      <span class="w-1.5 h-1.5 rounded-full bg-accent animate-pulse shrink-0" />
+      <span class="flex-1 min-w-0">
+        <span class="block text-meta font-bold text-accent">Mise à jour disponible</span>
+        <span class="block text-[11.5px] text-muted truncate">{{ latestVersion }} est disponible</span>
+      </span>
+      <ExternalLink :size="13" class="shrink-0 text-muted group-hover:text-accent transition-colors" />
+    </a>
+
+    <!-- Utilisateur et déconnexion -->
+    <div class="flex items-center gap-2 pl-2 pt-3.5 border-t border-card">
+      <span class="w-[34px] h-[34px] rounded-full bg-hover text-accent flex items-center justify-center font-display text-base font-bold shrink-0">
+        {{ initial }}
+      </span>
+      <span class="flex-1 min-w-0 flex flex-col gap-px">
+        <span class="text-[13px] font-medium text-primary truncate">{{ auth.username }}</span>
+        <span class="text-[11.5px] text-muted truncate">{{ auth.isAdmin ? 'Administrateur' : 'Invité' }}<template v-if="currentVersion"> · {{ currentVersion }}</template></span>
+      </span>
+      <button
+          @click="logout"
+          title="Se déconnecter"
+          class="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-muted hover:text-err hover:bg-hover transition-colors"
+      >
+        <LogOut :size="16" :stroke-width="1.75" />
+      </button>
+    </div>
 
   </aside>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 import { onClickOutside } from '@vueuse/core'
-import { CircleQuestionMark, Compass, LogOut, Wand } from 'lucide-vue-next'
+import { CircleQuestionMark, Compass, ExternalLink, LogOut, Wand } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useTourStore } from '@/stores/tour'
+import { useUpdateCheck } from '@/composables/useUpdateCheck'
 import SidebarNavItem from './SidebarNavItem.vue'
-import ThemeSwitcher from './ThemeSwitcher.vue'
 import FankarrLogo from '@/components/FankarrLogo.vue'
 import type { NavItem } from '@/types/nav'
 
@@ -98,6 +94,8 @@ defineProps<{ items: NavItem[] }>()
 const router = useRouter()
 const auth   = useAuthStore()
 const tour   = useTourStore()
+
+const initial = computed(() => auth.username?.charAt(0).toUpperCase() ?? '?')
 
 const helpOpen = ref(false)
 const helpRef  = ref<HTMLElement | null>(null)
@@ -113,66 +111,10 @@ function openSetup() {
   router.push('/setup')
 }
 
-const currentVersion = ref(
-    import.meta.env.DEV ? 'dev' : ''
-)
-const latestVersion     = ref('')
-const latestReleaseUrl  = ref('https://github.com/masutayunikon/FanKarr/releases/latest')
-const updateAvailable   = ref(false)
-
-const GITHUB_REPO = 'masutayunikon/FanKarr'
-
-function parseVersion(v: string): number[] {
-  return v.replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0)
-}
-
-function isNewer(latest: string, current: string): boolean {
-  if (current === 'dev') return false
-  const l = parseVersion(latest)
-  const c = parseVersion(current)
-  for (let i = 0; i < Math.max(l.length, c.length); i++) {
-    const lv = l[i] ?? 0
-    const cv = c[i] ?? 0
-    if (lv > cv) return true
-    if (lv < cv) return false
-  }
-  return false
-}
-
-async function checkForUpdates() {
-  try {
-    // Version locale
-    const vRes = await fetch('/api/version', { credentials: 'include' })
-    if (vRes.ok) {
-      const { version } = await vRes.json()
-      currentVersion.value = version
-    }
-
-    if (currentVersion.value === 'dev') return
-
-    // Dernière release GitHub
-    const gRes = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`, {
-      headers: { Accept: 'application/vnd.github.v3+json' },
-    })
-    if (!gRes.ok) return
-    const release = await gRes.json()
-    latestVersion.value    = release.tag_name ?? ''
-    latestReleaseUrl.value = release.html_url ?? latestReleaseUrl.value
-
-    if (isNewer(latestVersion.value, currentVersion.value)) {
-      updateAvailable.value = true
-    }
-  } catch {}
-}
+const { currentVersion, latestVersion, latestReleaseUrl, updateAvailable } = useUpdateCheck()
 
 async function logout() {
   await auth.logout()
   router.push('/auth')
 }
-
-onMounted(() => {
-  checkForUpdates()
-  // Revérifier toutes les 6h
-  setInterval(checkForUpdates, 6 * 60 * 60 * 1000)
-})
 </script>

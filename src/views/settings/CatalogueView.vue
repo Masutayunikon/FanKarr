@@ -1,75 +1,104 @@
 <template>
-  <div class="flex flex-col gap-6">
+  <div class="flex flex-col gap-4">
 
-    <div>
-      <h2 class="text-base font-semibold text-primary">Catalogue Fankai</h2>
-      <p class="text-sm text-muted mt-1">
-        Données locales synchronisées depuis GitLab. Mise à jour automatique toutes les 6h.
-      </p>
-    </div>
+    <Teleport defer to="#settings-actions">
+      <button @click="update" :disabled="updating" class="btn-secondary pointer-fine:h-[38px]">
+        <RefreshCw :size="15" :class="{ 'animate-spin': updating }" />
+        {{ updating ? 'Synchronisation…' : 'Synchroniser maintenant' }}
+      </button>
+    </Teleport>
 
-    <!-- Loading -->
-    <div v-if="!loaded" class="flex items-center justify-center gap-2 py-16 text-muted text-sm">
+    <!-- Chargement -->
+    <div v-if="!loaded" class="flex items-center justify-center gap-2 py-16 text-muted text-body">
       <div class="w-4 h-4 border border-border border-t-accent rounded-full animate-spin" />
     </div>
 
     <template v-else>
 
-      <!-- Bannière données manquantes -->
-      <div
-          v-if="status.empty"
-          class="border border-accent/30 bg-accent-muted rounded-lg p-4 flex items-center justify-between gap-4"
-      >
-        <div>
-          <p class="text-xs text-accent font-medium mb-1">Données manquantes</p>
-          <p class="text-sm text-secondary">
-            {{ status.exists ? 'Le catalogue est vide.' : 'Aucun catalogue trouvé.' }}
-            Téléchargez les données pour utiliser FanKarr.
-          </p>
-        </div>
-        <button @click="update" :disabled="updating" class="btn-primary whitespace-nowrap">
-          {{ updating ? 'Téléchargement...' : 'Télécharger' }}
-        </button>
-      </div>
-
-      <!-- Statut -->
-      <div class="settings-card">
-        <p class="text-xs text-muted mb-1">Statut</p>
-        <p class="text-sm text-primary font-medium">
-          {{ status.empty ? 'Aucune donnée chargée' : `${status.count} séries disponibles` }}
-        </p>
-      </div>
-
-      <!-- Action -->
-      <div>
-        <button @click="update" :disabled="updating" class="btn-primary">
-          {{ updating ? 'Mise à jour...' : 'Mettre à jour maintenant' }}
-        </button>
-        <p class="text-xs text-muted mt-2">Force la synchronisation sans attendre le cache de 6h.</p>
-      </div>
-
-      <!-- Surveillances orphelines -->
-      <div v-if="syncOrphans.length > 0" class="settings-card flex flex-col gap-2">
-        <div>
-          <p class="text-sm font-medium text-primary">Surveillances orphelines ({{ syncOrphans.length }})</p>
-          <p class="text-xs text-muted mt-0.5">
-            Séries surveillées qui n'existent plus dans le catalogue (supprimées ou recréées sous un autre nom).
-            Réactivez la surveillance sur la nouvelle fiche si besoin.
-          </p>
-        </div>
-        <div class="flex flex-col divide-y divide-border/50 -mx-4 px-4">
-          <div v-for="s in syncOrphans" :key="s.serieId" class="flex items-center gap-3 py-2">
-            <span class="flex-1 min-w-0 text-sm text-primary truncate">{{ s.serieName }}</span>
-            <span class="text-xs text-muted font-mono shrink-0">#{{ s.serieId }}</span>
-            <button
-                @click="removeSyncOrphan(s.serieId)"
-                class="text-xs px-2 py-1 rounded-lg border border-border text-muted hover:text-primary transition-colors shrink-0"
-            >
-              Retirer
-            </button>
+      <!-- Données manquantes -->
+      <div v-if="status.empty" class="rounded-card border border-accent/30 bg-accent/5 px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
+        <div class="flex items-start gap-3.5">
+          <TriangleAlert :size="18" :stroke-width="1.75" class="text-accent shrink-0 mt-0.5" />
+          <div class="flex flex-col gap-1">
+            <p class="card-title text-accent">Données manquantes</p>
+            <p class="text-meta text-secondary">
+              {{ status.exists ? 'Le catalogue est vide.' : 'Aucun catalogue trouvé.' }}
+              Téléchargez les données pour utiliser FanKarr.
+            </p>
           </div>
         </div>
+        <button @click="update" :disabled="updating" class="btn-primary">
+          {{ updating ? 'Téléchargement…' : 'Télécharger' }}
+        </button>
       </div>
+
+      <!-- Sources -->
+      <SettingsSection title="Sources" description="Le scraper sert de source principale ; l’API Fankai prend le relais pour ce qui lui manque.">
+        <div class="flex items-center gap-5 flex-wrap sm:flex-nowrap">
+          <div class="flex-1 min-w-0 flex flex-col gap-[3px]">
+            <span class="flex items-center gap-2.5 text-sm font-medium text-primary">
+              Scraper GitHub
+              <span class="pill h-5 px-[9px] text-[11px]" :class="status.empty ? 'pill-err' : 'pill-ok'">{{ status.empty ? 'Vide' : 'Chargé' }}</span>
+            </span>
+            <span class="text-meta text-muted">
+              {{ status.empty ? 'Aucune donnée chargée' : `${status.count} séries disponibles` }}<template v-if="status.syncedAt"> · synchronisé {{ formatRelative(status.syncedAt) }}</template>
+            </span>
+          </div>
+          <span class="text-meta text-muted shrink-0">Cache d’une heure</span>
+        </div>
+        <div class="h-px bg-hover" />
+        <div class="flex items-center gap-5 flex-wrap sm:flex-nowrap">
+          <div class="flex-1 min-w-0 flex flex-col gap-[3px]">
+            <span class="text-sm font-medium text-primary">API Fankai</span>
+            <span class="text-meta text-muted">
+              <template v-if="apiOnlyCount > 0">{{ apiOnlyCount }} série{{ apiOnlyCount > 1 ? 's' : '' }} au catalogue sans données du scraper : fiches et images lues depuis l’API, sans torrents.</template>
+              <template v-else>Titres à jour et séries pas encore scrapées, lues depuis l’API.</template>
+            </span>
+          </div>
+        </div>
+      </SettingsSection>
+
+      <!-- Surveillance RSS -->
+      <SettingsSection title="Surveillance RSS" description="Les nouveaux épisodes des séries surveillées sont envoyés au client sans rien demander. Vérification automatique toutes les 6 heures.">
+        <template #actions>
+          <button @click="runRss" :disabled="runningRss || watched.length === 0" class="btn-secondary btn-sm pointer-fine:h-[34px]">
+            <Loader v-if="runningRss" :size="14" class="animate-spin" />
+            <RefreshCw v-else :size="14" />
+            {{ runningRss ? 'Synchro…' : 'Lancer une synchro' }}
+          </button>
+        </template>
+
+        <div class="flex items-baseline gap-[9px]">
+          <span class="font-display text-[30px] font-bold text-primary">{{ watched.length }}</span>
+          <span class="text-meta text-muted">série{{ watched.length > 1 ? 's' : '' }} surveillée{{ watched.length > 1 ? 's' : '' }}</span>
+        </div>
+        <div v-if="watched.length > 0" class="flex items-center gap-2 flex-wrap">
+          <RouterLink
+              v-for="s in visibleWatched" :key="s.serieId"
+              :to="`/series/${s.serieId}`"
+              class="h-[26px] px-2.5 rounded-full bg-hover text-meta text-secondary hover:text-primary transition-colors flex items-center"
+          >{{ s.serieName }}</RouterLink>
+          <button v-if="watched.length > visibleWatched.length" @click="showAllWatched = true" class="text-meta text-muted hover:text-primary">
+            + {{ watched.length - visibleWatched.length }} autre{{ watched.length - visibleWatched.length > 1 ? 's' : '' }}
+          </button>
+        </div>
+        <p v-else class="text-meta text-muted">Activez la surveillance depuis une fiche série ou par la sélection de la médiathèque.</p>
+      </SettingsSection>
+
+      <!-- Surveillances orphelines -->
+      <SettingsSection
+          v-if="syncOrphans.length > 0"
+          :title="`Surveillances orphelines · ${syncOrphans.length}`"
+          description="Séries surveillées qui n'existent plus dans le catalogue (supprimées ou recréées sous un autre nom). Réactivez la surveillance sur la nouvelle fiche si besoin."
+      >
+        <div class="flex flex-col rounded-field bg-main border border-border-light">
+          <div v-for="s in syncOrphans" :key="s.serieId" class="flex items-center gap-3 px-3.5 py-2 border-b border-hover last:border-b-0">
+            <span class="flex-1 min-w-0 text-body text-primary truncate">{{ s.serieName }}</span>
+            <span class="text-meta text-muted shrink-0 tabular-nums">#{{ s.serieId }}</span>
+            <button @click="removeSyncOrphan(s.serieId)" class="btn-ghost btn-sm h-7 shrink-0">Retirer</button>
+          </div>
+        </div>
+      </SettingsSection>
 
     </template>
 
@@ -77,22 +106,42 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { RouterLink } from 'vue-router'
+import { Loader, RefreshCw, TriangleAlert } from 'lucide-vue-next'
 import { useToast } from '@/composables/useToast'
+import { useSeriesStore } from '@/stores/series'
+import { formatRelative } from '@/utils/format'
+import SettingsSection from '@/components/settings/SettingsSection.vue'
 
 const { add: toast } = useToast()
+const seriesStore = useSeriesStore()
 
 const updating = ref(false)
 const loaded   = ref(false)
-const status   = ref({ exists: false, count: 0, empty: true })
+const status   = ref<{ exists: boolean; count: number; empty: boolean; syncedAt?: string | null }>({ exists: false, count: 0, empty: true })
 const syncOrphans = ref<{ serieId: number; serieName: string }[]>([])
+const watched     = ref<{ serieId: number; serieName: string }[]>([])
+const runningRss  = ref(false)
+const showAllWatched = ref(false)
+const visibleWatched = computed(() => showAllWatched.value ? watched.value : watched.value.slice(0, 8))
+const apiOnlyCount = computed(() => Math.max(0, seriesStore.series.length - status.value.count))
 
 onMounted(async () => {
   fetchSyncOrphans()
+  fetchWatched()
+  if (seriesStore.series.length === 0) seriesStore.fetchSeries()
   const res = await fetch('/api/torrents/status', { credentials: 'include' })
   if (res.ok) status.value = await res.json()
   loaded.value = true
 })
+
+async function fetchWatched() {
+  try {
+    const res = await fetch('/api/rss-sync', { credentials: 'include' })
+    if (res.ok) watched.value = (await res.json()).sort((a: any, b: any) => a.serieName.localeCompare(b.serieName, 'fr'))
+  } catch {}
+}
 
 async function fetchSyncOrphans() {
   try {
@@ -106,9 +155,24 @@ async function removeSyncOrphan(serieId: number) {
     const res = await fetch(`/api/rss-sync/${serieId}`, { method: 'DELETE', credentials: 'include' })
     if (!res.ok) { toast('Erreur lors du retrait de la surveillance', 'error'); return }
     syncOrphans.value = syncOrphans.value.filter(s => s.serieId !== serieId)
+    watched.value     = watched.value.filter(s => s.serieId !== serieId)
     toast('Surveillance retirée ✓', 'success')
   } catch {
     toast('Impossible de contacter le serveur', 'error')
+  }
+}
+
+async function runRss() {
+  runningRss.value = true
+  try {
+    const res  = await fetch('/api/rss-sync/run', { method: 'POST', credentials: 'include' })
+    const data = await res.json()
+    if (!res.ok) { toast(data.error ?? 'Erreur lors de la synchro', 'error'); return }
+    toast(data.sent > 0 ? `${data.sent} épisode(s) envoyé(s) au client ✓` : 'Aucun nouvel épisode', data.errors > 0 ? 'error' : 'success')
+  } catch {
+    toast('Impossible de contacter le serveur', 'error')
+  } finally {
+    runningRss.value = false
   }
 }
 
@@ -118,7 +182,7 @@ async function update() {
     const res = await fetch('/api/update', { method: 'POST', credentials: 'include' })
     if (res.ok) {
       const { count } = await res.json()
-      status.value = { exists: true, count, empty: count === 0 }
+      status.value = { exists: true, count, empty: count === 0, syncedAt: new Date().toISOString() }
       toast(`${count} séries chargées ✓`, 'success')
       fetchSyncOrphans()
     } else {

@@ -531,6 +531,27 @@ router.delete('/organized-summary/orphans', requireAdmin, async (req, res) => {
 })
 
 // ── Dossier série ──────────────────────────────────────────────
+router.get('/organized-folders', requireAdmin, async (_req, res) => {
+    const { mediaPath } = readSettings()
+    if (!mediaPath) { res.json([]); return }
+    let organized: Organized
+    try { organized = readOrganized() }
+    catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return }
+    try {
+        const result: { serie_id: number; serie_title: string; expected: string; current: string[] }[] = []
+        for (const sd of await loadCatalog()) {
+            const title    = sd.title ?? sd.show_title ?? ''
+            const expected = path.join(mediaPath, serieFolderName(title))
+            const stale    = [...serieFolders(sd, organized, mediaPath).keys()].filter(f => f !== expected && fs.existsSync(f))
+            if (stale.length > 0) result.push({ serie_id: sd.id, serie_title: title, expected, current: stale })
+        }
+        res.json(result)
+    } catch (err) {
+        logger.error('api', `organized-folders échoué : ${err instanceof Error ? err.message : err}`)
+        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
+    }
+})
+
 router.get('/organized/:serieId/folder', requireAuth, async (req, res) => {
     const serieId = Number(req.params.serieId)
     const sd = await resolveSerieData(serieId)

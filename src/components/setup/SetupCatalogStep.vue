@@ -6,10 +6,10 @@
     </div>
 
     <template v-else>
-      <section class="settings-card flex items-center gap-4">
+      <section class="card flex items-center gap-4">
         <span
-            class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
-            :class="status.empty ? 'bg-yellow-500/10 text-yellow-500' : 'bg-green-500/10 text-green-400'"
+            class="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+            :class="status.empty ? 'bg-accent-muted text-accent' : 'bg-ok/10 text-ok'"
         >
           <Library :size="17" />
         </span>
@@ -17,7 +17,7 @@
           <p class="text-sm text-primary font-medium">
             {{ status.empty ? 'Catalogue non téléchargé' : `${status.count} séries disponibles` }}
           </p>
-          <p class="text-xs text-muted mt-0.5">
+          <p class="text-meta text-muted mt-0.5">
             {{ status.empty
               ? 'Sans catalogue, la médiathèque reste vide.'
               : 'Le catalogue se met à jour automatiquement.' }}
@@ -28,13 +28,13 @@
         </button>
       </section>
 
-      <section class="settings-card flex items-center gap-4">
-        <span class="w-9 h-9 rounded-lg bg-accent-muted text-accent flex items-center justify-center shrink-0">
+      <section class="card flex items-center gap-4">
+        <span class="w-9 h-9 rounded-full bg-accent-muted text-accent flex items-center justify-center shrink-0">
           <ScanSearch :size="17" />
         </span>
         <div class="flex-1 min-w-0">
           <p class="text-sm text-primary font-medium">Vous avez déjà des séries Fankai ?</p>
-          <p class="text-xs text-muted mt-0.5">
+          <p class="text-meta text-muted mt-0.5">
             <template v-if="scanResult">{{ scanResult.found }} fichiers analysés · {{ scanResult.added }} référencés.</template>
             <template v-else>Analysez la médiathèque pour référencer les fichiers présents, sans les déplacer.</template>
           </p>
@@ -44,7 +44,7 @@
         </button>
       </section>
 
-      <p v-if="warnEmpty" class="text-sm text-yellow-500" role="alert">
+      <p v-if="warnEmpty" class="text-body text-accent" role="alert">
         Le catalogue est encore vide. Téléchargez-le, ou cliquez à nouveau sur « Suivant » pour continuer.
       </p>
     </template>

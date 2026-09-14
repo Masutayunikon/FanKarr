@@ -2,24 +2,40 @@ import { Router }       from 'express'
 import { requireAdmin } from '../auth.js'
 import {
     readRequests, upsertRequest, approveRequest,
-    rejectRequest, completeRequest, deleteRequest,
+    rejectRequest, completeRequest, deleteRequest, withdrawRequest,
     getRequestsForUser, getPendingCount, mergedSeasons, mergedEpisodes,
     type SerieRequest,
 } from '../requests.js'
 import { dispatchDownload } from '../torrent-clients/index.js'
 import { readSerieData }    from '../lib/github-cache.js'
+import { resolveRequestTorrents, countRequestedEpisodes } from '../lib/request-scope.js'
 import { readSettings }     from '../settings.js'
 import { logger }           from '../logger.js'
 
 const router = Router()
 
 // GET /api/requests — admin voit tout, user voit les siennes
-router.get('/requests', (req, res) => {
+router.get('/requests', async (req, res) => {
     const list = req.user!.role === 'admin'
         ? readRequests()
         : getRequestsForUser(req.user!.id)
-    res.json(list)
+    res.json(await withScope(list))
 })
+
+async function withScope(list: SerieRequest[]) {
+    const serieData = new Map<number, Promise<any | null>>()
+    return Promise.all(list.map(async r => {
+        if (!serieData.has(r.serieId)) serieData.set(r.serieId, readSerieData(r.serieId))
+        const sd       = await serieData.get(r.serieId)
+        const seasons  = mergedSeasons(r)
+        const episodes = mergedEpisodes(r)
+        return {
+            ...r,
+            episodeCount: sd ? countRequestedEpisodes(sd, seasons, episodes) : null,
+            hasTorrents : !!sd && resolveRequestTorrents(sd, seasons, episodes).length > 0,
+        }
+    }))
+}
 
 // GET /api/requests/pending-count — pour le widget dashboard
 router.get('/requests/pending-count', (req, res) => {
@@ -119,75 +135,7 @@ export async function autoDownloadRequest(req: SerieRequest, override?: { season
     const seasons  = override !== undefined ? override.seasons  : mergedSeasons(req)
     const episodes = override !== undefined ? override.episodes : mergedEpisodes(req)
 
-    type TorrentEntry = { url: string; magnet: string | null; infohash: string | null; file_index?: number | null; file_path?: string | null }
-    const toDownload: TorrentEntry[] = []
-    const seenHashes = new Set<string>()
-
-    // Tous les torrents pack (série + saisons) pour résoudre les ep.paths
-    const allPackTorrents: any[] = [
-        ...(serieData.torrents ?? []),
-        ...(serieData.seasons ?? []).flatMap((s: any) => s.torrents ?? []),
-    ]
-
-    function addTorrent(t: any, file_index?: number | null, file_path?: string | null) {
-        const key = `${t.infohash ?? t.magnet ?? t.torrent_url}:${file_index ?? ''}`
-        if (seenHashes.has(key)) return
-        seenHashes.add(key)
-        toDownload.push({ url: t.torrent_url, magnet: t.magnet ?? null, infohash: t.infohash ?? null, file_index: file_index ?? null, file_path: file_path ?? null })
-    }
-
-    /**
-     * Ajoute le premier torrent disponible par épisode (individuel ou via file_index dans un pack).
-     * On prend le premier uniquement pour éviter les doublons quand plusieurs sources existent.
-     */
-    function addEpisodesByIndex(epList: any[]) {
-        for (const ep of epList) {
-            if (ep.torrents?.length > 0) {
-                // Premier torrent individuel disponible
-                addTorrent(ep.torrents[0])
-            } else if (ep.paths?.length > 0) {
-                // Premier path dans un pack
-                const p    = ep.paths[0]
-                const pack = allPackTorrents.find((t: any) => t.infohash?.toLowerCase() === p.infohash?.toLowerCase())
-                if (pack) addTorrent(pack, p.file_index ?? null, p.path ?? null)
-            }
-        }
-    }
-
-    if (episodes.length > 0) {
-        // ── Épisodes ciblés ───────────────────────────────────────
-        for (const season of serieData.seasons ?? []) {
-            const targets = (season.episodes ?? []).filter((ep: any) => episodes.includes(ep.id))
-            addEpisodesByIndex(targets)
-        }
-    } else if (seasons.length > 0) {
-        // ── Saisons ciblées ───────────────────────────────────────
-        for (const season of serieData.seasons ?? []) {
-            if (!seasons.includes(season.season_number)) continue
-            if ((season.torrents ?? []).length > 0) {
-                // Premier pack saison disponible → télécharger en bloc
-                addTorrent(season.torrents[0])
-            } else {
-                // Pas de pack → épisode par épisode avec file_index
-                addEpisodesByIndex(season.episodes ?? [])
-            }
-        }
-    } else {
-        // ── Toutes les saisons : intégrale en priorité ────────────
-        if ((serieData.torrents ?? []).length > 0) {
-            addTorrent(serieData.torrents[0])
-        } else if ((serieData.seasons ?? []).some((s: any) => s.torrents?.length > 0)) {
-            // Packs saison (premier par saison)
-            for (const season of serieData.seasons ?? []) {
-                if (season.torrents?.length > 0) addTorrent(season.torrents[0])
-            }
-        } else {
-            // Fallback : épisode par épisode avec file_index
-            for (const season of serieData.seasons ?? []) {
-                addEpisodesByIndex(season.episodes ?? [])
-            }
-        }
-    }
+    const toDownload = resolveRequestTorrents(serieData, seasons, episodes)
 
     if (toDownload.length === 0) {
         logger.warn('requests', `Auto-dl : aucun torrent trouvé pour "${req.serieName}"`)
@@ -216,6 +164,15 @@ router.delete('/requests', requireAdmin, (_req, res) => {
     }
     logger.info('requests', `Toutes les demandes supprimées (${all.length})`)
     res.json({ deleted: all.length })
+})
+
+// DELETE /api/requests/:id/mine — retire l'utilisateur d'une demande en attente
+router.delete('/requests/:id/mine', (req, res) => {
+    try {
+        res.json(withdrawRequest(String(req.params.id), req.user!.id))
+    } catch (err) {
+        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur' })
+    }
 })
 
 // DELETE /api/requests/:id — admin seulement

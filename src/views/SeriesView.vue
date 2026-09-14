@@ -1,119 +1,157 @@
 <template>
-  <div class="flex flex-col">
+  <div class="px-4 md:px-10 pt-[26px] pb-12">
+    <div class="flex flex-col gap-[18px]">
 
-    <SeriesToolbar
-        v-model:search="search"
-        v-model:active-filter="activeFilter"
-        v-model:active-sort="activeSort"
-        v-model:poster-size="posterSize"
-        :poster-sizes="posterSizes"
-        :count="filtered.length"
-        :has-active-filter="hasActiveFilter"
-        :filters-disponibilite="filtersDisponibilite"
-        :filters-import="filtersImport"
-        :sort-options="sortOptions"
-        :legend="legend"
-        :selectable="auth.isAdmin"
-        v-model:selecting="selecting"
-    />
+      <SeriesToolbar
+          v-model:search="search"
+          v-model:active-filter="activeFilter"
+          v-model:active-sort="activeSort"
+          v-model:poster-size="posterSize"
+          v-model:selecting="selecting"
+          :poster-sizes="posterSizes"
+          :count="filtered.length"
+          :filters="filters"
+          :more-filters="moreFilters"
+          :sort-options="sortOptions"
+          :selectable="auth.isAdmin"
+      />
 
-    <!-- Grille -->
-    <div data-tour="series-grid" class="px-4 md:px-6 py-6">
+      <!-- Grille -->
+      <div data-tour="series-grid" class="pt-1.5">
 
-      <div v-if="store.loadingSeries" class="flex flex-col items-center justify-center gap-3 h-64 text-muted">
-        <div class="w-6 h-6 border border-border border-t-accent rounded-full animate-spin" />
-        <p class="text-sm">Chargement du catalogue…</p>
-      </div>
+        <div v-if="store.loadingSeries && store.series.length === 0" class="flex flex-col items-center justify-center gap-3 h-64 text-muted">
+          <div class="w-6 h-6 border border-border border-t-accent rounded-full animate-spin" />
+          <p class="text-body">Chargement du catalogue…</p>
+        </div>
 
-      <div v-else-if="store.error" class="flex flex-col items-center justify-center gap-3 h-64">
-        <p class="text-sm text-red-400">{{ store.error }}</p>
-        <button class="btn-primary" @click="store.fetchSeries()">Réessayer</button>
-      </div>
+        <div v-else-if="store.error && store.series.length === 0" class="flex flex-col items-center justify-center gap-3 h-64">
+          <p class="text-body text-err">{{ store.error }}</p>
+          <button class="btn-primary" @click="store.fetchSeries()">Réessayer</button>
+        </div>
 
-      <div v-else-if="filtered.length === 0" class="flex items-center justify-center h-64 text-muted text-sm">
-        Aucune série trouvée
-      </div>
+        <div v-else-if="filtered.length === 0" class="flex flex-col items-center justify-center gap-3 h-64 text-center">
+          <p class="font-display text-xl font-bold text-primary">Aucune série trouvée</p>
+          <p class="text-body text-muted">Essayez une autre recherche ou un autre filtre.</p>
+          <button v-if="search || activeFilter !== 'all'" @click="search = ''; activeFilter = 'all'" class="btn-ghost btn-sm">Tout afficher</button>
+        </div>
 
-      <div v-else class="grid gap-4" :style="{ gridTemplateColumns: `repeat(auto-fill, minmax(${posterSizes[posterSize]}, 1fr))` }">
-        <component
-            :is="selecting ? 'div' : RouterLink"
-            v-for="(serie, i) in filtered"
-            :key="serie.id"
-            :data-tour="i === 0 ? 'series-poster' : undefined"
-            v-bind="selecting ? {} : { to: `/series/${serie.id}` }"
-            class="group flex flex-col gap-1.5 transition-transform duration-200 hover:-translate-y-0.5"
-            :class="{
-              'opacity-40': !serie.has_torrents && serie.download_state === 'none' && !selected.has(serie.id),
-              'cursor-pointer select-none': selecting,
-            }"
-            @click="selecting && toggleSelected(serie.id)"
+        <div
+            v-else
+            class="grid grid-cols-2 gap-x-3.5 gap-y-5 sm:grid-cols-[repeat(auto-fill,minmax(var(--poster-min),1fr))] sm:gap-x-5 sm:gap-y-[26px]"
+            :style="{ '--poster-min': posterSizes[posterSize] }"
         >
-          <div
-              class="relative aspect-[2/3] rounded-lg overflow-hidden bg-card border"
-              :class="selected.has(serie.id) ? 'border-accent ring-2 ring-accent' : 'border-border'"
-          >
-            <img
-                v-if="serie.poster_image"
-                :src="serie.poster_image"
-                :alt="serie.title"
-                loading="lazy"
-                class="w-full h-full object-cover"
-            />
-            <div v-else class="w-full h-full flex items-center justify-center text-muted">
-              <Tv :size="28" />
-            </div>
+          <template v-for="item in gridItems" :key="item.key">
 
-            <div v-if="!selecting" class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-              <span class="text-xs text-white border border-white/30 px-3 py-1 rounded-md">Voir</span>
-            </div>
-
+            <!-- Tuile  -->
             <div
-                v-if="selecting"
-                class="absolute top-2 left-2 w-5 h-5 rounded-md border flex items-center justify-center"
-                :class="selected.has(serie.id) ? 'bg-accent border-accent text-white' : 'bg-black/40 border-white/60'"
+                v-if="item.type === 'letter'"
+                class="@container aspect-[2/3] rounded-poster border border-border-light bg-linear-to-b from-card to-main max-sm:hidden flex flex-col justify-between px-[11%] pt-[11%] pb-[10%] overflow-hidden select-none"
+                aria-hidden="true"
             >
-              <Check v-if="selected.has(serie.id)" :size="13" />
+              <span class="font-display text-[80cqw] leading-[0.9] font-extrabold text-accent">{{ item.letter }}</span>
+              <span class="text-[clamp(11px,9cqw,12.5px)] text-secondary">{{ item.count }} série{{ item.count > 1 ? 's' : '' }}</span>
             </div>
 
-            <div v-if="auth.isAdmin && serie.rss_synced" class="absolute top-2 right-2 p-1 rounded-md bg-black/60 text-green-400" title="Surveillée">
-              <Rss :size="11" />
-            </div>
-
-            <div
-                class="absolute bottom-0 left-0 right-0 h-1"
-                :style="{ background: stateColor(serie.download_state) }"
-            />
-          </div>
-
-          <div>
-            <p class="text-xs font-medium truncate leading-snug text-primary">{{ serie.title }}</p>
-            <div class="flex items-center gap-1.5 mt-0.5">
-              <span v-if="serie.year" class="text-[11px] text-muted">{{ serie.year }}</span>
-              <span
-                  v-if="serie.status"
-                  class="text-[10px] px-1.5 py-0.5 rounded"
-                  :class="serie.status.toLowerCase() === 'continuing'
-                  ? 'bg-green-500/10 text-green-400'
-                  : 'bg-hover text-muted'"
+            <!-- Affiche -->
+            <component
+                v-else
+                :is="selecting ? 'button' : RouterLink"
+                v-bind="selecting ? { type: 'button', 'aria-pressed': selected.has(item.serie.id) } : { to: `/series/${item.serie.id}` }"
+                :data-tour="item.first ? 'series-poster' : undefined"
+                class="group flex flex-col gap-[9px] min-w-0 text-left"
+                :class="{ 'cursor-pointer select-none': selecting }"
+                @click="selecting && toggleSelected(item.serie.id)"
+            >
+              <div
+                  class="relative aspect-[2/3] rounded-poster overflow-hidden bg-card shadow-[0_0_0_1px_rgb(239_233_221/0.06)] transition-transform duration-200 group-hover:-translate-y-0.5"
+                  :class="{ 'ring-2 ring-accent': selected.has(item.serie.id) }"
               >
-                {{ serie.status }}
-              </span>
-            </div>
-          </div>
-        </component>
+                <img
+                    v-if="item.serie.poster_image"
+                    :src="item.serie.poster_image"
+                    :alt="item.serie.title"
+                    loading="lazy"
+                    class="w-full h-full object-cover"
+                    :class="{ 'grayscale brightness-[0.45]': item.state.dim && auth.isAdmin, 'brightness-[0.55] saturate-[0.7]': item.state.dim && !auth.isAdmin }"
+                />
+                <div v-else class="w-full h-full flex items-center justify-center text-muted">
+                  <Tv :size="28" />
+                </div>
+
+                <!-- Haut gauche : sélection ou importée -->
+                <span
+                    v-if="selecting"
+                    class="absolute left-2 top-2 w-6 h-6 rounded-full border flex items-center justify-center"
+                    :class="selected.has(item.serie.id) ? 'bg-accent border-accent text-on-accent' : 'bg-sidebar/80 border-primary/50'"
+                >
+                  <Check v-if="selected.has(item.serie.id)" :size="14" :stroke-width="3" />
+                </span>
+                <span v-else-if="item.state.imported" title="Importée" class="absolute left-2 top-2 w-6 h-6 rounded-full bg-sidebar/80 text-ok flex items-center justify-center">
+                  <Check :size="13" :stroke-width="3" />
+                </span>
+
+                <span v-if="item.state.watched" title="Surveillée" class="absolute right-2 top-2 w-6 h-6 rounded-full bg-sidebar/80 text-accent flex items-center justify-center">
+                  <Rss :size="12" :stroke-width="2.5" />
+                </span>
+                <span v-else-if="item.state.requested" class="absolute right-2 top-2 h-6 px-[9px] rounded-full bg-sidebar/84 text-accent text-[11.5px] font-bold flex items-center gap-1.5">
+                  <Clock3 :size="12" :stroke-width="2.25" /> Demandée
+                </span>
+
+                <!-- Bas : téléchargement en cours -->
+                <div
+                    v-if="item.state.progress !== null"
+                    class="absolute inset-x-0 bottom-0 px-2.5 pt-[30px] pb-2.5 bg-linear-to-b from-sidebar/0 to-sidebar/92 to-65% flex flex-col gap-1.5"
+                >
+                  <div class="flex justify-between text-[11.5px] font-bold text-primary">
+                    <span>Téléchargement</span><span v-if="item.state.progress >= 0">{{ item.state.progress }}&nbsp;%</span>
+                  </div>
+                  <div class="h-[3px] rounded-[2px] bg-primary/20 overflow-hidden">
+                    <div class="h-full rounded-[2px] bg-accent transition-[width] duration-500" :style="{ width: `${Math.max(0, item.state.progress)}%` }" />
+                  </div>
+                </div>
+
+                <!-- Bas : état écrit -->
+                <span
+                    v-else-if="item.state.chip"
+                    class="absolute left-2 bottom-2 h-6 px-[9px] rounded-full bg-sidebar/84 text-[11.5px] font-bold flex items-center gap-1.5 whitespace-nowrap max-w-[calc(100%-16px)]"
+                    :class="chipTone[item.state.chip.tone]"
+                    :title="item.state.chip.title"
+                >
+                  <TriangleAlert v-if="item.state.chip.icon === 'error'" :size="12" :stroke-width="2.25" class="shrink-0" />
+                  <Folder v-else-if="item.state.chip.icon === 'folder'" :size="12" :stroke-width="2.25" class="shrink-0" />
+                  <Clock3 v-else-if="item.state.chip.icon === 'soon'" :size="12" :stroke-width="2.25" class="shrink-0" />
+                  <span class="truncate">{{ item.state.chip.label }}</span>
+                  <span v-if="item.state.chip.detail" class="text-secondary font-medium">{{ item.state.chip.detail }}</span>
+                </span>
+
+                <span
+                    v-if="item.state.isNew"
+                    class="stamp-new absolute left-2"
+                    :class="item.state.chip || item.state.progress !== null ? 'bottom-[42px]' : 'bottom-2.5'"
+                >NOUVEAU</span>
+              </div>
+
+              <div class="flex flex-col gap-0.5 min-w-0">
+                <span class="text-body font-medium truncate" :class="item.state.dim ? 'text-secondary' : 'text-primary'">{{ item.serie.title }}</span>
+                <span class="text-xs text-muted truncate">{{ [item.serie.year, statusLabel(item.serie.status)].filter(Boolean).join(' · ') }}</span>
+              </div>
+            </component>
+          </template>
+        </div>
       </div>
     </div>
 
     <!-- Actions de masse -->
-    <div v-if="selecting" class="sticky bottom-0 z-10 px-4 md:px-6 py-3 border-t border-border bg-shell flex items-center gap-3 flex-wrap">
-      <span class="text-xs text-primary font-medium">{{ selected.size }} sélectionnée{{ selected.size > 1 ? 's' : '' }}</span>
-      <button @click="selectAllFiltered" class="text-xs text-accent hover:underline">Tout sélectionner ({{ filtered.length }})</button>
-      <button v-if="selected.size > 0" @click="clearSelection" class="text-xs text-muted hover:text-primary">Désélectionner</button>
-      <div class="flex items-center gap-2 ml-auto">
-        <button @click="bulkRename" :disabled="bulkBusy || selected.size === 0" class="btn-secondary">Renommer</button>
-        <button @click="bulkSync(true)" :disabled="bulkBusy || selected.size === 0" class="btn-secondary">Surveiller</button>
-        <button @click="bulkSync(false)" :disabled="bulkBusy || selected.size === 0" class="btn-secondary">Ne plus surveiller</button>
-        <button @click="selecting = false" class="btn-secondary" title="Quitter la sélection"><X :size="14" /></button>
+    <div v-if="selecting" class="sticky bottom-4 z-10 mt-8 mx-auto w-fit max-w-full bg-card border border-border rounded-card px-4 py-3 flex items-center gap-x-3 gap-y-2 flex-wrap shadow-[0_16px_40px_rgb(0_0_0/0.5)]">
+      <span class="text-body font-bold text-primary">{{ selected.size }} sélectionnée{{ selected.size > 1 ? 's' : '' }}</span>
+      <button @click="selectAllFiltered" class="text-meta text-accent hover:underline">Tout sélectionner ({{ filtered.length }})</button>
+      <button v-if="selected.size > 0" @click="clearSelection" class="text-meta text-secondary hover:text-primary">Désélectionner</button>
+      <span class="hidden sm:block w-px h-6 bg-hover" />
+      <div class="flex items-center gap-2 flex-wrap">
+        <button @click="bulkRename" :disabled="bulkBusy || selected.size === 0" class="btn-secondary btn-sm">Renommer</button>
+        <button @click="bulkSync(true)" :disabled="bulkBusy || selected.size === 0" class="btn-secondary btn-sm">Surveiller</button>
+        <button @click="bulkSync(false)" :disabled="bulkBusy || selected.size === 0" class="btn-secondary btn-sm">Ne plus surveiller</button>
+        <button @click="selecting = false" class="btn-icon btn-sm" title="Quitter la sélection" aria-label="Quitter la sélection"><X :size="14" /></button>
       </div>
     </div>
 
@@ -121,21 +159,24 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, onActivated } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted, onActivated, onDeactivated } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Tv, Check, Rss, X } from 'lucide-vue-next'
+import { Check, Clock3, Folder, Rss, TriangleAlert, Tv, X } from 'lucide-vue-next'
 import { useSeriesStore, type Serie } from '@/stores/series'
 import { useDownloadsStore } from '@/stores/downloads'
 import { useAuthStore }      from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
 import { usePosterSize } from '@/composables/usePosterSize'
-import SeriesToolbar from '@/components/series/SeriesToolbar.vue'
+import { useLibrarySearch } from '@/composables/useLibrarySearch'
+import { isNew, statusLabel } from '@/utils/series'
+import SeriesToolbar, { type LibraryFilter } from '@/components/series/SeriesToolbar.vue'
 
 defineOptions({ name: 'SeriesView' })
 
 const store     = useSeriesStore()
 const dlStore   = useDownloadsStore()
 const auth      = useAuthStore()
+const librarySearch = useLibrarySearch()
 const { add: toast } = useToast()
 const { current: posterSize, sizes: posterSizes } = usePosterSize()
 
@@ -143,48 +184,65 @@ const search       = ref('')
 const activeFilter = ref('all')
 const activeSort   = ref('alpha')
 
-const filtersDisponibilite = [
-  { label: 'Toutes',       value: 'all' },
-  { label: 'Disponibles',  value: 'available' },
-  { label: 'Sans torrent', value: 'unavailable' },
-]
-
-const filtersImport = [
-  { label: 'Importés',  value: 'complete',    color: '#22c55e' },
-  { label: 'En cours',  value: 'downloading', color: '#3b82f6' },
-  { label: 'Partiel',   value: 'partial',     color: '#9b59b6' },
-  { label: 'Non suivies', value: 'untracked', color: 'var(--border)' },
-]
-
 const sortOptions = [
-  { label: 'A→Z',      value: 'alpha' },
-  { label: 'Z→A',      value: 'alpha-desc' },
-  { label: 'Récents',  value: 'recent' },
-  { label: 'Importés', value: 'imported' },
+  { label: 'A → Z',    value: 'alpha' },
+  { label: 'Z → A',    value: 'alpha-desc' },
+  { label: 'Récentes', value: 'recent' },
+  { label: 'Importées d’abord', value: 'imported' },
 ]
 
-const legend = [
-  { label: 'Importé',      color: '#22c55e' },
-  { label: 'En cours',     color: '#3b82f6' },
-  { label: 'Partiel',      color: '#9b59b6' },
-  { label: 'Non importé',  color: 'var(--border)' },
-]
+// ── Filtres à compteurs ──────────────────────────────────────
+const myRequested = ref<Set<number>>(new Set())
 
-const hasActiveFilter = computed(() => activeFilter.value !== 'all')
+const predicates: Record<string, (s: Serie) => boolean> = {
+  'all'        : () => true,
+  'complete'   : s => s.download_state === 'complete',
+  'partial'    : s => s.download_state === 'partial',
+  'downloading': s => s.download_state === 'downloading',
+  'to-download': s => s.download_state === 'none' && s.has_torrents,
+  'no-torrent' : s => s.download_state === 'none' && !s.has_torrents,
+  'not-here'   : s => s.download_state === 'none',
+  'mine'       : s => myRequested.value.has(s.id),
+  'available'  : s => s.has_torrents,
+  'untracked'  : s => !s.in_client && !s.has_files,
+  'watched'    : s => s.rss_synced,
+}
+
+const countOf = (value: string) => store.series.filter(predicates[value]!).length
+
+const filters = computed<LibraryFilter[]>(() => (auth.isAdmin
+  ? [
+      { value: 'all',         label: 'Toutes' },
+      { value: 'complete',    label: 'Importées' },
+      { value: 'partial',     label: 'Partielles' },
+      { value: 'downloading', label: 'En téléchargement', attention: true },
+      { value: 'to-download', label: 'À télécharger' },
+      { value: 'no-torrent',  label: 'Sans torrent' },
+    ]
+  : [
+      { value: 'all',         label: 'Toutes' },
+      { value: 'complete',    label: 'Prêtes à regarder' },
+      { value: 'partial',     label: 'Partielles' },
+      { value: 'downloading', label: 'Bientôt', attention: true },
+      { value: 'not-here',    label: 'Pas encore là' },
+      { value: 'mine',        label: 'Mes demandes', attention: true },
+    ]
+).map(f => ({ ...f, count: countOf(f.value) })))
+
+const moreFilters = computed<LibraryFilter[]>(() => auth.isAdmin
+  ? [
+      { value: 'available', label: 'Avec torrent' },
+      { value: 'watched',   label: 'Surveillées' },
+      { value: 'untracked', label: 'Absentes du client et du disque' },
+    ].map(f => ({ ...f, count: countOf(f.value) }))
+  : [])
 
 const filtered = computed(() => {
-  let list = [...store.series]
-
-  if (activeFilter.value === 'available')   list = list.filter(s => s.has_torrents)
-  if (activeFilter.value === 'unavailable') list = list.filter(s => !s.has_torrents)
-  if (activeFilter.value === 'complete')    list = list.filter(s => s.download_state === 'complete')
-  if (activeFilter.value === 'downloading') list = list.filter(s => ['downloading', 'partial'].includes(s.download_state))
-  if (activeFilter.value === 'partial')     list = list.filter(s => s.download_state === 'partial')
-  if (activeFilter.value === 'untracked')   list = list.filter(s => !s.in_client && !s.has_files)
+  let list = store.series.filter(predicates[activeFilter.value] ?? predicates.all!)
 
   if (search.value.trim()) {
-    const q = search.value.toLowerCase()
-    list = list.filter(s => s.title.toLowerCase().includes(q))
+    const q = normalize(search.value)
+    list = list.filter(s => normalize(s.title).includes(q))
   }
 
   switch (activeSort.value) {
@@ -199,6 +257,100 @@ const filtered = computed(() => {
   }
 
   return list
+})
+
+function normalize(text: string) {
+  return text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
+}
+
+// ── État des séries ─────────────────────────────────────
+const errorsBySerie = ref<Map<number, number>>(new Map())
+const staleFolders  = ref<Set<number>>(new Set())
+
+const chipTone: Record<string, string> = {
+  err    : 'text-err',
+  accent : 'text-accent',
+  primary: 'text-primary',
+  muted  : 'text-secondary',
+}
+
+interface PosterState {
+  imported : boolean
+  watched  : boolean
+  requested: boolean
+  dim      : boolean
+  isNew    : boolean
+  progress : number | null
+  chip     : { label: string; detail?: string; tone: string; icon?: string; title?: string } | null
+}
+
+function downloadProgress(s: Serie): number | null {
+  if (s.download_state !== 'downloading') return null
+  const active = dlStore.torrents.filter(t => t.serieId === s.id && t.state === 'downloading')
+  if (active.length === 0) return -1
+  const size = active.reduce((sum, t) => sum + (t.size ?? 0), 0)
+  const done = active.reduce((sum, t) => sum + (t.downloaded ?? 0), 0)
+  return Math.round(size > 0 ? done / size * 100 : active[0].progress ?? 0)
+}
+
+function posterState(s: Serie): PosterState {
+  const partial = s.download_state === 'partial'
+    ? { label: 'Partielle', detail: s.episode_count ? `${s.organized_count}/${s.episode_count}` : undefined, tone: 'primary' }
+    : null
+
+  if (!auth.isAdmin) {
+    const notHere = s.download_state === 'none'
+    return {
+      imported : false,
+      watched  : false,
+      requested: myRequested.value.has(s.id),
+      dim      : notHere,
+      isNew    : s.download_state !== 'none' && isNew(s.last_imported_at),
+      progress : null,
+      chip     : s.download_state === 'downloading' ? { label: 'Bientôt', tone: 'accent', icon: 'soon' }
+               : partial ?? (notHere ? { label: 'Pas encore là', tone: 'muted' } : null),
+    }
+  }
+
+  const errors = errorsBySerie.value.get(s.id) ?? 0
+  return {
+    imported : s.download_state === 'complete',
+    watched  : s.rss_synced,
+    requested: false,
+    dim      : s.download_state === 'none' && !s.has_torrents,
+    isNew    : isNew(s.last_imported_at),
+    progress : errors ? null : downloadProgress(s),
+    chip     : errors ? { label: `${errors} erreur${errors > 1 ? 's' : ''}`, tone: 'err', icon: 'error', title: 'Import en erreur' }
+             : staleFolders.value.has(s.id) ? { label: 'À renommer', tone: 'accent', icon: 'folder', title: 'Dossier différent du titre de la série' }
+             : partial ?? (s.download_state === 'none' && !s.has_torrents ? { label: 'Sans torrent', tone: 'muted' } : null),
+  }
+}
+
+//  Grille──
+function letterOf(title: string) {
+  const c = normalize(title).charAt(0).toUpperCase()
+  return /[A-Z]/.test(c) ? c : '#'
+}
+
+type GridItem =
+  | { type: 'letter'; key: string; letter: string; count: number }
+  | { type: 'serie'; key: number; serie: Serie; state: PosterState; first: boolean }
+
+const gridItems = computed<GridItem[]>(() => {
+  const withLetters = activeSort.value === 'alpha' || activeSort.value === 'alpha-desc'
+  const counts = new Map<string, number>()
+  if (withLetters) for (const s of filtered.value) counts.set(letterOf(s.title), (counts.get(letterOf(s.title)) ?? 0) + 1)
+
+  const items: GridItem[] = []
+  let letter = ''
+  filtered.value.forEach((serie, i) => {
+    if (withLetters && letterOf(serie.title) !== letter) {
+      letter = letterOf(serie.title)
+      items.push({ type: 'letter', key: `letter-${letter}`, letter, count: counts.get(letter) ?? 0 })
+    }
+    items.push({ type: 'serie', key: serie.id, serie, state: posterState(serie), first: i === 0 })
+  })
+  return items
 })
 
 // ── Sélection multiple ───────────────────────────────────────
@@ -257,29 +409,35 @@ async function bulkSync(enabled: boolean) {
   }
 }
 
-function stateColor(state: string): string {
-  return ({
-    complete   : '#22c55e',
-    downloading: '#3b82f6',
-    partial    : '#9b59b6',
-    none       : 'transparent',
-  } as Record<string, string>)[state] ?? 'transparent'
-}
-
 // ── Polling downloads + notifs import ────────────────────────
 let dlInterval: ReturnType<typeof setInterval> | null = null
 const seenNotifs = new Set<string>()
+let notifsPrimed = false
 
 async function fetchOrganizeNotifs() {
   try {
     const res = await fetch('/api/organize/recent', { credentials: 'include' })
     if (!res.ok) return
     const notifs: any[] = await res.json()
+
+    // Erreurs du dernier passage de chaque torrent, par série
+    const errors = new Map<number, number>()
+    const latest = new Set<string>()
+    for (const n of notifs) {
+      if (latest.has(n.hash)) continue
+      latest.add(n.hash)
+      if (n.errors > 0 && n.serieId != null) errors.set(n.serieId, (errors.get(n.serieId) ?? 0) + n.errors)
+    }
+    errorsBySerie.value = errors
+
+    const primed = notifsPrimed
+    notifsPrimed = true
     let hasNew = false
     for (const n of notifs) {
       const key = `${n.hash}-${n.at}`
       if (seenNotifs.has(key)) continue
       seenNotifs.add(key)
+      if (!primed) continue
       hasNew = true
       if (n.done > 0) {
         const msg = n.errors > 0
@@ -292,11 +450,28 @@ async function fetchOrganizeNotifs() {
   } catch {}
 }
 
+async function fetchStaleFolders() {
+  try {
+    const res = await fetch('/api/organized-folders', { credentials: 'include' })
+    if (res.ok) staleFolders.value = new Set((await res.json()).map((f: any) => f.serie_id))
+  } catch {}
+}
+
+async function fetchMyRequests() {
+  try {
+    const res = await fetch('/api/requests', { credentials: 'include' })
+    if (!res.ok) return
+    const list: any[] = await res.json()
+    myRequested.value = new Set(list.filter(r => r.status === 'pending' || r.status === 'approved').map(r => r.serieId))
+  } catch {}
+}
+
 onMounted(async () => {
   if (store.series.length === 0) await store.fetchSeries()
   if (auth.isAdmin) {
     dlStore.refresh()
     fetchOrganizeNotifs()
+    fetchStaleFolders()
     dlInterval = setInterval(() => {
       dlStore.refresh()
       fetchOrganizeNotifs()
@@ -304,9 +479,22 @@ onMounted(async () => {
   }
 })
 
+let isActive = false
+function applyLibrarySearch() {
+  const q = librarySearch.consume()
+  if (q === null) return
+  if (q) search.value = q
+  nextTick(() => document.querySelector<HTMLInputElement>('[data-library-search]')?.focus())
+}
+watch(librarySearch.pending, (p) => { if (p && isActive) applyLibrarySearch() })
+onDeactivated(() => { isActive = false })
+
 onActivated(async () => {
+  isActive = true
+  applyLibrarySearch()
   store.fetchSeries()
-  if (auth.isAdmin) dlStore.refresh()
+  if (auth.isAdmin) { dlStore.refresh(); fetchStaleFolders() }
+  else fetchMyRequests()
 })
 
 onUnmounted(() => {

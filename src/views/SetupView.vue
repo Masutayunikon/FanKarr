@@ -1,70 +1,71 @@
 <template>
-  <div class="min-h-screen bg-shell flex flex-col md:flex-row">
+  <div class="min-h-screen bg-main flex flex-col md:flex-row">
 
     <!-- Rail des étapes -->
-    <aside class="md:w-72 md:h-screen md:sticky md:top-0 bg-sidebar border-b md:border-b-0 md:border-r border-border flex flex-col shrink-0">
-      <div class="flex items-center gap-2.5 px-5 py-4 border-b border-border min-h-[56px]">
-        <FankarrLogo class="w-7 h-7 shrink-0" />
+    <aside class="md:w-[280px] md:h-screen md:sticky md:top-0 bg-sidebar border-b md:border-b-0 md:border-r border-card flex flex-col shrink-0">
+      <div class="flex items-center gap-[11px] pl-5 pr-3 pt-[22px] pb-5">
+        <FankarrLogo class="w-[30px] h-[31px] shrink-0" />
         <div class="flex-1 min-w-0">
-          <p class="text-[15px] font-semibold text-primary tracking-wide leading-tight">FanKarr</p>
-          <p class="text-[11px] text-muted">Assistant de configuration</p>
+          <p class="font-display text-[23px] font-bold text-primary leading-tight tracking-[0.01em]">FanKarr</p>
+          <p class="text-[11.5px] text-muted">Assistant de configuration</p>
         </div>
         <button
             v-if="context.relaunch"
             @click="close"
             title="Fermer l'assistant"
-            class="text-muted hover:text-primary transition-colors p-1 rounded-md hover:bg-hover"
+            aria-label="Fermer l'assistant"
+            class="w-9 h-9 rounded-full flex items-center justify-center text-muted hover:text-primary hover:bg-hover transition-colors"
         >
-          <X :size="16" />
+          <X :size="17" />
         </button>
         <button
             v-else
             @click="logout"
             title="Se déconnecter"
-            class="text-muted hover:text-red-400 transition-colors p-1 rounded-md hover:bg-hover"
+            aria-label="Se déconnecter"
+            class="w-9 h-9 rounded-full flex items-center justify-center text-muted hover:text-err hover:bg-hover transition-colors"
         >
-          <LogOut :size="15" />
+          <LogOut :size="16" :stroke-width="1.75" />
         </button>
       </div>
 
       <!-- Progression mobile -->
-      <div class="md:hidden px-5 py-3">
-        <p class="text-xs text-muted">Étape {{ index + 1 }} sur {{ steps.length }} · <span class="text-primary">{{ current.label }}</span></p>
-        <div class="h-1 bg-border rounded-full mt-2 overflow-hidden">
-          <div class="h-full bg-accent rounded-full transition-all duration-300" :style="{ width: `${((index + 1) / steps.length) * 100}%` }" />
+      <div class="md:hidden px-5 pb-4">
+        <div class="progress" role="progressbar" :aria-valuenow="index + 1" aria-valuemin="1" :aria-valuemax="steps.length">
+          <div class="progress-bar" :style="{ width: `${((index + 1) / steps.length) * 100}%` }" />
         </div>
       </div>
 
-      <nav aria-label="Étapes" class="hidden md:block flex-1 overflow-y-auto px-3 py-5">
-        <ol class="flex flex-col gap-1">
+      <nav aria-label="Étapes" class="hidden md:block flex-1 overflow-y-auto px-3.5 pb-5">
+        <ol class="flex flex-col gap-0.5">
           <li v-for="(step, i) in steps" :key="step.id">
             <button
                 :disabled="!canVisit(i)"
                 :aria-current="i === index ? 'step' : undefined"
                 @click="visit(i)"
-                class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors"
-                :class="i === index ? 'bg-active' : canVisit(i) ? 'hover:bg-hover' : 'cursor-default'"
+                class="w-full flex items-center gap-3 px-2.5 py-2.5 rounded-lg text-left transition-colors"
+                :class="i === index ? 'bg-hover' : canVisit(i) ? 'hover:bg-hover/60' : 'cursor-default'"
             >
               <span
-                  class="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-medium shrink-0 border"
+                  class="w-[26px] h-[26px] rounded-full flex items-center justify-center text-[11.5px] font-bold shrink-0 border tabular-nums"
                   :class="stepBadgeClass(step.id, i)"
               >
                 <TriangleAlert v-if="step.id === 'client' && context.clientSkipped && i !== index" :size="12" />
-                <Check v-else-if="i < reached && i !== index" :size="12" />
+                <Check v-else-if="i < reached && i !== index" :size="13" :stroke-width="2.5" />
                 <template v-else>{{ i + 1 }}</template>
               </span>
               <span class="flex flex-col min-w-0">
-                <span class="text-sm truncate" :class="i === index ? 'text-primary font-medium' : canVisit(i) ? 'text-secondary' : 'text-muted'">
+                <span class="text-body truncate" :class="i === index ? 'text-primary font-semibold' : canVisit(i) ? 'text-secondary' : 'text-muted'">
                   {{ step.label }}
                 </span>
-                <span class="text-[11px] text-muted truncate">{{ step.hint }}</span>
+                <span class="text-xs text-muted truncate">{{ step.hint }}</span>
               </span>
             </button>
           </li>
         </ol>
       </nav>
 
-      <p class="hidden md:block px-5 py-4 text-[11px] text-muted border-t border-border leading-relaxed">
+      <p class="hidden md:block px-5 py-4 text-xs text-muted border-t border-card leading-relaxed">
         Tout reste modifiable ensuite dans les Paramètres.
       </p>
     </aside>
@@ -75,13 +76,13 @@
         <div class="w-4 h-4 border border-border border-t-accent rounded-full animate-spin" />
       </div>
 
-      <div v-else class="max-w-2xl mx-auto px-5 md:px-8 py-8 md:py-12 flex flex-col gap-8">
+      <div v-else class="max-w-[720px] mx-auto px-4 md:px-10 pt-7 md:pt-12 pb-16 flex flex-col gap-7">
         <header class="flex flex-col gap-1.5">
-          <p class="text-xs text-accent font-medium">
-            Étape {{ index + 1 }} sur {{ steps.length }}<template v-if="current.optional"> · optionnelle</template>
+          <p class="tag-label text-accent">
+            Étape {{ index + 1 }} sur {{ steps.length }}<template v-if="current.optional"> · facultative</template>
           </p>
-          <h1 ref="titleRef" tabindex="-1" class="text-xl font-semibold text-primary outline-none">{{ current.title }}</h1>
-          <p class="text-sm text-muted leading-relaxed">{{ current.description }}</p>
+          <h1 ref="titleRef" tabindex="-1" class="page-title outline-none">{{ current.title }}</h1>
+          <p class="text-body text-muted leading-relaxed">{{ current.description }}</p>
         </header>
 
         <component
@@ -93,17 +94,17 @@
             :default-path="defaultPath"
         />
 
-        <footer v-if="current.id !== 'recap'" class="flex items-center gap-2 pt-6 border-t border-border">
-          <button v-if="index > 0" @click="visit(index - 1)" :disabled="busy" class="btn-secondary flex items-center gap-1.5">
-            <ArrowLeft :size="14" /> Précédent
+        <footer v-if="current.id !== 'recap'" class="flex items-center gap-2.5 pt-6 border-t border-hover">
+          <button v-if="index > 0" @click="visit(index - 1)" :disabled="busy" class="btn-ghost">
+            <ArrowLeft :size="15" /> Précédent
           </button>
           <div class="flex-1" />
-          <button v-if="current.optional" @click="next(false)" :disabled="busy" class="btn-ghost">
+          <button v-if="current.optional" @click="next(false)" :disabled="busy" class="text-body text-muted hover:text-primary transition-colors px-2">
             Passer
           </button>
-          <button @click="next(true)" :disabled="busy" class="btn-primary flex items-center gap-1.5">
-            {{ busy ? '...' : index === 0 ? 'Commencer' : 'Suivant' }}
-            <ArrowRight v-if="!busy" :size="14" />
+          <button @click="next(true)" :disabled="busy" class="btn-primary">
+            {{ busy ? '…' : index === 0 ? 'Commencer' : 'Suivant' }}
+            <ArrowRight v-if="!busy" :size="15" />
           </button>
         </footer>
       </div>
@@ -219,8 +220,8 @@ function canVisit(i: number) {
 
 function stepBadgeClass(id: SetupStepId, i: number) {
   if (i === index.value) return 'border-accent text-accent bg-accent-muted'
-  if (id === 'client' && context.clientSkipped) return 'border-yellow-500/50 text-yellow-500'
-  if (i < reached.value) return 'border-green-500/50 text-green-400'
+  if (id === 'client' && context.clientSkipped) return 'border-accent/40 text-accent'
+  if (i < reached.value) return 'border-ok/40 text-ok'
   return 'border-border text-muted'
 }
 
@@ -276,7 +277,7 @@ async function finish(withTour: boolean) {
     await router.push('/dashboard')
   } else {
     if (!auth.tourSeen) auth.markTourSeen()
-    await router.push(context.relaunch ? '/settings/advanced' : '/series')
+    await router.push(context.relaunch ? '/settings/advanced' : '/dashboard')
   }
 }
 

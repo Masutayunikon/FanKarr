@@ -1,7 +1,7 @@
 <template>
   <div class="flex flex-col gap-6">
 
-    <div class="settings-card flex flex-col gap-5">
+    <div class="card flex flex-col gap-5">
       <SettingsToggle
           v-model="form.autoImport"
           label="Import automatique"
@@ -25,13 +25,13 @@
       />
     </div>
 
-    <div class="settings-card flex flex-col gap-3">
+    <div class="card flex flex-col gap-3">
       <SettingsToggle
           v-model="form.nfoSupport"
           label="Fichiers NFO et images"
           description="Télécharge NFO et visuels à côté de chaque épisode lors de l'import."
       />
-      <div class="flex items-start gap-2.5 px-3 py-2.5 rounded-lg border border-border bg-shell/50 text-xs text-muted leading-relaxed">
+      <div class="flex items-start gap-2.5 px-3 py-2.5 rounded-field border border-border bg-main/50 text-meta text-muted leading-relaxed">
         <Info :size="13" class="shrink-0 mt-0.5" />
         <p>
           Inutile si vous utilisez l'agent Fankai sur <span class="text-primary">Jellyfin, Plex, Emby ou Kodi</span> :
@@ -41,7 +41,7 @@
       </div>
     </div>
 
-    <p v-if="error" class="text-sm text-red-400" role="alert">{{ error }}</p>
+    <p v-if="error" class="text-body text-err" role="alert">{{ error }}</p>
 
   </div>
 </template>

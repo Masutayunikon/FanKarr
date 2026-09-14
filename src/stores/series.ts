@@ -59,6 +59,9 @@ export interface Serie {
     torrent_count: number
     has_torrents: boolean
     download_state: 'none' | 'downloading' | 'partial' | 'complete'
+    episode_count: number
+    organized_count: number
+    last_imported_at: string | null
     in_client: boolean
     has_files: boolean
     rss_synced: boolean

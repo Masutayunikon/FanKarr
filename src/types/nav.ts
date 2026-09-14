@@ -1,14 +1,11 @@
-export interface NavChild {
-    label: string
-    to: string
-}
+import type { Component } from 'vue'
 
 export interface NavItem {
-    label?    : string
-    icon?     : string
-    to?       : string
-    children? : NavChild[]
-    separator?: true
-    badge?    : string | number
-    tour?     : string          
+    label?     : string
+    icon?      : Component
+    to?        : string
+    separator? : true
+    badge?     : number
+    badgeStyle?: 'count' | 'dot'
+    tour?      : string
 }
