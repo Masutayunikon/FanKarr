@@ -1,7 +1,7 @@
 <template>
   <div class="px-4 md:px-8 py-8 max-w-4xl">
 
-    <div class="flex items-center justify-between mb-6">
+    <div data-tour="requests-header" class="flex items-center justify-between mb-6">
       <div>
         <h1 class="text-lg font-semibold text-primary">Demandes</h1>
         <p class="text-sm text-muted mt-0.5">

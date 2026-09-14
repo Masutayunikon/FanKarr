@@ -16,12 +16,28 @@
 
     <div v-if="saved" class="text-xs text-green-400">Paramètre sauvegardé.</div>
 
+    <div class="settings-card flex flex-col sm:flex-row sm:items-center gap-4">
+      <div class="flex-1">
+        <p class="text-sm text-primary">Assistant de configuration</p>
+        <p class="text-xs text-muted mt-0.5">
+          Reprend pas à pas les dossiers, le client torrent, Jellyfin/Plex et le catalogue. La configuration actuelle est conservée.
+        </p>
+      </div>
+      <div class="flex gap-2 shrink-0">
+        <button @click="tour.start()" class="btn-ghost">Revoir la visite</button>
+        <RouterLink to="/setup" class="btn-secondary">Relancer l'assistant</RouterLink>
+      </div>
+    </div>
+
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
 import SettingsToggle from '@/components/settings/SettingsToggle.vue'
+import { useTourStore } from '@/stores/tour'
+
+const tour    = useTourStore()
 
 const devMode = ref(false)
 const saved   = ref(false)

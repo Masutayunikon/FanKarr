@@ -268,7 +268,7 @@ export async function scanMediaPath(
     }
 
     // Désimport automatique des fichiers manquants sur le disque
-    const { autoUnimportMissing } = readSettings() as any
+    const { autoUnimportMissing } = readSettings()
     let autoRemoved = 0
     if (autoUnimportMissing && !mediaEmpty) {
         for (const [hash, episodes] of Object.entries(organized)) {
@@ -300,9 +300,13 @@ export async function autoOrganizeAll(
     seriesData : any[],
     onResult  ?: (r: { hash: string; name: string; serieId?: number | null; done: number; skipped: number; errors: number; errorFiles: { file: string; error: string }[] }) => void
 ): Promise<void> {
-    const { autoImport } = readSettings()
+    const { autoImport, mediaPath } = readSettings()
     if (!autoImport) {
         logger.debug('organize', 'Import automatique désactivé — skip')
+        return
+    }
+    if (!mediaPath?.trim()) {
+        logger.debug('organize', 'Médiathèque non configurée — skip')
         return
     }
 

@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div :data-tour="item.tour">
     <component
         :is="item.to ? RouterLink : 'button'"
         :to="item.to ?? undefined"

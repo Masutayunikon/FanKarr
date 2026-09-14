@@ -9,6 +9,9 @@ export const useAuthStore = defineStore('auth', () => {
     const username  = ref<string | null>(null)
     const userId    = ref<string | null>(null)
 
+    const onboardingDone = ref(true)
+    const tourSeen       = ref(true)
+
     const isAdmin = computed(() => role.value === 'admin')
 
     async function checkStatus() {
@@ -20,6 +23,8 @@ export const useAuthStore = defineStore('auth', () => {
             role.value     = data.role     ?? null
             username.value = data.username ?? null
             userId.value   = data.userId   ?? null
+            onboardingDone.value = data.onboardingDone ?? true
+            tourSeen.value       = data.tourSeen       ?? true
         } catch {
             loggedIn.value = false
         } finally {
@@ -35,10 +40,7 @@ export const useAuthStore = defineStore('auth', () => {
         })
         const data = await res.json()
         if (res.ok) {
-            loggedIn.value = true
-            role.value     = data.user?.role     ?? null
-            username.value = data.user?.username ?? null
-            userId.value   = data.user?.id       ?? null
+            await checkStatus()
             return null
         }
         return data.error
@@ -57,6 +59,8 @@ export const useAuthStore = defineStore('auth', () => {
             role.value     = data.user?.role     ?? 'admin'
             username.value = data.user?.username ?? u
             userId.value   = data.user?.id       ?? null
+            onboardingDone.value = false
+            tourSeen.value       = false
             return null
         }
         return data.error
@@ -68,7 +72,29 @@ export const useAuthStore = defineStore('auth', () => {
         role.value     = null
         username.value = null
         userId.value   = null
+        onboardingDone.value = true
+        tourSeen.value       = true
     }
 
-    return { loggedIn, setup, loading, role, username, userId, isAdmin, checkStatus, login, setupAccount, logout }
+    async function markTourSeen() {
+        tourSeen.value = true
+        try { await fetch('/api/auth/tour-seen', { method: 'POST', credentials: 'include' }) } catch {}
+    }
+
+    async function completeOnboarding(): Promise<boolean> {
+        const res = await fetch('/api/settings/onboarding', {
+            method : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body   : JSON.stringify({ complete: true }),
+        })
+        if (res.ok) onboardingDone.value = true
+        return res.ok
+    }
+
+    return {
+        loggedIn, setup, loading, role, username, userId, isAdmin,
+        onboardingDone, tourSeen,
+        checkStatus, login, setupAccount, logout, markTourSeen, completeOnboarding,
+    }
 })

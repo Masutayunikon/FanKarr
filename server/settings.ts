@@ -17,6 +17,9 @@ export interface Settings {
     jellyfinUrl         : string   // URL du serveur Jellyfin (ex: http://jellyfin:8096)
     jellyfinAdminToken  : string   // Token admin Jellyfin pour la sync
     englishDirectory    : boolean  // Si true, les dossiers de séries sont en anglais (ex: "Season 1" au lieu de "Saison 1")
+    autoUnimportMissing : boolean
+    onboardingStep      : string | null   // étape la plus avancée atteinte dans l'assistant
+    onboardingCompletedAt: string | null
 }
 
 const defaults: Settings = {
@@ -32,6 +35,9 @@ const defaults: Settings = {
     jellyfinUrl        : '',
     jellyfinAdminToken : '',
     englishDirectory   : false,
+    autoUnimportMissing: false,
+    onboardingStep     : null,
+    onboardingCompletedAt: null,
 }
 
 export function readSettings(): Settings {
