@@ -1,14 +1,14 @@
-fankarr:
-  image: masutayunikon/fankarr:latest
-  container_name: fankarr
-  environment:
-    - PUID=1000        # UID de votre utilisateur (id -u)
-    - PGID=1000        # GID de votre utilisateur (id -g)
-    - TZ=Europe/Paris  # Votre timezone
-  volumes:
-    - ./config:/config  # Config, logs, base de données
-    - /votre/chemin:/media  # Racine de votre mediatheque (hardlinks compatibles)
-  ports:
-    - 9898:9898
-  restart: unless-stopped
- 
+services:
+  fankarr:
+    image: masutayunikon/fankarr:latest
+    container_name: fankarr
+    environment:
+      - PUID=1000        # UID de votre utilisateur (id -u)
+      - PGID=1000        # GID de votre utilisateur (id -g)
+      - TZ=Europe/Paris  # Fuseau horaire
+    volumes:
+      - ./config:/config  # Configuration, journaux et données
+      - /votre/chemin:/media  # Dossier parent de la médiathèque et des téléchargements (nécessaire aux hardlinks)
+    ports:
+      - 9898:9898
+    restart: unless-stopped

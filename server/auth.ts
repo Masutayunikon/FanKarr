@@ -8,7 +8,7 @@ import { DATA_DIR }   from './config.js'
 import { logger }     from './logger.js'
 import {
     findByUsername, findById, findByApiToken,
-    createUser, changePassword, regenerateApiToken, safeUser, hasUsers, markTourSeen,
+    createUser, changePassword, regenerateApiToken, safeUser, hasUsers, markTourSeen, markLogin,
     type User,
 } from './users.js'
 import { readSettings } from './settings.js'
@@ -21,7 +21,7 @@ declare global {
     }
 }
 
-// ── Durée JWT ─────────────────────────────────────────────────
+// ── Durée de session (JWT) ────────────────────────────────────
 const RAW_EXPIRY = process.env.AUTH_TOKEN_EXPIRY ?? '30d'
 const NO_EXPIRY  = RAW_EXPIRY === '0' || RAW_EXPIRY.toLowerCase() === 'never'
 const TOKEN_EXPIRY: string | undefined = NO_EXPIRY ? undefined : RAW_EXPIRY
@@ -34,6 +34,7 @@ function signToken(user: User): string {
 }
 
 function setCookieAndRespond(res: Response, user: User): void {
+    user.lastLoginAt = markLogin(user.id) ?? user.lastLoginAt
     const token = signToken(user)
     res.cookie('fankarr_token', token, { httpOnly: true, sameSite: 'lax' })
     res.json({ success: true, user: safeUser(user) })
@@ -65,25 +66,25 @@ export function authStatus(req: Request, res: Response): void {
 // POST /api/auth/setup  (premier lancement uniquement)
 export function authSetup(req: Request, res: Response): void {
     if (hasUsers()) {
-        logger.warn('auth', 'Tentative de setup alors qu\'un compte existe déjà')
+        logger.warn('auth', 'Tentative de création du premier compte alors qu\'un compte existe')
         res.status(400).json({ error: 'Un compte existe déjà' }); return
     }
 
     const { username, password } = req.body
     if (!username || !password) {
-        res.status(400).json({ error: 'Username et password requis' }); return
+        res.status(400).json({ error: 'Nom d\'utilisateur et mot de passe requis' }); return
     }
     if (password.length < 6) {
-        res.status(400).json({ error: 'Le mot de passe doit faire au moins 6 caractères' }); return
+        res.status(400).json({ error: 'Le mot de passe doit contenir au moins 6 caractères' }); return
     }
 
     try {
         const user = createUser(username, password, 'admin')
         startOnboarding()
-        logger.info('auth', `Premier compte admin créé pour "${username}"`)
+        logger.info('auth', `Premier compte admin créé pour « ${username} »`)
         setCookieAndRespond(res, user)
     } catch (err) {
-        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur' })
+        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux' })
     }
 }
 
@@ -95,16 +96,16 @@ export function authLogin(req: Request, res: Response): void {
 
     const { username, password } = req.body
     if (!username || !password) {
-        res.status(400).json({ error: 'Username et password requis' }); return
+        res.status(400).json({ error: 'Nom d\'utilisateur et mot de passe requis' }); return
     }
 
     const user = findByUsername(username)
     if (!user || !bcrypt.compareSync(password, user.passwordHash)) {
-        logger.warn('auth', `Échec de connexion pour "${username}"`)
+        logger.warn('auth', `Échec de la connexion de « ${username} »`)
         res.status(401).json({ error: 'Identifiants incorrects' }); return
     }
 
-    logger.info('auth', `Connexion de "${username}" (rôle: ${user.role}, expiry: ${NO_EXPIRY ? 'aucune' : TOKEN_EXPIRY})`)
+    logger.info('auth', `Connexion de « ${username} » (rôle : ${user.role}, session : ${NO_EXPIRY ? 'sans expiration' : TOKEN_EXPIRY})`)
     setCookieAndRespond(res, user)
 }
 
@@ -114,7 +115,7 @@ export function authLogout(req: Request, res: Response): void {
     if (token) {
         try {
             const p = jwt.verify(token, JWT_SECRET) as any
-            logger.info('auth', `Déconnexion de "${p.username}"`)
+            logger.info('auth', `Déconnexion de « ${p.username} »`)
         } catch {}
     }
     res.clearCookie('fankarr_token')
@@ -130,16 +131,16 @@ export function authMe(req: Request, res: Response): void {
 export function authChangePassword(req: Request, res: Response): void {
     const { currentPassword, newPassword } = req.body
     if (!currentPassword || !newPassword) {
-        res.status(400).json({ error: 'Mot de passe actuel et nouveau requis' }); return
+        res.status(400).json({ error: 'Mot de passe actuel et nouveau mot de passe requis' }); return
     }
     if (newPassword.length < 6) {
-        res.status(400).json({ error: 'Le nouveau mot de passe doit faire au moins 6 caractères' }); return
+        res.status(400).json({ error: 'Le nouveau mot de passe doit contenir au moins 6 caractères' }); return
     }
     try {
         changePassword(req.user!.id, currentPassword, newPassword)
         res.json({ success: true })
     } catch (err) {
-        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur' })
+        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux' })
     }
 }
 
@@ -149,7 +150,7 @@ export function authRegenerateToken(req: Request, res: Response): void {
         const token = regenerateApiToken(req.user!.id)
         res.json({ apiToken: token })
     } catch (err) {
-        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur' })
+        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux' })
     }
 }
 
@@ -158,31 +159,17 @@ export function authTourSeen(req: Request, res: Response): void {
     try {
         res.json({ tourSeenAt: markTourSeen(req.user!.id) })
     } catch (err) {
-        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur' })
+        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux' })
     }
 }
 
-// POST /api/auth/register  (via lien d'invitation)
-export function authRegister(req: Request, res: Response): void {
-    const { username, password, inviteCode } = req.body
-    if (!username || !password || !inviteCode) {
-        res.status(400).json({ error: 'Username, password et code d\'invitation requis' }); return
-    }
-    if (password.length < 6) {
-        res.status(400).json({ error: 'Le mot de passe doit faire au moins 6 caractères' }); return
-    }
-    // La validation du code se fait dans le router invites (middleware)
-    // Ici on reçoit déjà un username/password validés — la création est déléguée au router
-    res.status(400).json({ error: 'Utilisez /api/invites/:code/register' })
-}
-
-// ── Middlewares ───────────────────────────────────────────────
+// ── Contrôle d'accès ─────────────────────────────────────────
 
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
     const token = req.cookies?.fankarr_token
     if (!token) {
-        logger.debug('auth', `Accès refusé — non authentifié (${req.method} ${req.path})`)
-        res.status(401).json({ error: 'Non authentifié' }); return
+        logger.debug('auth', `Accès refusé : non authentifié (${req.method} ${req.path})`)
+        res.status(401).json({ error: 'Session expirée, reconnectez-vous' }); return
     }
     try {
         const payload = jwt.verify(token, JWT_SECRET) as any
@@ -193,22 +180,21 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
         req.user = user
         next()
     } catch {
-        logger.warn('auth', `Token invalide sur (${req.method} ${req.path})`)
-        res.status(401).json({ error: 'Token invalide' })
+        logger.warn('auth', `Jeton de session invalide (${req.method} ${req.path})`)
+        res.status(401).json({ error: 'Session expirée, reconnectez-vous' })
     }
 }
 
 export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
     requireAuth(req, res, () => {
         if (req.user?.role !== 'admin') {
-            logger.warn('auth', `Accès admin refusé pour "${req.user?.username}" (${req.method} ${req.path})`)
+            logger.warn('auth', `Accès admin refusé pour « ${req.user?.username} » (${req.method} ${req.path})`)
             res.status(403).json({ error: 'Accès réservé aux administrateurs' }); return
         }
         next()
     })
 }
 
-/** Accepte aussi l'authentification par token API (header Authorization: Bearer <token>) */
 export function requireAuthOrApiToken(req: Request, res: Response, next: NextFunction): void {
     const authHeader = req.headers.authorization
     if (authHeader?.startsWith('Bearer ')) {

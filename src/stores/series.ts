@@ -59,6 +59,9 @@ export interface Serie {
     torrent_count: number
     has_torrents: boolean
     download_state: 'none' | 'downloading' | 'partial' | 'complete'
+    episode_count: number
+    organized_count: number
+    last_imported_at: string | null
     in_client: boolean
     has_files: boolean
     rss_synced: boolean
@@ -85,18 +88,17 @@ export const useSeriesStore = defineStore('series', () => {
         error.value = null
         try {
             const res = await fetch('/api/series')
-            if (!res.ok) throw new Error(`Erreur ${res.status}`)
+            if (!res.ok) { error.value = 'Impossible de charger les séries.'; return }
             const data = await res.json()
             series.value = data.series
-            // Précache des posters en arrière-plan
             for (const s of data.series as Serie[]) {
                 if (s.poster_image && !_imageCache.has(s.poster_image)) {
                     _imageCache.add(s.poster_image)
                     new Image().src = s.poster_image
                 }
             }
-        } catch (err) {
-            error.value = err instanceof Error ? err.message : 'Erreur inconnue'
+        } catch {
+            error.value = 'Impossible de contacter le serveur.'
         } finally {
             loadingSeries.value = false
         }
@@ -108,10 +110,10 @@ export const useSeriesStore = defineStore('series', () => {
         currentSerie.value = null
         try {
             const res = await fetch(`/api/series/${id}`)
-            if (!res.ok) throw new Error(`Erreur ${res.status}`)
+            if (!res.ok) { error.value = 'Impossible de charger la série.'; return }
             currentSerie.value = await res.json()
-        } catch (err) {
-            error.value = err instanceof Error ? err.message : 'Erreur inconnue'
+        } catch {
+            error.value = 'Impossible de contacter le serveur.'
         } finally {
             loadingDetail.value = false
         }
@@ -126,9 +128,9 @@ export const useSeriesStore = defineStore('series', () => {
             })
             const data = await res.json()
             if (res.ok) return { success: true }
-            return { success: false, error: data.error }
-        } catch (err) {
-            return { success: false, error: err instanceof Error ? err.message : 'Erreur inconnue' }
+            return { success: false, error: data.error ?? "Impossible d'envoyer le torrent au client" }
+        } catch {
+            return { success: false, error: 'Impossible de contacter le serveur' }
         }
     }
 

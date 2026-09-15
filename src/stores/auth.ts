@@ -43,7 +43,7 @@ export const useAuthStore = defineStore('auth', () => {
             await checkStatus()
             return null
         }
-        return data.error
+        return data.error ?? 'Impossible de se connecter.'
     }
 
     async function setupAccount(u: string, password: string): Promise<string | null> {
@@ -63,7 +63,7 @@ export const useAuthStore = defineStore('auth', () => {
             tourSeen.value       = false
             return null
         }
-        return data.error
+        return data.error ?? 'Impossible de créer le compte.'
     }
 
     async function logout() {

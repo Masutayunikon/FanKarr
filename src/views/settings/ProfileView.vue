@@ -1,105 +1,103 @@
 <template>
-  <div class="flex flex-col gap-6">
+  <div class="flex flex-col gap-4">
 
-    <!-- ── Informations du compte ────────────────────────────── -->
-    <section class="flex flex-col gap-4">
-      <div>
-        <h2 class="text-base font-semibold text-primary">Mon compte</h2>
-        <p class="text-sm text-muted mt-1">Informations associées à votre compte FanKarr.</p>
-      </div>
-
-      <div class="settings-card flex flex-col gap-3">
-        <div>
-          <label class="settings-label mb-1">Nom d'utilisateur</label>
-          <p class="text-sm text-primary font-mono bg-shell px-3 py-2 rounded-lg border border-border w-fit">
-            {{ auth.username }}
-          </p>
-        </div>
-        <div>
-          <label class="settings-label mb-1">Rôle</label>
-          <span class="text-xs px-2 py-0.5 rounded-full font-medium"
-            :class="auth.isAdmin ? 'bg-violet-500/20 text-violet-300' : 'bg-blue-500/20 text-blue-300'">
-            {{ auth.isAdmin ? 'Administrateur' : 'Utilisateur' }}
+    <SettingsSection title="Compte" description="Le nom d'utilisateur sert à la connexion et apparaît sur vos demandes.">
+      <div class="flex items-center gap-[18px]">
+        <span class="w-16 h-16 rounded-full bg-hover text-accent flex items-center justify-center font-display text-[28px] font-bold shrink-0">
+          {{ auth.username?.charAt(0).toUpperCase() }}
+        </span>
+        <div class="flex-1 min-w-0 flex flex-col gap-[5px]">
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <span class="text-[17px] font-bold text-primary">{{ auth.username }}</span>
+            <span class="pill" :class="auth.isAdmin ? 'pill-wait' : 'pill-neutral'">{{ auth.isAdmin ? 'Administrateur' : 'Invité' }}</span>
+          </div>
+          <span v-if="me" class="text-meta text-muted">
+            <template v-if="me.createdAt">Compte créé le {{ formatDate(me.createdAt) }}</template>
+            <template v-if="me.createdAt && me.lastLoginAt"> · </template>
+            <template v-if="me.lastLoginAt">dernière connexion {{ formatRelative(me.lastLoginAt) }}</template>
           </span>
         </div>
       </div>
-    </section>
+    </SettingsSection>
 
-    <!-- ── Changer de mot de passe ───────────────────────────── -->
-    <section class="flex flex-col gap-4">
-      <div>
-        <h2 class="text-base font-semibold text-primary">Changer le mot de passe</h2>
-        <p class="text-sm text-muted mt-1">Votre nouveau mot de passe doit faire au moins 6 caractères.</p>
-      </div>
-
-      <div class="settings-card flex flex-col gap-4">
-        <div>
-          <label class="settings-label mb-1.5">Mot de passe actuel</label>
-          <input v-model="currentPassword" type="password" class="settings-input" placeholder="••••••••" />
+    <SettingsSection title="Mot de passe" description="Au moins 6 caractères.">
+      <div class="grid sm:grid-cols-3 gap-4">
+        <div class="flex flex-col gap-[7px]">
+          <label for="pwd-current" class="field-label">Mot de passe actuel</label>
+          <input id="pwd-current" v-model="currentPassword" type="password" class="field" placeholder="••••••••" autocomplete="current-password" />
         </div>
-        <div>
-          <label class="settings-label mb-1.5">Nouveau mot de passe</label>
-          <input v-model="newPassword" type="password" class="settings-input" placeholder="••••••••" />
+        <div class="flex flex-col gap-[7px]">
+          <label for="pwd-new" class="field-label">Nouveau mot de passe</label>
+          <input id="pwd-new" v-model="newPassword" type="password" class="field" placeholder="••••••••" autocomplete="new-password" />
         </div>
-        <div>
-          <label class="settings-label mb-1.5">Confirmer le nouveau mot de passe</label>
-          <input v-model="confirmPassword" type="password" class="settings-input" placeholder="••••••••" />
-        </div>
-
-        <div class="flex items-center gap-3 flex-wrap">
-          <button @click="changePassword" :disabled="changingPwd" class="btn-primary">
-            {{ changingPwd ? 'Modification…' : 'Modifier le mot de passe' }}
-          </button>
-          <span v-if="pwdSuccess" class="text-xs text-green-400">Mot de passe modifié.</span>
-          <span v-if="pwdError"   class="text-xs text-red-400">{{ pwdError }}</span>
+        <div class="flex flex-col gap-[7px]">
+          <label for="pwd-confirm" class="field-label">Confirmer le nouveau mot de passe</label>
+          <input id="pwd-confirm" v-model="confirmPassword" type="password" class="field" placeholder="••••••••" autocomplete="new-password" @keyup.enter="changePassword" />
         </div>
       </div>
-    </section>
-
-    <!-- ── Token API personnel ──────────────────────────────── -->
-    <section data-tour="profile-token" class="flex flex-col gap-4">
-      <div>
-        <h2 class="text-base font-semibold text-primary">Token API personnel</h2>
-        <p class="text-sm text-muted mt-1">
-          Utilisez ce token pour accéder à l'API FanKarr depuis des applications tierces
-          (ex : plugin Jellyfin).
-        </p>
-      </div>
-
-      <div class="settings-card flex flex-col gap-3">
-        <div class="flex items-center gap-2">
-          <code class="flex-1 text-xs bg-shell px-3 py-2 rounded-lg border border-border text-muted font-mono truncate">
-            {{ showToken ? myToken : '••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••' }}
-          </code>
-          <button @click="showToken = !showToken" class="btn-ghost text-xs shrink-0">
-            {{ showToken ? 'Masquer' : 'Afficher' }}
-          </button>
-          <button @click="copyToken" class="btn-ghost text-xs shrink-0">
-            {{ tokenCopied ? 'Copié !' : 'Copier' }}
-          </button>
-        </div>
-        <button @click="regenerateToken" class="btn-ghost text-xs text-red-400 hover:text-red-300 w-fit">
-          Regénérer le token
+      <div class="flex items-center gap-3.5 flex-wrap">
+        <button @click="changePassword" :disabled="changingPwd" class="btn-secondary pointer-fine:h-[38px]">
+          {{ changingPwd ? 'Modification…' : 'Changer le mot de passe' }}
         </button>
-        <p class="text-xs text-muted">
-          Authentification via header :
-          <code class="bg-shell px-1.5 py-0.5 rounded text-xs">Authorization: Bearer &lt;token&gt;</code>
-        </p>
+        <span v-if="pwdSuccess" class="text-meta text-ok flex items-center gap-1.5"><Check :size="14" /> Mot de passe modifié.</span>
+        <span v-else-if="pwdError" class="text-meta text-err">{{ pwdError }}</span>
+        <span v-else class="text-meta text-muted">Les autres sessions ouvertes resteront connectées.</span>
       </div>
-    </section>
+    </SettingsSection>
+
+    <div class="grid lg:grid-cols-[1fr_1.1fr] gap-4 items-start">
+      <SettingsSection title="Apparence" description="Couleur d'accent de l'interface. Ce choix ne s'applique qu'à ce navigateur.">
+        <ThemePicker />
+      </SettingsSection>
+
+      <div data-tour="profile-token">
+        <SettingsSection title="Jeton d'API" description="Pour les applications tierces qui lisent la médiathèque ou envoient des demandes, comme le plugin Jellyfin.">
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <code class="flex-1 min-w-[180px] field font-sans truncate" :title="showToken ? myToken : undefined">
+              {{ showToken ? myToken : maskedToken }}
+            </code>
+            <button @click="showToken = !showToken" class="btn-icon pointer-fine:h-[38px] pointer-fine:w-[38px]" :aria-label="showToken ? 'Masquer le jeton' : 'Afficher le jeton'" :title="showToken ? 'Masquer' : 'Afficher'">
+              <EyeOff v-if="showToken" :size="15" />
+              <Eye v-else :size="15" />
+            </button>
+            <button @click="copyToken" class="btn-secondary pointer-fine:h-[38px]">
+              <Check v-if="tokenCopied" :size="15" class="text-ok" />
+              <Copy v-else :size="15" />
+              {{ tokenCopied ? 'Copié' : 'Copier' }}
+            </button>
+            <button @click="regenerateToken" class="btn-secondary pointer-fine:h-[38px]">
+              <RefreshCw :size="15" /> Régénérer
+            </button>
+          </div>
+          <p class="text-xs text-muted">
+            Régénérer le jeton déconnecte immédiatement les applications qui utilisent l'ancien.
+            Authentification par l'en-tête <code class="px-1.5 py-0.5 rounded bg-main text-secondary">Authorization: Bearer &lt;jeton&gt;</code>.
+          </p>
+        </SettingsSection>
+      </div>
+    </div>
 
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted }        from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { Check, Copy, Eye, EyeOff, RefreshCw } from 'lucide-vue-next'
 import { useAuthStore }          from '@/stores/auth'
 import { copyToClipboard }       from '@/composables/useClipboard'
+import { formatRelative }        from '@/utils/format'
+import ThemePicker               from '@/components/settings/ThemePicker.vue'
+import SettingsSection           from '@/components/settings/SettingsSection.vue'
 
 const auth = useAuthStore()
 
+const me = ref<{ createdAt?: string; lastLoginAt?: string | null } | null>(null)
 
-// ── Mot de passe ──────────────────────────────────────────────
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+// ── Mot de passe ──
 const currentPassword = ref('')
 const newPassword     = ref('')
 const confirmPassword = ref('')
@@ -118,7 +116,7 @@ async function changePassword() {
     pwdError.value = 'Les mots de passe ne correspondent pas.'; return
   }
   if (newPassword.value.length < 6) {
-    pwdError.value = 'Le mot de passe doit faire au moins 6 caractères.'; return
+    pwdError.value = 'Le mot de passe doit contenir au moins 6 caractères.'; return
   }
 
   changingPwd.value = true
@@ -136,25 +134,30 @@ async function changePassword() {
     confirmPassword.value = ''
     setTimeout(() => { pwdSuccess.value = false }, 3000)
   } else {
-    pwdError.value = data.error ?? 'Erreur lors du changement de mot de passe'
+    pwdError.value = data.error ?? 'Impossible de changer le mot de passe.'
   }
   changingPwd.value = false
 }
 
-// ── Token API ─────────────────────────────────────────────────
+// ── Jeton d'API ──
 const myToken     = ref('')
 const showToken   = ref(false)
 const tokenCopied = ref(false)
 
-async function loadMyToken() {
+const maskedToken = computed(() => myToken.value
+  ? `${myToken.value.slice(0, 4)}${'•'.repeat(24)}${myToken.value.slice(-4)}`
+  : '•'.repeat(32))
+
+async function loadMe() {
   const res = await fetch('/api/auth/me', { credentials: 'include' })
   if (res.ok) {
     const d = await res.json()
     myToken.value = d.apiToken ?? ''
+    me.value = { createdAt: d.createdAt, lastLoginAt: d.lastLoginAt }
   }
 }
 
-onMounted(loadMyToken)
+onMounted(loadMe)
 
 async function copyToken() {
   try {
@@ -165,7 +168,7 @@ async function copyToken() {
 }
 
 async function regenerateToken() {
-  if (!confirm('Regénérer le token ? L\'ancien token sera immédiatement invalidé.')) return
+  if (!confirm('Régénérer le jeton ? L\'ancien sera immédiatement invalidé.')) return
   const res = await fetch('/api/auth/regenerate-token', {
     method: 'POST', credentials: 'include',
   })

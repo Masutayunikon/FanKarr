@@ -1,7 +1,3 @@
-/**
- * Helpers pour l'API Jellyfin
- * Utilisé pour la sync d'utilisateurs et la validation SSO
- */
 
 import { readSettings } from '../settings.js'
 import { logger }       from '../logger.js'
@@ -39,7 +35,7 @@ export async function testJellyfinConnection(url: string, token: string): Promis
         const res = await fetch(`${url.replace(/\/$/, '')}/System/Info`, {
             headers: adminHeaders(token),
         })
-        if (!res.ok) return { ok: false, error: `HTTP ${res.status}` }
+        if (!res.ok) return { ok: false, error: `Jellyfin a répondu HTTP ${res.status} : vérifiez l'URL et la clé API` }
         const data = await res.json()
         return { ok: true, version: data.Version }
     } catch (err) {
@@ -51,15 +47,15 @@ export async function testJellyfinConnection(url: string, token: string): Promis
 
 export async function fetchJellyfinUsers(): Promise<JellyfinUser[]> {
     const { jellyfinUrl, jellyfinAdminToken } = readSettings()
-    if (!jellyfinUrl || !jellyfinAdminToken) throw new Error('Jellyfin non configuré (URL ou token manquant)')
+    if (!jellyfinUrl || !jellyfinAdminToken) throw new Error('Jellyfin non configuré (URL ou clé API manquante)')
 
     const base = jellyfinUrl.replace(/\/$/, '')
     const res  = await fetch(`${base}/Users`, { headers: adminHeaders(jellyfinAdminToken) })
-    if (!res.ok) throw new Error(`Jellyfin API ${res.status} : impossible de récupérer les utilisateurs`)
+    if (!res.ok) throw new Error(`Impossible de récupérer les utilisateurs Jellyfin (HTTP ${res.status})`)
     return res.json()
 }
 
-// ── Validation d'un token utilisateur Jellyfin (SSO) ──────────
+// ── Validation d'un jeton utilisateur Jellyfin ────────────────
 
 export interface JellyfinTokenInfo {
     valid   : boolean
@@ -77,13 +73,13 @@ export async function validateJellyfinToken(jellyfinUserId: string, jellyfinToke
         const res  = await fetch(`${base}/Users/${jellyfinUserId}`, {
             headers: userHeaders(jellyfinToken),
         })
-        if (res.status === 401 || res.status === 403) return { valid: false, error: 'Token Jellyfin invalide ou expiré' }
-        if (!res.ok) return { valid: false, error: `Jellyfin API ${res.status}` }
+        if (res.status === 401 || res.status === 403) return { valid: false, error: 'Jeton Jellyfin invalide ou expiré' }
+        if (!res.ok) return { valid: false, error: `Jellyfin a répondu HTTP ${res.status}` }
 
         const user: JellyfinUser = await res.json()
         if (user.Policy?.IsDisabled) return { valid: false, error: 'Compte Jellyfin désactivé' }
 
-        logger.debug('jellyfin', `Token valide pour "${user.Name}" (${user.Id.slice(0, 8)}…)`)
+        logger.debug('jellyfin', `Jeton valide pour « ${user.Name} » (${user.Id.slice(0, 8)}…)`)
         return { valid: true, userId: user.Id, username: user.Name }
     } catch (err) {
         return { valid: false, error: err instanceof Error ? err.message : 'Erreur réseau' }

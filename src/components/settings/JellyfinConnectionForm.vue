@@ -1,36 +1,40 @@
 <template>
-  <div class="settings-card flex flex-col gap-4">
-    <div>
-      <label class="settings-label mb-1.5">URL du serveur</label>
-      <input v-model="jellyfinUrl" type="url" class="settings-input" placeholder="http://jellyfin:8096" />
-      <p class="text-xs text-muted mt-1">URL accessible depuis FanKarr (réseau local ou Docker)</p>
-    </div>
-    <div>
-      <label class="settings-label mb-1.5">Token admin Jellyfin</label>
-      <input v-model="jellyfinAdminToken" type="password" class="settings-input"
-        :placeholder="hasToken ? '••••••••••••••••••••• (configuré)' : 'Tableau de bord → Clés API'" />
-      <p class="text-xs text-muted mt-1">
-        Dans Jellyfin : Tableau de bord → Clés API → Créer une clé
-      </p>
+  <div class="flex flex-col gap-4">
+    <div class="grid md:grid-cols-2 gap-4">
+      <div class="flex flex-col gap-[7px]">
+        <label for="jellyfin-url" class="field-label">Adresse du serveur</label>
+        <input id="jellyfin-url" v-model="jellyfinUrl" type="url" class="field" placeholder="http://jellyfin:8096" />
+        <p class="text-xs text-muted">Adresse joignable depuis FanKarr (réseau local ou Docker).</p>
+      </div>
+      <div class="flex flex-col gap-[7px]">
+        <label for="jellyfin-token" class="field-label">Clé API administrateur</label>
+        <input id="jellyfin-token" v-model="jellyfinAdminToken" type="password" class="field" autocomplete="off"
+          :placeholder="hasToken ? '•••••••••••••••••••• (configurée)' : 'Collez la clé API'" />
+        <p class="text-xs text-muted">Dans Jellyfin : Tableau de bord › Clés API › Créer une clé.</p>
+      </div>
     </div>
 
-    <div class="flex items-center gap-3 flex-wrap">
-      <button @click="save" :disabled="saving" class="btn-primary">
+    <div class="flex items-center gap-2.5 flex-wrap">
+      <button @click="save" :disabled="saving" class="btn-primary pointer-fine:h-[38px]">
         {{ saving ? 'Enregistrement…' : 'Enregistrer' }}
       </button>
-      <button @click="testConnection" :disabled="testing" class="btn-secondary">
+      <button @click="testConnection" :disabled="testing" class="btn-secondary pointer-fine:h-[38px]">
         {{ testing ? 'Test…' : 'Tester la connexion' }}
       </button>
-      <span v-if="testResult" class="text-xs" :class="testResult.ok ? 'text-green-400' : 'text-red-400'">
-        {{ testResult.ok ? `Connecté — Jellyfin ${testResult.version}` : testResult.error }}
+      <span v-if="testResult" class="pill" :class="testResult.ok ? 'pill-ok' : 'pill-err'">
+        <Check v-if="testResult.ok" :size="12" :stroke-width="2.5" />
+        <TriangleAlert v-else :size="12" :stroke-width="2.25" />
+        {{ testResult.ok ? `Connecté · Jellyfin ${testResult.version}` : testResult.error }}
       </span>
-      <span v-if="saved" class="text-xs text-green-400">Enregistré.</span>
+      <span v-if="saved" class="text-meta text-ok flex items-center gap-1.5"><Check :size="14" /> Enregistré</span>
+      <span v-if="saveError" class="text-meta text-err">{{ saveError }}</span>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { Check, TriangleAlert } from 'lucide-vue-next'
 
 interface JellyfinTestResult { ok: boolean; version?: string; error?: string }
 
@@ -43,6 +47,7 @@ const jellyfinAdminToken = ref('')
 const hasToken           = ref(false)
 const saving             = ref(false)
 const saved              = ref(false)
+const saveError          = ref<string | null>(null)
 const testing            = ref(false)
 const testResult         = ref<JellyfinTestResult | null>(null)
 
@@ -61,15 +66,19 @@ onMounted(async () => {
 })
 
 async function save() {
-  saving.value = true
-  saved.value  = false
+  saving.value    = true
+  saved.value     = false
+  saveError.value = null
   const body: Record<string, string> = { jellyfinUrl: jellyfinUrl.value }
   if (jellyfinAdminToken.value) body.jellyfinAdminToken = jellyfinAdminToken.value
   const res = await fetch('/api/jellyfin/settings', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
     body: JSON.stringify(body),
-  })
-  if (res.ok) {
+  }).catch(() => null)
+  if (!res?.ok) {
+    const d = await res?.json().catch(() => ({}))
+    saveError.value = d?.error ?? 'Impossible d\'enregistrer les réglages Jellyfin.'
+  } else {
     const d = await res.json()
     hasToken.value = d.hasToken
     jellyfinAdminToken.value = ''

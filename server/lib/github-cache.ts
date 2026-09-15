@@ -8,7 +8,7 @@ const GITHUB_BASE =
 
 const CACHE_TTL_MS = 1 * 60 * 60 * 1000
 
-interface CacheEntry<T> { data: T; expiresAt: number }
+interface CacheEntry<T> { data: T; expiresAt: number; fetchedAt: number }
 const _cache = new Map<string, CacheEntry<any>>()
 
 export function cacheGet<T>(key: string): T | null {
@@ -19,17 +19,19 @@ export function cacheGet<T>(key: string): T | null {
 }
 
 export function cacheSet<T>(key: string, data: T): void {
-    _cache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS })
+    _cache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS, fetchedAt: Date.now() })
+}
+
+export function cacheFetchedAt(key: string): string | null {
+    const entry = _cache.get(key)
+    return entry && Date.now() <= entry.expiresAt ? new Date(entry.fetchedAt).toISOString() : null
 }
 
 export function cacheClear(): void { _cache.clear() }
 
 export function cacheSize(): number { return _cache.size }
 
-/**
- * @param force  Ignore le cache mémoire ET le cache CDN de raw.githubusercontent
- *               (~5 min).
- */
+/** force : ignore le cache mémoire et celui du CDN de raw.githubusercontent (environ 5 min). */
 export async function githubGet(urlPath: string, force = false): Promise<any> {
     if (!force) {
         const cached = cacheGet(urlPath)
@@ -38,7 +40,7 @@ export async function githubGet(urlPath: string, force = false): Promise<any> {
     const url  = force ? `${GITHUB_BASE}/${urlPath}?_=${Date.now()}` : `${GITHUB_BASE}/${urlPath}`
     const init = force ? { cache: 'no-store' as const, headers: { 'Cache-Control': 'no-cache' } } : undefined
     const res  = await fetch(url, init)
-    if (!res.ok) throw new Error(`GitHub ${res.status}: ${urlPath}`)
+    if (!res.ok) throw new Error(`GitHub : HTTP ${res.status} sur ${urlPath}`)
     const data = await res.json()
     cacheSet(urlPath, data)
     return data

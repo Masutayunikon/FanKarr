@@ -1,25 +1,19 @@
-/**
- * uTorrent Driver
- */
 
 import type { TorrentClientDriver, TorrentInfo, DownloadOptions, ClientConfig } from './index.js'
 import { clientFetch } from './index.js'
 import { logger } from '../logger.js'
 
-// uTorrent status flags (bitmask) :
-// 1 = Started, 2 = Checking, 4 = Start after check, 8 = Checked,
-// 16 = Error, 32 = Paused, 64 = Queued, 128 = Loaded
+// Drapeaux d'état : 1 démarré, 2 vérification, 4 démarrage après vérification, 8 vérifié, 16 erreur, 32 pause, 64 file d'attente, 128 chargé
 function mapState(status: number): TorrentInfo['state'] {
     if (status & 16)                    return 'error'
     if (status & 32)                    return 'paused'
     if (status & 2)                     return 'checking'
-    // Démarré + chargé + vérifié → on regarde le ratio de progression
+    // Démarré et vérifié : en cours (le seeding est déduit de la progression)
     if (status & 1 && status & 8)       return 'downloading'
-    if (status & 64)                    return 'downloading' // queued
+    if (status & 64)                    return 'downloading'
     return 'unknown'
 }
 
-// uTorrent nécessite un token CSRF + cookie à chaque session
 interface UTSession { token: string; cookie: string }
 
 async function utTorrentExists(config: ClientConfig, hash: string): Promise<boolean> {
@@ -31,10 +25,7 @@ async function utTorrentExists(config: ClientConfig, hash: string): Promise<bool
     } catch { return false }
 }
 
-/**
- * Attend que les métadonnées soient disponibles (polling), puis applique les priorités :
- * tous les fichiers à 0 (skip), sauf le fichier cible à 2 (normal).
- */
+/** Attend la liste des fichiers puis les passe à 0, sauf la cible à 2 (normale). */
 async function utApplyFilePriority(
     config   : ClientConfig,
     hash     : string,
@@ -43,7 +34,6 @@ async function utApplyFilePriority(
     const auth = btoa(`${config.username ?? ''}:${config.password ?? ''}`)
     const HASH = hash.toUpperCase()
 
-    // 100 tentatives × 500 ms = 50 s max
     for (let attempt = 0; attempt < 100; attempt++) {
         await new Promise(r => setTimeout(r, 500))
         try {
@@ -52,24 +42,22 @@ async function utApplyFilePriority(
             const files   = data?.files?.[1] as any[][] | undefined
             if (!Array.isArray(files) || files.length === 0) continue
 
-            // Passer tous les fichiers à priorité 0 (skip)
             const skipQs = new URLSearchParams({ token: session.token, action: 'setprio', hash: HASH, p: '0' })
             for (let i = 0; i < files.length; i++) skipQs.append('f', String(i))
             await clientFetch(config, `${config.url}/gui/?${skipQs}`, {
                 headers: { Authorization: `Basic ${auth}`, Cookie: session.cookie },
             })
 
-            // Activer le fichier cible (priorité 2 = normal)
             const selectQs = new URLSearchParams({ token: session.token, action: 'setprio', hash: HASH, p: '2', f: String(fileIndex) })
             await clientFetch(config, `${config.url}/gui/?${selectQs}`, {
                 headers: { Authorization: `Basic ${auth}`, Cookie: session.cookie },
             })
 
-            logger.info('utorrent', `Fichier ${fileIndex} sélectionné pour ${HASH.slice(0, 8)}…`)
+            logger.info('utorrent', `Fichier n° ${fileIndex} sélectionné pour ${HASH.slice(0, 8)}…`)
             return
         } catch {}
     }
-    throw new Error(`Timeout : fichiers non disponibles pour ${hash.slice(0, 8)}…`)
+    throw new Error(`Délai dépassé : fichiers du torrent ${hash.slice(0, 8)}… toujours indisponibles`)
 }
 
 async function utGetSession(config: ClientConfig): Promise<UTSession> {
@@ -79,11 +67,12 @@ async function utGetSession(config: ClientConfig): Promise<UTSession> {
     }
 
     const res = await clientFetch(config, `${config.url}/gui/token.html`, { headers })
-    if (!res.ok) throw new Error(`HTTP ${res.status} — token introuvable`)
+    if (res.status === 401) throw new Error('uTorrent a refusé la connexion : vérifiez le nom d\'utilisateur et le mot de passe')
+    if (!res.ok) throw new Error(`uTorrent a répondu HTTP ${res.status} : vérifiez l'URL de la WebUI`)
 
     const text   = await res.text()
     const match  = text.match(/<div[^>]+id=['"]token['"][^>]*>([^<]+)</)
-    if (!match) throw new Error('Token CSRF introuvable dans la réponse')
+    if (!match) throw new Error('Réponse inattendue de uTorrent : vérifiez l\'URL de la WebUI')
     const token  = match[1].trim()
     const cookie = res.headers.get('set-cookie') ?? ''
 
@@ -104,15 +93,12 @@ async function utRequest(
             'Cookie'       : session.cookie,
         },
     })
-    if (!res.ok) throw new Error(`uTorrent HTTP ${res.status}`)
+    if (!res.ok) throw new Error(`uTorrent a répondu HTTP ${res.status}`)
     return res.json()
 }
 
 function mapTorrent(t: any[]): TorrentInfo {
-    // uTorrent retourne un tableau par torrent :
-    // [hash, status, name, size, progress, downloaded, uploaded, ratio,
-    //  ul_speed, dl_speed, eta, label, peers_connected, peers_swarm,
-    //  seeds_connected, seeds_swarm, availability, queue_order, remaining]
+    // Tableau par torrent : [hash, status, name, size, progress, downloaded, uploaded, ratio, ul_speed, dl_speed, eta, label, …]
     const [hash, status, name, size, progress, downloaded, uploaded, ratio, ulSpeed, dlSpeed, eta, label] = t
     return {
         hash      : hash.toLowerCase(),
@@ -122,7 +108,7 @@ function mapTorrent(t: any[]): TorrentInfo {
         size,
         downloaded,
         uploaded  : uploaded ?? 0,
-        ratio     : Math.round(((ratio ?? 0) / 1000) * 100) / 100, // uTorrent ratio est x1000
+        ratio     : Math.round(((ratio ?? 0) / 1000) * 100) / 100, // ratio × 1000
         speed     : dlSpeed ?? 0,
         upspeed   : ulSpeed ?? 0,
         eta       : eta ?? -1,
@@ -136,13 +122,13 @@ const UT: TorrentClientDriver = {
         id    : 'utorrent',
         label : 'uTorrent',
         fields: [
-            { key: 'url',      label: 'URL WebUI',          type: 'url',      placeholder: 'http://localhost:8080',  required: true },
-            { key: 'username', label: 'Identifiant',        type: 'text',     placeholder: 'admin',                  required: true },
+            { key: 'url',      label: 'URL de la WebUI',    type: 'url',      placeholder: 'http://localhost:8080',  required: true },
+            { key: 'username', label: 'Nom d\'utilisateur', type: 'text',     placeholder: 'admin',                  required: true },
             { key: 'password', label: 'Mot de passe',       type: 'password', placeholder: '••••••••',              required: true },
             { key: 'category', label: 'Catégorie',          type: 'text',     placeholder: 'fankai',                 required: false, default: 'fankai' },
-            { key: 'savePath', label: 'Dossier cible',      type: 'text',     placeholder: '/downloads/fankai',      required: false },
-            { key: 'remotePath', label: 'Chemin distant (client)', type: 'text', placeholder: '/downloads',          required: false },
-            { key: 'localPath',  label: 'Chemin local (FanKarr)',  type: 'text', placeholder: '/mnt/nas/downloads',  required: false },
+            { key: 'savePath', label: 'Dossier de téléchargement', type: 'text', placeholder: '/downloads/fankai',   required: false },
+            { key: 'remotePath', label: 'Dossier vu par le client', type: 'text', placeholder: '/downloads',         required: false },
+            { key: 'localPath',  label: 'Dossier vu par FanKarr',   type: 'text', placeholder: '/mnt/nas/downloads', required: false },
             { key: 'ignoreCertificateErrors', label: 'Ignorer les erreurs de certificat SSL', type: 'boolean', required: false },
         ],
     },
@@ -153,8 +139,8 @@ const UT: TorrentClientDriver = {
             logger.info('utorrent', `Test de connexion réussi sur ${config.url}`)
             return { ok: true, message: 'Connexion réussie' }
         } catch (err) {
-            const msg = err instanceof Error ? err.message : 'Erreur inconnue'
-            logger.warn('utorrent', `Test de connexion échoué sur ${config.url} : ${msg}`)
+            const msg = err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux'
+            logger.warn('utorrent', `Échec du test de connexion sur ${config.url} : ${msg}`)
             return { ok: false, message: msg }
         }
     },
@@ -164,10 +150,10 @@ const UT: TorrentClientDriver = {
             const session = await utGetSession(config)
             const data    = await utRequest(config, { action: 'getsettings' }, session)
             const version = data?.['build']?.toString() ?? 'inconnue'
-            logger.debug('utorrent', `Healthcheck OK — build ${version}`)
+            logger.debug('utorrent', `Client en ligne (build ${version})`)
             return { online: true, version }
         } catch (err) {
-            logger.debug('utorrent', `Healthcheck échoué : ${err instanceof Error ? err.message : err}`)
+            logger.debug('utorrent', `Client injoignable : ${err instanceof Error ? err.message : err}`)
             return { online: false }
         }
     },
@@ -185,7 +171,6 @@ const UT: TorrentClientDriver = {
             .map(t => {
                 const info = mapTorrent(t)
 
-                // Récupérer le save_path depuis les properties si disponible
                 const props = data?.props?.find((p: any) => p[0]?.toLowerCase() === info.hash)
                 if (props) info.save_path = props[1] ?? ''
 
@@ -201,9 +186,9 @@ const UT: TorrentClientDriver = {
         if (options?.file_index != null && hash) {
             const exists = await utTorrentExists(config, hash)
             if (exists) {
-                logger.info('utorrent', `Torrent ${hash.slice(0, 8)}… déjà présent, mise à jour priorité fichier ${options.file_index}`)
+                logger.info('utorrent', `Torrent ${hash.slice(0, 8)}… déjà présent, sélection du fichier n° ${options.file_index}`)
                 utApplyFilePriority(config, hash, options.file_index).catch(err =>
-                    logger.warn('utorrent', `Priorité fichier non appliquée : ${err instanceof Error ? err.message : err}`)
+                    logger.warn('utorrent', `Priorité de fichier non appliquée : ${err instanceof Error ? err.message : err}`)
                 )
                 return
             }
@@ -219,18 +204,17 @@ const UT: TorrentClientDriver = {
             method : 'GET',
             headers: { Authorization: `Basic ${auth}`, Cookie: session.cookie },
         })
-        if (!res.ok) throw new Error(`Ajout échoué : HTTP ${res.status}`)
+        if (!res.ok) throw new Error(`Échec de l'ajout (HTTP ${res.status})`)
 
         if (options?.file_index != null && hash) {
-            logger.info('utorrent', `Torrent ajouté (sélection fichier ${options.file_index} en attente de métadonnées)`)
+            logger.info('utorrent', `Torrent ajouté, fichier n° ${options.file_index} sélectionné dès réception des métadonnées`)
             utApplyFilePriority(config, hash, options.file_index).catch(err =>
-                logger.warn('utorrent', `Priorité fichier non appliquée : ${err instanceof Error ? err.message : err}`)
+                logger.warn('utorrent', `Priorité de fichier non appliquée : ${err instanceof Error ? err.message : err}`)
             )
         } else {
-            logger.info('utorrent', `Torrent ajouté avec succès (catégorie: ${config.category ?? 'aucune'}${config.savePath ? `, dossier: ${config.savePath}` : ''})`)
+            logger.info('utorrent', `Torrent ajouté (catégorie : ${config.category ?? 'aucune'}${config.savePath ? `, dossier : ${config.savePath}` : ''})`)
         }
 
-        // Appliquer le label/catégorie si défini
         if (config.category) {
             setTimeout(async () => {
                 try {

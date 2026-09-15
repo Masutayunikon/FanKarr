@@ -13,36 +13,36 @@
 
       <div
           v-if="spot"
-          class="absolute rounded-lg pointer-events-none transition-all duration-200 motion-reduce:transition-none"
+          class="absolute rounded-card pointer-events-none transition-all duration-200 motion-reduce:transition-none"
           :style="{
             top: `${spot.top}px`, left: `${spot.left}px`, width: `${spot.width}px`, height: `${spot.height}px`,
-            boxShadow: '0 0 0 2px var(--accent), 0 0 0 9999px rgb(0 0 0 / 0.65)',
+            boxShadow: '0 0 0 2px var(--accent), 0 0 0 9999px rgb(14 10 8 / 0.72)',
           }"
       />
-      <div v-else class="absolute inset-0 bg-black/60 pointer-events-none" />
+      <div v-else class="absolute inset-0 bg-sidebar/72 pointer-events-none" />
 
       <div
           ref="bubbleRef"
-          class="absolute bg-card border border-border rounded-xl p-4 w-80 max-w-[calc(100vw-24px)] shadow-xl flex flex-col gap-3 transition-[top,left] duration-200 motion-reduce:transition-none"
+          class="absolute bg-card border border-border rounded-card px-5 py-4 w-[340px] max-w-[calc(100vw-24px)] shadow-[0_24px_60px_rgb(0_0_0/0.55)] flex flex-col gap-3 transition-[top,left] duration-200 motion-reduce:transition-none"
           :style="{ top: `${bubble.top}px`, left: `${bubble.left}px` }"
       >
         <div class="flex items-start gap-3">
           <div class="flex-1 min-w-0">
-            <p class="text-[11px] text-accent font-medium">{{ tour.index + 1 }} / {{ tour.steps.length }}</p>
-            <h2 id="tour-title" class="text-sm font-semibold text-primary mt-0.5">{{ step.title }}</h2>
+            <p class="tag-label text-accent tabular-nums">{{ tour.index + 1 }} / {{ tour.steps.length }}</p>
+            <h2 id="tour-title" class="font-display text-lg font-bold text-primary mt-1 leading-snug">{{ step.title }}</h2>
           </div>
-          <button @click="tour.finish()" aria-label="Fermer la visite" class="text-muted hover:text-primary transition-colors p-1 -m-1 rounded-md">
+          <button @click="tour.finish()" aria-label="Fermer la visite" class="w-8 h-8 -mr-2 -mt-1 rounded-full flex items-center justify-center text-muted hover:text-primary hover:bg-hover transition-colors">
             <X :size="15" />
           </button>
         </div>
 
-        <p id="tour-body" class="text-xs text-secondary leading-relaxed" aria-live="polite">{{ step.body }}</p>
+        <p id="tour-body" class="text-body text-secondary leading-relaxed" aria-live="polite">{{ step.body }}</p>
 
         <div class="flex items-center gap-2 pt-1">
-          <button @click="tour.finish()" class="btn-ghost text-xs">Passer</button>
+          <button @click="tour.finish()" class="text-meta text-muted hover:text-primary transition-colors px-1">Passer</button>
           <div class="flex-1" />
-          <button v-if="tour.index > 0" @click="tour.prev()" class="btn-secondary text-xs py-1.5">Précédent</button>
-          <button ref="primaryRef" @click="tour.next()" class="btn-primary text-xs py-1.5">
+          <button v-if="tour.index > 0" @click="tour.prev()" class="btn-ghost btn-sm">Précédent</button>
+          <button ref="primaryRef" @click="tour.next()" class="btn-primary btn-sm px-4">
             {{ tour.isLast ? 'Terminer' : 'Suivant' }}
           </button>
         </div>
@@ -171,7 +171,7 @@ async function showStep() {
   if (el) {
     const r = el.getBoundingClientRect()
     if (r.top < 0 || r.bottom > window.innerHeight) {
-      el.scrollIntoView({ block: 'center', behavior: reducedMotion.value ? 'auto' : 'smooth' })
+      el.scrollIntoView({ block: r.height > window.innerHeight ? 'start' : 'center', behavior: reducedMotion.value ? 'auto' : 'smooth' })
     }
   }
   await nextTick()

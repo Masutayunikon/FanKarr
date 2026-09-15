@@ -1,163 +1,182 @@
 <template>
-  <div class="settings-card flex flex-col gap-3">
+  <article class="bg-card rounded-xl px-4 py-3 flex flex-col md:flex-row md:items-center gap-x-4 gap-y-3">
 
-    <!-- Nom + état -->
-    <div class="flex items-start justify-between gap-4">
-      <div class="flex-1 min-w-0">
-        <!-- Nom du torrent + tooltip épisodes -->
-        <div class="relative group/eps inline-block max-w-full">
-          <p class="text-sm text-primary font-medium truncate cursor-default">{{ torrent.name }}</p>
-          <!-- Tooltip épisodes -->
-          <div v-if="episodesWithProgress.length > 0"
-               class="absolute bottom-full left-0 mb-2 hidden group-hover/eps:block z-20 min-w-56 max-w-80">
-            <div class="bg-card border border-border rounded-lg p-3 text-xs shadow-xl">
-              <p class="text-muted font-medium mb-2">{{ episodesWithProgress.length }} épisode{{ episodesWithProgress.length > 1 ? 's' : '' }}</p>
-              <div class="flex flex-col gap-1 max-h-48 overflow-y-auto">
-                <div v-for="ep in episodesWithProgress" :key="ep.episode_id"
-                     class="flex items-center justify-between gap-3">
-                  <span class="text-primary shrink-0">S{{ String(ep.season_number).padStart(2,'0') }}E{{ String(ep.episode_number).padStart(2,'0') }}</span>
-                  <span v-if="ep.progress !== null"
-                        class="text-[10px] px-1.5 py-0.5 rounded shrink-0"
-                        :class="ep.progress >= 100 ? 'bg-green-500/15 text-green-500' : ep.priority === 0 ? 'bg-border/50 text-muted' : 'bg-accent/15 text-accent'">
-                    {{ ep.priority === 0 ? 'ignoré' : ep.progress >= 100 ? '✓' : `${ep.progress}%` }}
-                  </span>
+    <div class="flex items-center gap-4 flex-1 min-w-0">
+      <RouterLink v-if="torrent.serieId" :to="`/series/${torrent.serieId}`" class="shrink-0">
+        <img v-if="poster" :src="poster" alt="" class="w-[34px] h-[51px] object-cover rounded-[4px]" />
+        <span v-else class="w-[34px] h-[51px] rounded-[4px] bg-hover text-muted flex items-center justify-center"><Tv :size="16" :stroke-width="1.75" /></span>
+      </RouterLink>
+      <span v-else class="w-[34px] h-[51px] rounded-[4px] bg-hover text-muted flex items-center justify-center shrink-0" title="Série non reconnue">
+        <FileQuestion :size="16" :stroke-width="1.75" />
+      </span>
+
+      <div class="flex-1 min-w-0 flex flex-col gap-[7px]">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="relative group/eps min-w-0">
+            <p class="text-sm font-medium truncate cursor-default" :class="isImported ? 'text-secondary' : 'text-primary'" :title="torrent.name">
+              {{ torrent.serieName && !torrent.name.startsWith(torrent.serieName) ? torrent.serieName : torrent.name }}
+            </p>
+            <div v-if="episodesWithProgress.length > 0" class="absolute bottom-full left-0 mb-2 hidden group-hover/eps:block z-20 min-w-56 max-w-80">
+              <div class="menu p-3 gap-0">
+                <p class="text-meta text-primary font-medium truncate mb-1">{{ torrent.name }}</p>
+                <p class="tag-label mb-2">{{ plural(episodesWithProgress.length, 'épisode') }}</p>
+                <div class="flex flex-col gap-1 max-h-48 overflow-y-auto">
+                  <div v-for="ep in episodesWithProgress" :key="ep.episode_id" class="flex items-center justify-between gap-3 text-meta">
+                    <span class="text-primary shrink-0 tabular-nums">S{{ String(ep.season_number).padStart(2,'0') }}E{{ String(ep.episode_number).padStart(2,'0') }}</span>
+                    <span
+                        v-if="ep.progress !== null"
+                        class="pill h-5 px-2 text-[10.5px]"
+                        :class="ep.progress >= 100 ? 'pill-ok' : ep.priority === 0 ? 'pill-muted' : 'pill-active'"
+                    >
+                      {{ ep.priority === 0 ? 'Exclu' : ep.progress >= 100 ? '✓' : `${ep.progress} %` }}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
+          <span class="pill h-5 px-2 text-[11px] shrink-0" :class="[badge.class, { 'max-sm:hidden': torrent.state === 'downloading' }]">{{ badge.label }}</span>
+          <span v-if="clientLine" class="text-[11.5px] text-muted shrink-0 hidden sm:inline">{{ clientLine }}</span>
+          <span v-if="!isDone" class="ml-auto text-[13px] tabular-nums shrink-0" :class="torrent.state === 'error' ? 'text-err' : 'text-primary'">{{ clampedProgress }}&nbsp;%</span>
         </div>
-        <!-- Nom de la série -->
-        <p v-if="torrent.serieName" class="text-[11px] text-muted truncate mt-0.5">{{ torrent.serieName }}</p>
-        <div class="flex items-center gap-2 mt-1">
-          <span class="text-[10px] px-2 py-0.5 rounded border" :class="stateBadge(torrent.state).class">{{ stateBadge(torrent.state).label }}</span>
-          <span v-if="columns.client" class="text-xs text-muted">{{ torrent.client_name }}</span>
-        </div>
-      </div>
-      <div class="text-right shrink-0">
-        <p class="text-sm font-semibold text-primary">{{ clampedProgress }}%</p>
-        <p v-if="columns.size" class="text-xs text-muted mt-0.5">{{ formatSize(torrent.downloaded) }} / {{ formatSize(torrent.size) }}</p>
-      </div>
-    </div>
 
-    <!-- Barre de progression -->
-    <div class="h-1 bg-border rounded-full overflow-hidden">
-      <div class="h-full rounded-full transition-all duration-500"
-           :class="torrent.state === 'seeding' || torrent.state === 'unknown' ? 'bg-green-500' : torrent.state === 'error' ? 'bg-red-500' : torrent.state === 'paused' ? 'bg-muted' : 'bg-accent'"
-           :style="{ width: `${clampedProgress}%` }" />
-    </div>
-
-    <!-- Infos + actions -->
-    <div class="flex items-center justify-between">
-      <div class="flex items-center gap-3 text-xs text-muted">
-        <span v-if="torrent.state === 'downloading'">↓ {{ formatSpeed(torrent.speed) }}</span>
-        <span v-if="torrent.state === 'downloading' && torrent.eta > 0">ETA {{ formatEta(torrent.eta) }}</span>
-        <template v-if="torrent.state === 'seeding'">
-          <span class="text-green-500">Complété</span>
-          <span v-if="columns.ratio" class="font-mono" :class="torrent.ratio >= 1 ? 'text-green-400' : torrent.ratio >= 0.5 ? 'text-yellow-500' : 'text-muted'">R {{ torrent.ratio?.toFixed(2) ?? '0.00' }}</span>
-          <span v-if="columns.uploaded">↑ {{ formatSize(torrent.uploaded ?? 0) }}</span>
-          <span v-if="columns.upspeed && torrent.upspeed > 0">{{ formatSpeed(torrent.upspeed) }}</span>
+        <template v-if="!isDone">
+          <div class="progress">
+            <div class="progress-bar" :class="{ 'bg-muted': torrent.state === 'paused', 'bg-err': torrent.state === 'error' }" :style="{ width: `${clampedProgress}%` }" />
+          </div>
+          <div class="flex items-center gap-x-4 gap-y-1 flex-wrap text-xs text-muted">
+            <span v-if="torrent.state === 'downloading'">{{ formatSpeed(torrent.speed ?? 0) }}</span>
+            <span v-if="torrent.state === 'downloading' && torrent.eta > 0 && formatDuration(torrent.eta) !== '∞'">reste {{ formatDuration(torrent.eta) }}</span>
+            <span v-if="torrent.state === 'error'" class="text-err">Le client signale une erreur sur ce torrent</span>
+            <span v-if="columns.size">{{ formatSize(torrent.downloaded) }} sur {{ formatSize(torrent.size) }}</span>
+          </div>
         </template>
-        <span v-if="torrent.state === 'unknown'" class="text-yellow-500">État non remonté par le client</span>
-      </div>
 
-      <div class="flex items-center gap-2">
-
-        <!-- Actions terminés -->
-        <template v-if="torrent.state === 'seeding' || torrent.state === 'unknown'">
-          <!-- Erreurs -->
-          <div v-if="torrent.errorFiles?.length > 0" class="relative group/err">
-            <span class="text-xs px-2 py-0.5 rounded border border-red-500/40 text-red-400 cursor-default">{{ torrent.errorFiles.length }} erreur{{ torrent.errorFiles.length > 1 ? 's' : '' }}</span>
-            <div class="absolute bottom-full right-0 mb-2 hidden group-hover/err:block z-10 w-80">
-              <div class="bg-card border border-red-500/30 rounded-lg p-3 text-xs shadow-xl">
-                <p class="text-red-400 mb-2 font-medium">Fichiers en erreur</p>
-                <div v-for="e in torrent.errorFiles" :key="e.file" class="mb-1.5 last:mb-0">
-                  <p class="text-primary truncate">{{ e.file }}</p>
+        <template v-else>
+          <div v-if="torrent.errorFiles?.length > 0" class="relative group/err flex items-center gap-[9px] text-meta text-err min-w-0 w-fit max-w-full">
+            <TriangleAlert :size="14" :stroke-width="2" class="shrink-0" />
+            <span class="truncate">{{ errorSummary }}</span>
+            <div class="absolute bottom-full left-0 mb-2 hidden group-hover/err:block z-20 w-96 max-w-[80vw]">
+              <div class="menu p-3 gap-0 border-err/30">
+                <p class="tag-label text-err mb-2">Fichiers en erreur</p>
+                <div v-for="e in torrent.errorFiles" :key="e.file" class="mb-1.5 last:mb-0 text-meta">
+                  <p class="text-primary truncate" :title="e.file">{{ e.file }}</p>
                   <p class="text-muted">{{ e.error }}</p>
                 </div>
               </div>
             </div>
           </div>
-
-          <!-- Badge import -->
-          <span class="text-xs px-2 py-0.5 rounded border"
-                :class="torrent.organizeState === 'done' ? 'border-green-500/40 text-green-500' : torrent.organizeState === 'partial' ? 'border-yellow-500/40 text-yellow-500' : 'border-border text-muted'">
-            {{ torrent.organizeState === 'done'
-              ? `Importé (${torrent.organizeProgress?.done}/${torrent.organizeProgress?.total})`
-              : torrent.organizeState === 'partial'
-                ? `En cours (${torrent.organizeProgress?.done}/${torrent.organizeProgress?.total})`
-                : 'Non importé' }}
-          </span>
-
-          <button v-if="torrent.organizeState !== 'done'" @click="emit('import', torrent)" :disabled="importing"
-                  class="btn-secondary text-xs py-1 flex items-center gap-1.5 min-w-[72px] justify-center">
-            <svg v-if="importing" width="10" height="10" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" fill="none" class="animate-spin shrink-0">
-              <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-            </svg>
-            {{ importing ? 'Import…' : 'Importer' }}
-          </button>
-        </template>
-
-        <!-- Bouton supprimer -->
-        <div class="relative">
-          <button
-              @click="emit('toggle-confirm', torrent.hash)"
-              :disabled="deleting"
-              class="w-7 h-7 flex items-center justify-center rounded-lg border border-border text-muted hover:border-red-500/40 hover:text-red-400 transition-colors"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
-              <polyline points="3 6 5 6 21 6"/>
-              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-              <path d="M10 11v6M14 11v6M9 6V4h6v2"/>
-            </svg>
-          </button>
-          <div v-if="showConfirmDelete" class="absolute bottom-full right-0 mb-2 bg-card border border-border rounded-xl p-3 z-10 w-52 shadow-xl">
-            <p class="text-xs text-primary font-medium mb-2">
-              {{ tab === 'active' ? 'Annuler ce téléchargement ?' : 'Supprimer ce torrent ?' }}
-            </p>
-            <label class="flex items-center gap-2 text-xs text-muted mb-3 cursor-pointer">
-              <input type="checkbox" v-model="withFiles" class="accent-red-500" />
-              Supprimer aussi les fichiers
-            </label>
-            <div class="flex gap-1.5">
-              <button @click="emit('delete', torrent, withFiles)" :disabled="deleting" class="flex-1 text-xs py-1 px-2 rounded-lg bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20 transition-colors">
-                {{ deleting ? '...' : 'Confirmer' }}
-              </button>
-              <button @click="emit('toggle-confirm', null)" class="flex-1 text-xs py-1 px-2 rounded-lg border border-border text-muted hover:text-primary transition-colors">
-                Annuler
-              </button>
-            </div>
+          <div v-else class="flex items-center gap-x-4 gap-y-1 flex-wrap text-xs text-muted">
+            <span>
+              <template v-if="torrent.organizeProgress?.total > 1">{{ torrent.organizeProgress.total }} fichiers · </template>{{ formatSize(torrent.size) }}
+            </span>
+            <span v-if="torrent.state === 'unknown'" class="text-accent">Le client n'indique pas l'état de ce torrent</span>
+            <span v-if="isImported && torrent.importedAt">importé {{ formatRelative(torrent.importedAt) }}</span>
+            <span v-else-if="!isImported && autoImportIn">import automatique {{ autoImportIn }}</span>
+            <span v-if="columns.uploaded && torrent.uploaded">Envoyé {{ formatSize(torrent.uploaded) }}</span>
+            <span v-if="columns.upspeed && torrent.upspeed > 0">Envoi {{ formatSpeed(torrent.upspeed) }}</span>
           </div>
-        </div>
-
+        </template>
       </div>
     </div>
 
-  </div>
+    <div class="md:w-[260px] shrink-0 flex items-center justify-end gap-2.5 flex-wrap">
+      <template v-if="!isDone">
+        <span class="text-meta text-muted max-md:mr-auto">{{ torrent.serieName ? (autoImport ? 'Import automatique à la fin' : 'À importer une fois terminé') : 'Série non reconnue' }}</span>
+      </template>
+      <template v-else>
+        <span v-if="isImported" class="flex items-center gap-1.5 text-meta text-ok max-md:mr-auto">
+          <Check :size="14" :stroke-width="2.5" /> Importé {{ torrent.organizeProgress?.done }}/{{ torrent.organizeProgress?.total }}
+        </span>
+        <span v-else class="text-meta text-secondary max-md:mr-auto">
+          {{ torrent.organizeState === 'partial' ? `Importé ${torrent.organizeProgress?.done}/${torrent.organizeProgress?.total}` : 'Non importé' }}
+        </span>
+        <button
+            v-if="!isImported"
+            @click="emit('import', torrent)"
+            :disabled="importing"
+            class="btn-sm min-w-[88px] max-md:min-w-[128px]"
+            :class="torrent.errorFiles?.length > 0 || torrent.organizeState === 'partial' ? 'btn-secondary' : 'btn-primary'"
+        >
+          <Loader v-if="importing" :size="13" class="animate-spin" />
+          {{ importing ? 'Import…' : torrent.errorFiles?.length > 0 ? 'Réessayer' : 'Importer' }}
+        </button>
+      </template>
+
+      <div class="relative">
+        <button
+            @click="emit('toggle-confirm', showConfirmDelete ? null : torrent.hash)"
+            :disabled="deleting"
+            class="w-8 h-8 pointer-coarse:w-10 pointer-coarse:h-10 rounded-full border border-border-light text-muted flex items-center justify-center hover:text-err hover:border-err/30 transition-colors"
+            :title="isDone ? 'Supprimer le torrent' : 'Arrêter le téléchargement'"
+            :aria-label="isDone ? 'Supprimer le torrent' : 'Arrêter le téléchargement'"
+        >
+          <Trash2 :size="14" />
+        </button>
+        <div v-if="showConfirmDelete" class="menu absolute bottom-full right-0 mb-2 w-60 z-20 p-3 gap-3">
+          <p class="text-body text-primary font-medium">
+            {{ isDone ? 'Supprimer ce torrent du client ?' : 'Arrêter ce téléchargement ?' }}
+          </p>
+          <label class="flex items-center gap-2 text-meta text-secondary cursor-pointer">
+            <input type="checkbox" v-model="withFiles" class="w-4 h-4 rounded" />
+            Supprimer aussi les fichiers du disque
+          </label>
+          <div class="flex gap-2">
+            <button @click="emit('delete', torrent, withFiles)" :disabled="deleting" class="btn-danger btn-sm flex-1">
+              {{ deleting ? 'Suppression…' : isDone ? 'Supprimer' : 'Arrêter' }}
+            </button>
+            <button @click="emit('toggle-confirm', null)" class="btn-ghost btn-sm flex-1">{{ isDone ? 'Garder' : 'Continuer' }}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </article>
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { RouterLink } from 'vue-router'
+import { Check, FileQuestion, Loader, Trash2, TriangleAlert, Tv } from 'lucide-vue-next'
+import { formatDuration, formatRelative, formatSize, formatSpeed, plural } from '@/utils/format'
 
 const props = defineProps<{
-  torrent         : any
-  tab             : 'active' | 'done'
-  columns         : Record<string, boolean>
-  importing       : boolean
-  deleting        : boolean
+  torrent          : any
+  columns          : Record<string, boolean>
+  importing        : boolean
+  deleting         : boolean
   showConfirmDelete: boolean
+  poster?          : string | null
+  autoImport?      : boolean
+  autoImportIn?    : string
 }>()
 
 const emit = defineEmits<{
-  import        : [torrent: any]
-  delete        : [torrent: any, withFiles: boolean]
+  import          : [torrent: any]
+  delete          : [torrent: any, withFiles: boolean]
   'toggle-confirm': [hash: string | null]
 }>()
 
 const withFiles = ref(false)
 
 const clampedProgress = computed(() => Math.min(100, Math.max(0, props.torrent.progress ?? 0)))
+const isDone     = computed(() => props.torrent.state === 'seeding' || props.torrent.state === 'unknown')
+const isImported = computed(() => isDone.value && props.torrent.organizeState === 'done')
 
-// Épisodes enrichis avec leur progression depuis les données de fichiers du client
+const clientLine = computed(() => [
+  props.columns.client ? props.torrent.client_name : null,
+  isDone.value && props.columns.ratio ? `Ratio ${(props.torrent.ratio ?? 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : null,
+].filter(Boolean).join(' · '))
+
+
+const errorSummary = computed(() => {
+  const errs: { file: string; error: string }[] = props.torrent.errorFiles ?? []
+  if (!errs.length) return ''
+  const name = errs[0]!.file.split(/[\\/]/).pop() ?? errs[0]!.file
+  const ep   = name.match(/S\d+E(\d+)/i)
+  return `${ep ? `E${ep[1]}` : name} · ${errs[0]!.error}${errs.length > 1 ? ` (+${errs.length - 1})` : ''}`
+})
+
 const episodesWithProgress = computed(() => {
   const eps: any[] = props.torrent.episodes ?? []
   if (!eps.length) return []
@@ -174,28 +193,12 @@ const episodesWithProgress = computed(() => {
   })
 })
 
-function stateBadge(state: string) {
-  return ({
-    downloading: { label: 'Téléchargement', class: 'border-accent/40 text-accent' },
-    seeding    : { label: 'Complété',       class: 'border-green-500/40 text-green-500' },
-    paused     : { label: 'En pause',       class: 'border-border text-muted' },
-    checking   : { label: 'Vérification',   class: 'border-yellow-500/40 text-yellow-500' },
-    error      : { label: 'Erreur',         class: 'border-red-500/40 text-red-400' },
-    unknown    : { label: 'État inconnu',   class: 'border-yellow-500/40 text-yellow-500' },
-  } as Record<string, any>)[state] ?? { label: 'Inconnu', class: 'border-border text-muted' }
-}
-function formatSize(bytes: number): string {
-  if (!bytes) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(1024))
-  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`
-}
-function formatSpeed(bps: number) { return `${formatSize(bps)}/s` }
-function formatEta(seconds: number): string {
-  if (seconds < 0 || seconds > 86400 * 7) return '∞'
-  const h = Math.floor(seconds / 3600), m = Math.floor((seconds % 3600) / 60), s = seconds % 60
-  if (h > 0) return `${h}h${m.toString().padStart(2, '0')}m`
-  if (m > 0) return `${m}m${s.toString().padStart(2, '0')}s`
-  return `${s}s`
-}
+const badge = computed(() => ({
+  downloading: { label: 'Téléchargement', class: 'pill-active' },
+  seeding    : { label: 'Terminé',        class: 'pill-ok' },
+  paused     : { label: 'En pause',       class: 'pill-neutral' },
+  checking   : { label: 'Vérification',   class: 'pill-wait' },
+  error      : { label: 'Erreur',         class: 'pill-err' },
+  unknown    : { label: 'État inconnu',   class: 'pill-wait' },
+} as Record<string, { label: string; class: string }>)[props.torrent.state] ?? { label: 'État inconnu', class: 'pill-muted' })
 </script>

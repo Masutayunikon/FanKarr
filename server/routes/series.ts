@@ -10,11 +10,17 @@ import { readAvailable, readInfohashMap, readSerieData } from '../lib/github-cac
 import { loadSynced } from '../lib/rss-sync.js'
 import {
     fankaiGet, fetchSerieFromApi, normalizeSerie, normalizeSeason, normalizeEpisode,
-    extractTorrentsFromSerieData, buildResolvedEpisodes, computeSerieDownloadState,
+    extractTorrentsFromSerieData, buildResolvedEpisodes, computeSerieDownloadState, countOrganizedEpisodes,
     deduplicateEpisodes, serieHasEpisodes,
 } from '../lib/serie-helpers.js'
+import { recentImportsBySerie } from '../lib/notifs.js'
 
 const router = Router()
+
+router.get('/library/recent', requireAuth, (req, res) => {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 12, 1), 50)
+    res.json(recentImportsBySerie().slice(0, limit))
+})
 
 router.get('/series', requireAuth, async (_req, res) => {
     try {
@@ -30,16 +36,23 @@ router.get('/series', requireAuth, async (_req, res) => {
         const seriesRaw = (Array.isArray(apiData) ? apiData : (apiData.series ?? [])).map(normalizeSerie)
         const serieDataMap = new Map<number, any>()
         await Promise.all(seriesRaw.filter((s: any) => availableSet.has(s.id)).map(async (s: any) => { const sd = await readSerieData(s.id); if (sd) serieDataMap.set(s.id, sd) }))
+        const lastImports = new Map(recentImportsBySerie().map(r => [r.serieId, r.at]))
         res.json({ series: seriesRaw.map((serie: any) => {
             const serieData = serieDataMap.get(serie.id) ?? null
             const torrents  = serieData ? extractTorrentsFromSerieData(serieData) : []
             const inClient  = torrents.some(t => t.infohash && clientHashes.has(t.infohash.toLowerCase()))
             const hasFiles  = (serieData?.seasons ?? []).some((s: any) => (s.episodes ?? []).some((ep: any) => organizedEpisodeIds.has(String(ep.id))))
-            return { ...serie, torrent_count: torrents.length, has_torrents: torrents.length > 0, download_state: computeSerieDownloadState(serieData, organized, activeTorrents), in_client: inClient, has_files: hasFiles, rss_synced: !!synced[serie.id] }
+            const counts    = serieData ? countOrganizedEpisodes(serieData, organized) : { total: 0, organized: 0 }
+            return {
+                ...serie, torrent_count: torrents.length, has_torrents: torrents.length > 0,
+                download_state: computeSerieDownloadState(serieData, organized, activeTorrents, counts),
+                episode_count: counts.total, organized_count: counts.organized, last_imported_at: lastImports.get(serie.id) ?? null,
+                in_client: inClient, has_files: hasFiles, rss_synced: !!synced[serie.id],
+            }
         })})
     } catch (err) {
-        logger.error('api', `GET /api/series échoué : ${err instanceof Error ? err.message : err}`)
-        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
+        logger.error('api', `Échec du chargement des séries : ${err instanceof Error ? err.message : err}`)
+        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux' })
     }
 })
 
@@ -66,7 +79,7 @@ router.get('/series/:id', requireAuth, async (req, res) => {
             }
         }
         if (serieData) {
-            // Lookup rapide hash → torrent pack (intégrale ou saison)
+            // Index hash : pack (intégrale ou saison)
             const torrentByHash = new Map<string, { torrent_url: string; magnet: string; type: string; raw: string; fankai: boolean; torrent_name: string | null }>()
             for (const t of (serieData.torrents ?? []))
                 if (t.infohash) torrentByHash.set(t.infohash.toLowerCase(), { torrent_url: t.torrent_url, magnet: t.magnet, type: 'pack_integrale', raw: t.title ?? '', fankai: t.fankai ?? true, torrent_name: t.torrent_name ?? null })
@@ -112,9 +125,6 @@ router.get('/series/:id', requireAuth, async (req, res) => {
                             organizedEpisodeIds.add(ep.id)
                         }
                     }
-                    // Fallback : si l'épisode n'a pas de torrent individuel,
-                    // on crée un torrent synthétique depuis ep.paths (fichier dans un pack).
-                    // On ajoute TOUTES les entrées valides (un pack par path unique).
                     if (!episodeTorrentMap[ep.id] || episodeTorrentMap[ep.id].length === 0) {
                         const seenPackHashes = new Set<string>()
                         for (const pathEntry of (ep.paths ?? [])) {
@@ -161,8 +171,6 @@ router.get('/series/:id', requireAuth, async (req, res) => {
                     organized: organizedEpisodeIds.has(ep.id),
                 }
             })
-            // Dédoublonnage : plusieurs variantes (x264/x265…) du même episode_number
-            // sont fusionnées en un seul épisode avec la liste de torrents combinée
             const eps = deduplicateEpisodes(rawEps)
             const total    = eps.filter((e: any) => e.available).length
             const orgCount = eps.filter((e: any) => e.organized).length
@@ -187,8 +195,8 @@ router.get('/series/:id', requireAuth, async (req, res) => {
 
         res.json({ serie, seasons: enrichedSeasons, scraper_synced: serieHasEpisodes(serieData), torrents_integrale: integraleTorrents.map(t => ({ label: 'Intégrale', torrent_url: t.torrent_url, magnet: t.magnet, infohash: t.infohash?.toLowerCase() ?? null, raw: t.title ?? t.raw, torrent_name: t.torrent_name ?? null })) })
     } catch (err) {
-        logger.error('api', `GET /api/series/${id} échoué : ${err instanceof Error ? err.message : err}`)
-        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
+        logger.error('api', `Échec du chargement de la série ${id} : ${err instanceof Error ? err.message : err}`)
+        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux' })
     }
 })
 

@@ -13,10 +13,10 @@ export interface Settings {
     autoImport          : boolean
     devMode             : boolean
     deleteTorrentOnMove : boolean
-    requestAutoDownloadUsers: 'all' | string[]  // IDs users autorisés au dl auto sur approbation ; [] = désactivé
-    jellyfinUrl         : string   // URL du serveur Jellyfin (ex: http://jellyfin:8096)
-    jellyfinAdminToken  : string   // Token admin Jellyfin pour la sync
-    englishDirectory    : boolean  // Si true, les dossiers de séries sont en anglais (ex: "Season 1" au lieu de "Saison 1")
+    requestAutoDownloadUsers: 'all' | string[]  // Utilisateurs dont les demandes sont approuvées et téléchargées automatiquement ; [] = aucun
+    jellyfinUrl         : string   // URL du serveur Jellyfin (ex. http://jellyfin:8096)
+    jellyfinAdminToken  : string   // Clé API Jellyfin pour la synchronisation
+    englishDirectory    : boolean  // Dossiers de saison en anglais (« Season 01 » au lieu de « Saison 1 »)
     autoUnimportMissing : boolean
     onboardingStep      : string | null   // étape la plus avancée atteinte dans l'assistant
     onboardingCompletedAt: string | null

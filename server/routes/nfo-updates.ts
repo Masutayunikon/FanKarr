@@ -10,8 +10,8 @@ router.get('/nfo-updates/recent', requireAuth, (_req, res) => {
 })
 
 router.post('/nfo-updates/check', requireAuth, async (_req, res) => {
-    logger.info('nfo-update', 'Vérification manuelle des MAJ NFO lancée')
-    checkNfoUpdates().catch(err => logger.error('nfo-update', `Vérif manuelle échouée : ${err instanceof Error ? err.message : err}`))
+    logger.info('nfo-update', 'Vérification manuelle des mises à jour NFO lancée')
+    checkNfoUpdates().catch(err => logger.error('nfo-update', `Échec de la vérification manuelle des mises à jour NFO : ${err instanceof Error ? err.message : err}`))
     res.json({ ok: true, message: 'Vérification lancée en arrière-plan' })
 })
 
