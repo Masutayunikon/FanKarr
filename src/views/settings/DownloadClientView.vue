@@ -7,11 +7,10 @@
       </button>
     </Teleport>
 
-    <!-- Clients configurés -->
     <section class="bg-card rounded-card">
       <div class="flex flex-col gap-0.5 px-5 pt-4 pb-3.5">
         <h3 class="card-title">Clients configurés</h3>
-        <p class="text-meta text-muted">FanKarr envoie tout dans sa catégorie et ne touche qu’à celle-là.</p>
+        <p class="text-meta text-muted">FanKarr range ses torrents dans une catégorie dédiée (« fankai » par défaut) et ne touche pas aux autres.</p>
       </div>
 
       <div v-if="clients.length === 0" class="flex items-center justify-between gap-4 flex-wrap px-5 py-4 border-t border-hover">
@@ -57,11 +56,10 @@
       </div>
     </section>
 
-    <!-- Types pris en charge -->
     <section class="bg-card rounded-card overflow-hidden">
       <div class="flex flex-col gap-0.5 px-5 pt-4 pb-3.5">
-        <h3 class="card-title">Types pris en charge</h3>
-        <p class="text-meta text-muted">Ce que chaque client sait faire avec FanKarr. Un même serveur peut cumuler plusieurs clients.</p>
+        <h3 class="card-title">Clients compatibles</h3>
+        <p class="text-meta text-muted">Fonctions disponibles selon le client. Vous pouvez en configurer plusieurs.</p>
       </div>
       <div class="overflow-x-auto border-t border-hover">
         <table class="w-full min-w-[720px] text-meta">
@@ -73,7 +71,7 @@
               <th class="text-center px-3 h-[34px] tag-label tracking-[0.12em] font-bold">Progression par fichier</th>
               <th class="text-center px-3 h-[34px] tag-label tracking-[0.12em] font-bold">Envoi du .torrent</th>
               <th class="text-center px-3 h-[34px] tag-label tracking-[0.12em] font-bold">Catégories</th>
-              <th class="text-center px-3 h-[34px] tag-label tracking-[0.12em] font-bold">Suppr. fichiers</th>
+              <th class="text-center px-3 h-[34px] tag-label tracking-[0.12em] font-bold">Suppression des fichiers</th>
             </tr>
           </thead>
           <tbody>
@@ -91,9 +89,9 @@
                 </div>
               </td>
               <td class="px-3 py-2.5 text-secondary whitespace-nowrap">{{ row.auth }}</td>
-              <td class="text-center px-3 py-2.5" :class="row.fileSelect ? 'text-ok' : 'text-muted'">{{ row.fileSelect ? 'Async ✓' : '—' }}</td>
+              <td class="text-center px-3 py-2.5" :class="row.fileSelect ? 'text-ok' : 'text-muted'">{{ row.fileSelect ? 'Immédiat' : '—' }}</td>
               <td class="text-center px-3 py-2.5" :class="row.fileProgress ? 'text-ok' : 'text-muted'">{{ row.fileProgress ? '✓' : '—' }}</td>
-              <td class="text-center px-3 py-2.5" :class="row.torrentUpload === 'proxy' ? 'text-ok' : 'text-secondary'">{{ row.torrentUpload === 'proxy' ? 'Proxy ✓' : row.torrentUpload === 'url' ? 'URL' : '—' }}</td>
+              <td class="text-center px-3 py-2.5" :class="row.torrentUpload === 'proxy' ? 'text-ok' : 'text-secondary'">{{ row.torrentUpload === 'proxy' ? 'Via FanKarr' : row.torrentUpload === 'url' ? 'Lien direct' : '—' }}</td>
               <td class="text-center px-3 py-2.5" :class="row.categories ? 'text-ok' : 'text-muted'">{{ row.categories ? '✓' : '—' }}</td>
               <td class="text-center px-3 py-2.5" :class="row.deleteFiles ? 'text-ok' : 'text-muted'">{{ row.deleteFiles ? '✓' : '—' }}</td>
             </tr>
@@ -101,13 +99,12 @@
         </table>
       </div>
       <div class="flex flex-col gap-1 px-5 py-3.5 border-t border-hover text-xs text-muted">
-        <span><span class="text-ok">Async ✓</span> — sélection dès réception des métadonnées, aucun octet superflu téléchargé.</span>
-        <span><span class="text-ok">Proxy ✓</span> — FanKarr télécharge le .torrent et l'envoie au client (liens protégés pris en charge).</span>
-        <span><span class="text-secondary">URL</span> — le client télécharge le .torrent directement depuis l'adresse.</span>
+        <span><span class="text-ok">Immédiat</span> : seuls les fichiers choisis sont téléchargés, dès la réception des métadonnées.</span>
+        <span><span class="text-ok">Via FanKarr</span> : FanKarr récupère le fichier .torrent et le transmet au client (fonctionne avec les liens protégés).</span>
+        <span><span class="text-secondary">Lien direct</span> : le client récupère lui-même le fichier .torrent.</span>
       </div>
     </section>
 
-    <!-- Modale ajout / modification -->
     <Teleport to="body">
       <div v-if="modal.open" class="modal-backdrop" @click.self="closeModal">
         <div class="modal max-w-lg max-h-[90vh] overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="client-modal-title">
@@ -155,28 +152,32 @@ function matrixHealth(type: string) {
 const clientMatrix = [
   {
     id: 'qbittorrent',  label: 'qBittorrent',              version: '4.1+',
-    auth: 'Login / MdP · Clé API (5.2+)', fileSelect: true,  fileProgress: true,  torrentUpload: 'proxy', categories: true,  deleteFiles: true,
+    auth: "Nom d'utilisateur et mot de passe · Clé API (5.2+)", fileSelect: true,  fileProgress: true,  torrentUpload: 'proxy', categories: true,  deleteFiles: true,
   },
   {
     id: 'transmission', label: 'Transmission',             version: '3.x / 4.x',
-    auth: 'Login / MdP',     fileSelect: true,  fileProgress: true,  torrentUpload: 'url',   categories: true,  deleteFiles: true,
+    auth: "Nom d'utilisateur et mot de passe", fileSelect: true,  fileProgress: true,  torrentUpload: 'url',   categories: true,  deleteFiles: true,
   },
   {
     id: 'rtorrent',     label: 'rTorrent / ruTorrent',     version: '0.9+',
-    auth: 'URL xmlrpc',      fileSelect: true,  fileProgress: true,  torrentUpload: 'url',   categories: true,  deleteFiles: true,
+    auth: 'Adresse XML-RPC', fileSelect: true,  fileProgress: true,  torrentUpload: 'url',   categories: true,  deleteFiles: true,
   },
   {
     id: 'utorrent',     label: 'uTorrent',                 version: '3.x',
-    auth: 'Login / MdP',     fileSelect: true,  fileProgress: false, torrentUpload: 'url',   categories: true,  deleteFiles: true,
+    auth: "Nom d'utilisateur et mot de passe", fileSelect: true,  fileProgress: false, torrentUpload: 'url',   categories: true,  deleteFiles: true,
   },
   {
     id: 'synology-ds',  label: 'Synology Download Station', version: '6.x+',
-    auth: 'Login / MdP',     fileSelect: false, fileProgress: false, torrentUpload: 'url',   categories: false, deleteFiles: true,
+    auth: "Nom d'utilisateur et mot de passe", fileSelect: false, fileProgress: false, torrentUpload: 'url',   categories: false, deleteFiles: true,
   },
   {
     id: 'real-debrid',  label: 'Real-Debrid',              version: 'API v1',
     auth: 'Clé API',          fileSelect: true,  fileProgress: true,  torrentUpload: 'proxy', categories: false, deleteFiles: true,
-  }
+  },
+  {
+    id: 'deluge',       label: 'Deluge',                   version: 'Interface web',
+    auth: 'Mot de passe',     fileSelect: true,  fileProgress: true,  torrentUpload: 'proxy', categories: true,  deleteFiles: true,
+  },
 ]
 
 const modal = ref({ open: false, key: 0, client: null as SavedTorrentClient | null })
@@ -211,7 +212,7 @@ async function testClient(uuid: string) {
   try {
     const res = await fetch(`/api/torrent-clients/${uuid}/test`, { method: 'POST', credentials: 'include' })
     const { ok, message } = await res.json()
-    toast(ok ? 'Connexion réussie ✓' : (message ?? 'Connexion échouée'), ok ? 'success' : 'error')
+    toast(ok ? 'Connexion réussie' : (message ?? 'Échec de la connexion'), ok ? 'success' : 'error')
     healthStatus.value[uuid] = ok
   } catch {
     toast('Impossible de contacter le serveur', 'error')
@@ -229,7 +230,7 @@ async function deleteClient(client: SavedTorrentClient) {
     delete healthStatus.value[uuid]
     toast('Client supprimé', 'success')
   } else {
-    toast('Erreur lors de la suppression', 'error')
+    toast('Impossible de supprimer le client', 'error')
   }
 }
 

@@ -18,7 +18,7 @@
               class="field"
               spellcheck="false"
           />
-          <button @click="openPicker(field.key)" class="btn-secondary shrink-0" :title="`Parcourir — ${field.label}`">
+          <button @click="openPicker(field.key)" class="btn-secondary shrink-0" :title="`Choisir le dossier : ${field.label}`">
             <FolderOpen :size="14" /> <span class="hidden sm:inline">Parcourir</span>
           </button>
         </div>
@@ -34,15 +34,14 @@
       </div>
 
       <p v-if="result?.relation === 'same'" class="text-meta text-err flex items-start gap-1.5">
-        <X :size="12" class="shrink-0 mt-0.5" /> La médiathèque doit être distincte du dossier de téléchargements.
+        <X :size="12" class="shrink-0 mt-0.5" /> La médiathèque et le dossier des téléchargements doivent être différents.
       </p>
       <p v-else-if="result?.relation === 'nested'" class="text-meta text-accent flex items-start gap-1.5">
         <TriangleAlert :size="12" class="shrink-0 mt-0.5" />
-        Un dossier est à l'intérieur de l'autre : ça fonctionne, mais le scan de la médiathèque verra aussi les téléchargements.
+        L'un des dossiers est dans l'autre. C'est possible, mais l'analyse de la médiathèque trouvera aussi les téléchargements.
       </p>
     </div>
 
-    <!-- Mode d'import -->
     <div class="card flex flex-col gap-3">
       <label class="field-label">Mode d'import</label>
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -62,7 +61,6 @@
         </button>
       </div>
 
-      <!-- Résultat du test hardlink -->
       <div v-if="result && form.organizeMode === 'hardlink'" class="text-meta">
         <p v-if="result.hardlink.tested && result.hardlink.ok" class="text-ok flex items-center gap-1.5">
           <Check :size="12" class="shrink-0" /> {{ result.hardlink.message }}
@@ -71,7 +69,7 @@
           <p class="text-accent flex items-start gap-1.5">
             <TriangleAlert :size="12" class="shrink-0 mt-0.5" /> {{ result.hardlink.message }}
           </p>
-          <p class="text-muted">Sans hardlink, FanKarr copiera les fichiers (espace disque doublé).</p>
+          <p class="text-muted">Les hardlinks ne fonctionnent pas entre ces dossiers : en mode Copier, chaque fichier prendra deux fois la place.</p>
           <button @click="form.organizeMode = 'copy'" class="btn-secondary btn-sm self-start">Passer en mode Copier</button>
         </div>
         <p v-else class="text-muted">{{ result.hardlink.message }}</p>
@@ -104,7 +102,7 @@ const fields: { key: PathKey; label: string; required: boolean; placeholder: str
   {
     key: 'completePath', label: 'Dossier des téléchargements terminés', required: false,
     placeholder: props.isDocker ? '/data/downloads' : 'D:/Torrents/complete',
-    help: 'Là où votre client torrent dépose les fichiers terminés. Sert aussi à tester les hardlinks.',
+    help: 'Dossier où votre client torrent place les fichiers terminés.',
   },
   {
     key: 'mediaPath', label: 'Médiathèque Fankai', required: true,
@@ -114,9 +112,9 @@ const fields: { key: PathKey; label: string; required: boolean; placeholder: str
 ]
 
 const modes = [
-  { id: 'hardlink' as const, label: 'Hardlink', text: 'Aucune copie : le fichier reste en partage dans le client torrent.' },
+  { id: 'hardlink' as const, label: 'Hardlink', text: 'Le fichier apparaît dans la médiathèque sans être copié ; le client continue de le partager.' },
   { id: 'copy'     as const, label: 'Copier',   text: 'Duplique le fichier. Fonctionne partout, prend deux fois la place.' },
-  { id: 'move'     as const, label: 'Déplacer', text: 'Retire le fichier du client : le partage s\'arrête.' },
+  { id: 'move'     as const, label: 'Déplacer', text: "Retire le fichier du client : le partage s'arrête." },
 ]
 
 const form = reactive({
@@ -175,7 +173,7 @@ async function submit(): Promise<boolean> {
   if (!res.ok) { error.value = 'Corrigez les dossiers signalés avant de continuer.'; return false }
 
   if (!(await postSettings({ ...form, mediaPath: res.mediaPath.resolved, completePath: res.completePath?.resolved ?? '' }))) {
-    error.value = "Erreur lors de l'enregistrement."
+    error.value = "Impossible d'enregistrer les dossiers."
     return false
   }
   return true

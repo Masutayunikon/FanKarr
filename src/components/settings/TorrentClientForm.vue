@@ -15,7 +15,6 @@
         </div>
       </div>
 
-      <!-- Champs principaux -->
       <template v-if="currentDefinition">
         <div v-for="field in basicFields" :key="field.key">
           <SettingsToggle
@@ -39,7 +38,6 @@
           </div>
         </div>
 
-        <!-- Paramètres avancés -->
         <div v-if="advancedFields.length > 0">
           <button
               type="button"
@@ -92,7 +90,7 @@
       <button @click="test" :disabled="testing || !type" class="btn-secondary">
         <Loader v-if="testing" :size="14" class="animate-spin" />
         <Check v-else-if="tested" :size="14" class="text-ok" />
-        {{ testing ? 'Test…' : tested ? 'Connexion testée' : 'Tester' }}
+        {{ testing ? 'Test…' : tested ? 'Connexion testée' : 'Tester la connexion' }}
       </button>
       <button v-if="showCancel" @click="emit('cancel')" class="btn-ghost ml-auto">Annuler</button>
     </div>
@@ -122,10 +120,10 @@ const { add: toast } = useToast()
 const ADVANCED_KEYS = ['savePath', 'remotePath', 'localPath', 'ignoreCertificateErrors']
 
 const FIELD_TOOLTIPS: Record<string, string> = {
-  savePath   : 'Optionnel. Permet de placer les téléchargements dans un sous-dossier spécifique à l\'intérieur du dossier déjà configuré dans la gestion des médias.',
-  remotePath : 'Si le client tourne sur une autre machine, indiquez ici le chemin qu\'il utilise (ex: /downloads). À associer avec le chemin local ci-dessous.',
-  localPath  : 'Chemin équivalent au chemin distant, mais vu par FanKarr sur sa machine (ex: /mnt/nas/downloads). Les deux champs fonctionnent en binôme pour faire la correspondance.',
-  ignoreCertificateErrors: 'Accepte les certificats auto-signés ou invalides en HTTPS. À n\'utiliser que sur un réseau de confiance.',
+  savePath   : 'Facultatif. Dossier où le client enregistre les torrents envoyés par FanKarr (ex. /downloads/fankai). Vide, le client utilise son dossier par défaut.',
+  remotePath : "Si le client tourne sur une autre machine ou dans un autre conteneur : son dossier de téléchargement, tel qu'il le voit (ex. /downloads).",
+  localPath  : 'Le même dossier, tel que FanKarr le voit (ex. /mnt/nas/downloads).',
+  ignoreCertificateErrors: "Accepte les certificats auto-signés ou invalides en HTTPS. À n'utiliser que sur un réseau de confiance.",
 }
 
 const name         = ref(props.client?.name ?? '')
@@ -177,7 +175,7 @@ async function test() {
     })
     const { ok, message } = await res.json()
     tested.value = ok
-    toast(ok ? 'Connexion réussie ✓' : (message ?? 'Connexion échouée'), ok ? 'success' : 'error')
+    toast(ok ? 'Connexion réussie' : (message ?? 'Impossible de se connecter au client torrent'), ok ? 'success' : 'error')
   } catch {
     toast('Impossible de contacter le serveur', 'error')
   } finally {
@@ -199,11 +197,11 @@ async function save() {
       }),
     })
     if (res.ok) {
-      toast(isEdit ? 'Client modifié ✓' : 'Client enregistré ✓', 'success')
+      toast(isEdit ? 'Client modifié' : 'Client enregistré', 'success')
       emit('saved', await res.json(), isEdit)
     } else {
       const { error } = await res.json()
-      toast(error ?? "Erreur lors de l'enregistrement", 'error')
+      toast(error ?? "Impossible d'enregistrer le client", 'error')
     }
   } finally {
     saving.value = false

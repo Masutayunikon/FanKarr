@@ -3,7 +3,6 @@
     <div class="modal-backdrop" @click.self="$emit('cancel')">
       <div class="bg-card border border-border rounded-card w-full max-w-lg flex flex-col max-h-[70vh] shadow-[0_24px_60px_rgb(0_0_0/0.55)]" role="dialog" aria-modal="true" aria-label="Choisir un dossier">
 
-        <!-- Header -->
         <div class="flex items-center justify-between gap-4 px-5 py-4 border-b border-hover shrink-0">
           <div class="min-w-0">
             <p class="card-title">Choisir un dossier</p>
@@ -12,7 +11,6 @@
           <button @click="$emit('cancel')" class="btn-icon btn-sm border-transparent" aria-label="Fermer"><X :size="16" /></button>
         </div>
 
-        <!-- Chemin éditable -->
         <div class="px-5 py-3 border-b border-hover shrink-0 flex gap-2">
           <button @click="navigateTo('/')" class="btn-icon h-[42px] w-[42px]" :title="drivesRoot ? 'Lecteurs' : 'Retour à la racine'" :aria-label="drivesRoot ? 'Lecteurs' : 'Retour à la racine'">
             <House :size="15" />
@@ -25,22 +23,20 @@
               aria-label="Chemin"
           />
           <button @click="navigateTo(inputPath)" class="btn-secondary h-[42px]">
-            OK
+            Aller
           </button>
         </div>
 
-        <!-- Retour parent -->
         <div v-if="parent !== null" class="px-5 shrink-0">
           <button
               @click="navigateTo(parent)"
               class="flex items-center gap-2 w-full py-2.5 text-meta text-secondary hover:text-primary transition-colors border-b border-hover"
           >
             <ArrowLeft :size="14" />
-            ..
+            Dossier parent
           </button>
         </div>
 
-        <!-- Liste dossiers -->
         <div class="overflow-y-auto flex-1">
           <div v-if="loading" class="flex items-center justify-center py-10 text-muted text-meta gap-2">
             <div class="w-4 h-4 border border-border border-t-accent rounded-full animate-spin" />
@@ -59,10 +55,8 @@
           </button>
         </div>
 
-        <!-- Footer -->
         <div class="flex items-center justify-between gap-4 px-5 py-4 border-t border-hover shrink-0">
           <span class="text-meta text-muted truncate">{{ current }}</span>
-          <!-- FIX : regex sortie dans selectCurrent() pour éviter l'erreur de parsing Vue -->
           <button @click="selectCurrent()" class="btn-primary">
             Choisir
           </button>
@@ -93,7 +87,7 @@ function selectCurrent() {
 }
 
 function joinPath(base: string, name: string): string {
-  // Lecteur Windows complet (ex: "C:\") → chemin absolu, pas de jointure
+  // Lecteur Windows (ex. "C:\") : déjà absolu
   if (/^[A-Za-z]:\\$/.test(name)) return name
   if (base === '/') return `/${name}`
   const cleanBase = base.replace(/[\\/]+$/, '')
@@ -107,7 +101,7 @@ async function navigateTo(p: string) {
   try {
     const res = await fetch(`/api/browse?path=${encodeURIComponent(p)}`, { credentials: 'include' })
     if (!res.ok) {
-      error.value = (await res.json()).error ?? 'Erreur'
+      error.value = (await res.json()).error ?? "Impossible d'ouvrir ce dossier."
       return
     }
     const data  = await res.json()
@@ -117,7 +111,7 @@ async function navigateTo(p: string) {
     dirs.value       = data.dirs
     drivesRoot.value = data.drivesRoot ?? false
   } catch {
-    error.value = 'Impossible de lire ce dossier'
+    error.value = 'Impossible de lire ce dossier.'
   } finally {
     loading.value = false
   }

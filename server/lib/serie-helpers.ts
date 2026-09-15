@@ -6,7 +6,7 @@ const FANKAI_API = 'https://metadata.fankai.fr'
 
 export async function fankaiGet(endpoint: string): Promise<any> {
     const res = await fetch(`${FANKAI_API}${endpoint}`)
-    if (!res.ok) throw new Error(`Fankai API ${res.status}: ${endpoint}`)
+    if (!res.ok) throw new Error(`API Fankai : HTTP ${res.status} sur ${endpoint}`)
     return res.json()
 }
 
@@ -48,15 +48,14 @@ export async function resolveSerieData(serieId: number, action?: string): Promis
         if (action) logger.warn('api', `${action} : série ${serieId} absente du scraper (${scraperError}), données reprises de l'API Fankai`)
         return sd
     } catch (err) {
-        logger.error('api', `${action ?? 'Lecture série'} : série ${serieId} introuvable — scraper (${scraperError}), API Fankai (${errorMessage(err)})`)
+        logger.error('api', `${action ?? 'Lecture de la série'} : série ${serieId} introuvable (scraper : ${scraperError}, API Fankai : ${errorMessage(err)})`)
         return null
     }
 }
 
 let lastCatalogWarn = 0
 
-// Catalogue du scraper complété par l'API Fankai : titres à jour et séries pas encore scrapées.
-// complete = false si une source a échoué : ne rien supprimer sur la base d'une absence dans ce cas.
+// Scraper complété par l'API Fankai ; complete = false si une source a échoué (ne rien supprimer alors)
 export async function loadCatalogStatus(force = false): Promise<{ series: any[]; complete: boolean }> {
     const [seriesData, availableIds] = await Promise.all([loadEnrichedSeriesData(force), readAvailable(force)])
     const scraperComplete = availableIds.length > 0 && seriesData.length === availableIds.length
@@ -121,14 +120,6 @@ export function extractTorrentsFromSerieData(sd: any): any[] {
     return result
 }
 
-/**
- * Résout les noms d'un épisode en préférant les valeurs du path entry
- * correspondant au hash donné (spécifique au torrent/encoding),
- * avec fallback sur les champs de niveau épisode.
- *
- * Utilisation :
- *   const { formatted_name, nfo_filename, original_filename } = resolveEpNaming(ep, hash)
- */
 export function resolveEpNaming(ep: any, hash?: string | null): {
     formatted_name   : string | null
     nfo_filename     : string | null
@@ -145,10 +136,6 @@ export function resolveEpNaming(ep: any, hash?: string | null): {
     }
 }
 
-/**
- * Calcule le nom attendu d'un fichier épisode selon le mode (NFO ou formaté).
- * Source unique de vérité partagée entre organized-summary, organized/:id, rename-episode et rename-all.
- */
 export function computeExpectedName(
     ep      : any,
     orgEntry: any,
@@ -164,11 +151,7 @@ export function computeExpectedName(
     return { currentName, expectedName, needsRename: expectedName !== currentName }
 }
 
-/**
- * Dédoublonne une liste d'épisodes par episode_number.
- * Quand plusieurs variantes existent (ex. x264 + x265), on garde la première
- * comme épisode principal et on fusionne les torrents des autres dans sa liste.
- */
+/** Dédoublonne par episode_number : la première variante (x264, x265…) garde les torrents des autres. */
 export function deduplicateEpisodes(episodes: any[]): any[] {
     const map = new Map<number, any>()
     for (const ep of episodes) {
@@ -226,8 +209,7 @@ export function computeSerieDownloadState(
 }
 
 export function countOrganizedEpisodes(serieData: any, organized: Record<string, Record<string, any>>): { total: number; organized: number } {
-    // Dédoublonnage : épisodes uniques par (season_number, episode_number)
-    // pour éviter de compter x264 + x265 comme deux épisodes distincts
+    // Épisodes uniques par (saison, numéro) : x264 et x265 comptent pour un
     const uniqueEpKeys = new Set<string>()
     const epIdToKey    = new Map<number, string>()
     for (const season of serieData.seasons ?? []) {

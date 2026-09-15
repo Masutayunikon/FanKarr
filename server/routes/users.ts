@@ -6,60 +6,54 @@ import {
 
 const router = Router()
 
-// GET /api/users
 router.get('/users', (_req, res) => {
     res.json(readUsers().map(safeUser))
 })
 
-// POST /api/users
 router.post('/users', (req, res) => {
     const { username, password, role } = req.body
     if (!username || !password) {
-        res.status(400).json({ error: 'username et password requis' }); return
+        res.status(400).json({ error: 'Nom d\'utilisateur et mot de passe requis' }); return
     }
     if (password.length < 6) {
-        res.status(400).json({ error: 'Le mot de passe doit faire au moins 6 caractères' }); return
+        res.status(400).json({ error: 'Le mot de passe doit contenir au moins 6 caractères' }); return
     }
     try {
         const user = createUser(username, password, role === 'admin' ? 'admin' : 'user')
         res.json(safeUser(user))
     } catch (err) {
-        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur' })
+        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux' })
     }
 })
 
-// PATCH /api/users/:id
 router.patch('/users/:id', (req, res) => {
     const { username, password, role } = req.body
     try {
         const user = updateUser(req.params.id, { username, password, role })
         res.json(safeUser(user))
     } catch (err) {
-        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur' })
+        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux' })
     }
 })
 
-// DELETE /api/users/:id
 router.delete('/users/:id', (req, res) => {
-    // Empêche l'admin de se supprimer lui-même
     if (req.user?.id === req.params.id) {
-        res.status(400).json({ error: 'Impossible de supprimer son propre compte' }); return
+        res.status(400).json({ error: 'Vous ne pouvez pas supprimer votre propre compte' }); return
     }
     try {
         deleteUser(req.params.id)
         res.json({ success: true })
     } catch (err) {
-        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur' })
+        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux' })
     }
 })
 
-// POST /api/users/:id/regenerate-token
 router.post('/users/:id/regenerate-token', (req, res) => {
     try {
         const token = regenerateApiToken(req.params.id)
         res.json({ apiToken: token })
     } catch (err) {
-        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur' })
+        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux' })
     }
 })
 

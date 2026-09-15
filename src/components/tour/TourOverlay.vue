@@ -171,7 +171,7 @@ async function showStep() {
   if (el) {
     const r = el.getBoundingClientRect()
     if (r.top < 0 || r.bottom > window.innerHeight) {
-      el.scrollIntoView({ block: 'center', behavior: reducedMotion.value ? 'auto' : 'smooth' })
+      el.scrollIntoView({ block: r.height > window.innerHeight ? 'start' : 'center', behavior: reducedMotion.value ? 'auto' : 'smooth' })
     }
   }
   await nextTick()

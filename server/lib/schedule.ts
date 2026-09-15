@@ -1,4 +1,3 @@
-// Cadence de l'import automatique
 export const AUTO_IMPORT_INTERVAL_MS = 5 * 60_000
 
 export const autoImportSchedule = {

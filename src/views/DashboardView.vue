@@ -22,12 +22,11 @@
         </label>
       </header>
 
-      <div class="grid lg:grid-cols-[minmax(0,1fr)_356px] gap-7 lg:gap-8">
+      <div class="grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_356px] gap-7 lg:gap-8">
 
-        <!-- ── Colonne principale-->
-        <div class="flex flex-col gap-[30px] min-w-0 max-lg:contents">
+        <!-- ── Colonne principale ── -->
+        <div data-tour="dashboard-main" class="flex flex-col gap-[30px] min-w-0 max-lg:contents">
 
-          <!-- Dernier import -->
           <section v-if="hero" class="relative sm:min-h-[344px] rounded-card overflow-hidden bg-card max-lg:order-1">
             <img v-if="hero.serie.poster_image" :src="hero.serie.poster_image" alt="" class="absolute inset-0 w-full h-full object-cover blur-[34px] saturate-[1.3] scale-[1.35] opacity-60" />
             <div class="absolute inset-0 bg-linear-to-r from-main/97 via-main/84 via-48% to-main/35" />
@@ -40,13 +39,13 @@
                   <span v-if="isNew(hero.at)" class="stamp-new absolute -left-2 top-3">NOUVEAU</span>
                 </RouterLink>
                 <div class="flex-1 min-w-0 flex flex-col gap-1.5 pt-1">
-                  <span class="text-[10.5px] tracking-[0.16em] font-bold uppercase text-accent">{{ auth.isAdmin ? 'Importé' : 'Ajouté' }} {{ formatRelative(hero.at) }}</span>
+                  <span class="text-[10.5px] tracking-[0.16em] font-bold uppercase text-accent">{{ auth.isAdmin ? 'Importée' : 'Ajoutée' }} {{ formatRelative(hero.at) }}</span>
                   <RouterLink :to="`/series/${hero.serie.id}`" class="flex flex-col">
                     <span class="font-display text-[28px] leading-[1.05] font-extrabold text-primary line-clamp-2">{{ heroTitle.name }}</span>
                     <span v-if="heroTitle.suffix" class="font-display text-xl leading-snug font-semibold text-accent">{{ heroTitle.suffix }}</span>
                   </RouterLink>
                   <p class="text-meta text-secondary">
-                    <template v-for="part in heroMeta" :key="part">{{ part }} · </template>{{ plural(hero.episodes, 'épisode') }} {{ auth.isAdmin ? (hero.episodes > 1 ? 'ajoutés' : 'ajouté') : 'à regarder' }}.
+                    <template v-for="part in heroMeta" :key="part">{{ part }} · </template>{{ auth.isAdmin ? plural(hero.episodes, 'épisode ajouté', 'épisodes ajoutés') : `${plural(hero.episodes, 'épisode')} à regarder` }}.
                   </p>
                 </div>
               </div>
@@ -67,7 +66,7 @@
                 </RouterLink>
                 <p class="text-[15px] leading-[1.6] text-secondary max-w-[420px] text-pretty">
                   <template v-for="part in heroMeta" :key="part">{{ part }} · </template>
-                  <span class="text-primary">{{ plural(hero.episodes, 'épisode') }}{{ auth.isAdmin ? (hero.episodes > 1 ? ' ajoutés' : ' ajouté') : '' }}</span>
+                  <span class="text-primary">{{ auth.isAdmin ? plural(hero.episodes, 'épisode ajouté', 'épisodes ajoutés') : plural(hero.episodes, 'épisode') }}</span>
                   {{ auth.isAdmin ? 'à la médiathèque.' : 'à regarder.' }}
                 </p>
                 <div class="flex items-center gap-5 mt-1.5 flex-wrap">
@@ -75,7 +74,7 @@
                     Voir la série <ArrowRight :size="16" />
                   </RouterLink>
                   <RouterLink :to="auth.isAdmin ? '/activity' : '/series'" class="text-body text-secondary hover:text-primary transition-colors">
-                    {{ auth.isAdmin ? 'Tous les imports récents' : 'Toutes les nouveautés' }}
+                    {{ auth.isAdmin ? 'Tous les imports récents' : 'Parcourir la médiathèque' }}
                   </RouterLink>
                 </div>
               </div>
@@ -94,16 +93,15 @@
               <p class="text-body text-secondary max-w-[460px]">
                 {{ auth.isAdmin
                   ? 'Les séries importées apparaîtront ici dès la fin de leur téléchargement.'
-                  : 'Les séries ajoutées à la médiathèque apparaîtront ici. En attendant, parcourez le catalogue et demandez ce qui vous manque.' }}
+                  : 'Les séries ajoutées apparaîtront ici. En attendant, parcourez la médiathèque et demandez celles qui vous intéressent.' }}
               </p>
               <RouterLink to="/series" class="btn-secondary w-fit mt-1">Parcourir la médiathèque</RouterLink>
             </div>
           </section>
 
-          <!-- Récemment ajoutés -->
           <section v-if="recentList.length > 0" class="flex flex-col gap-3.5 max-lg:order-4">
             <div class="flex items-baseline justify-between">
-              <h2 class="section-title">Récemment ajoutés</h2>
+              <h2 class="section-title">Récemment ajoutées</h2>
               <RouterLink to="/series" class="text-[13px] text-secondary hover:text-primary transition-colors flex items-center gap-1">
                 Médiathèque <ChevronRight :size="14" />
               </RouterLink>
@@ -120,12 +118,11 @@
             </div>
           </section>
 
-          <!-- Chiffres -->
           <section data-tour="dashboard-stats" class="border-t border-card pt-[18px] max-lg:order-5">
             <div v-if="auth.isAdmin" class="flex flex-col sm:flex-row gap-3 sm:gap-0">
               <div class="flex-1 flex items-baseline gap-2.5">
                 <span class="font-display text-[34px] font-bold text-primary">{{ stats.catalogue }}</span>
-                <span class="text-[13px] text-muted">séries au catalogue</span>
+                <span class="text-[13px] text-muted">{{ stats.catalogue > 1 ? 'séries au catalogue' : 'série au catalogue' }}</span>
               </div>
               <div class="hidden sm:block w-px bg-card mx-6" />
               <div class="flex-1 flex items-baseline gap-2.5">
@@ -146,12 +143,11 @@
             </div>
           </section>
 
-          <!-- Panneau debug -->
           <section v-if="devMode" class="flex flex-col gap-3 max-lg:order-6">
             <div class="flex items-center gap-2.5">
               <h2 class="section-title">Diagnostic</h2>
               <span class="pill pill-wait">DEV</span>
-              <button @click="fetchDebug" class="ml-auto btn-ghost btn-sm"><RefreshCw :size="13" /> Rafraîchir</button>
+              <button @click="fetchDebug" class="ml-auto btn-ghost btn-sm"><RefreshCw :size="13" /> Actualiser</button>
             </div>
             <div v-if="debug" class="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div v-for="d in debugCards" :key="d.label" class="card flex flex-col gap-1">
@@ -160,11 +156,11 @@
                 <span class="text-meta text-muted">{{ d.hint }}</span>
               </div>
             </div>
-            <div v-else class="card text-meta text-muted py-4 text-center">Chargement des stats…</div>
+            <div v-else class="card text-meta text-muted py-4 text-center">Chargement…</div>
           </section>
         </div>
 
-        <!-- ── Admin --- -->
+        <!-- ── Colonne droite : admin ── -->
         <div v-if="auth.isAdmin" class="flex flex-col gap-7 min-w-0 max-lg:contents">
 
           <section data-tour="dashboard-requests" class="flex flex-col gap-3 max-lg:order-2">
@@ -177,10 +173,9 @@
               <div v-if="loadingTodo" class="flex items-center gap-2 text-muted text-meta px-[18px] py-5">
                 <span class="w-3 h-3 border border-border border-t-accent rounded-full animate-spin" /> Chargement…
               </div>
-              <p v-else-if="todoCount === 0" class="text-meta text-muted px-[18px] py-5">Rien à traiter : aucune demande en attente, aucun import en erreur.</p>
+              <p v-else-if="todoCount === 0" class="text-meta text-muted px-[18px] py-5">Rien à traiter : aucune demande en attente, aucun import en erreur ni dossier à renommer.</p>
 
               <template v-else>
-                <!-- Demandes -->
                 <div v-for="req in visibleRequests" :key="req.id" class="flex gap-3.5 px-[18px] py-4 border-b border-hover">
                   <RouterLink :to="`/series/${req.serieId}`" class="shrink-0">
                     <img v-if="posterOf(req.serieId)" :src="posterOf(req.serieId)!" alt="" class="w-10 h-[60px] object-cover rounded-[4px]" />
@@ -193,7 +188,7 @@
                     <span v-if="req.hasTorrents === false" class="text-meta text-err flex items-center gap-1.5"><TriangleAlert :size="13" /> Aucun torrent disponible</span>
                     <div class="flex items-center gap-x-3.5 gap-y-2 mt-[9px] flex-wrap max-sm:-ml-[54px]">
                       <button @click="approve(req)" :disabled="busy[req.id]" class="btn-sm max-sm:flex-1" :class="req.hasTorrents === false ? 'btn-secondary' : 'btn-primary'">
-                        {{ req.hasTorrents === false ? 'Approuver quand même' : 'Approuver et télécharger' }}
+                        {{ req.hasTorrents === false ? 'Approuver sans télécharger' : 'Approuver et télécharger' }}
                       </button>
                       <button @click="rejectTarget = req" class="text-meta text-secondary hover:text-err transition-colors max-sm:hidden">Refuser</button>
                       <button @click="rejectTarget = req" class="btn-icon btn-sm sm:hidden hover:text-err" title="Refuser" aria-label="Refuser la demande"><X :size="15" /></button>
@@ -201,7 +196,6 @@
                   </div>
                 </div>
 
-                <!-- Imports en erreur -->
                 <div v-for="err in visibleErrors" :key="err.hash" class="flex gap-3.5 px-[18px] py-4 border-b border-hover">
                   <span class="w-10 h-10 rounded-field bg-err/12 text-err flex items-center justify-center shrink-0"><TriangleAlert :size="18" :stroke-width="1.75" /></span>
                   <div class="flex-1 min-w-0 flex flex-col gap-[3px]">
@@ -213,18 +207,17 @@
                         {{ busy[err.hash] ? 'Import…' : 'Réessayer' }}
                       </button>
                       <button v-if="err.serieId" @click="openManualImport(err)" class="text-meta text-secondary hover:text-primary transition-colors max-sm:h-10 max-sm:px-2">Import manuel</button>
-                      <RouterLink v-if="!err.torrent" to="/activity" class="text-meta text-secondary hover:text-primary transition-colors">Voir dans Activité</RouterLink>
+                      <RouterLink v-if="!err.torrent" to="/activity" class="text-meta text-secondary hover:text-primary transition-colors">Voir l'activité</RouterLink>
                     </div>
                   </div>
                 </div>
 
-                <!-- Dossiers à renommer -->
                 <div v-for="f in visibleFolders" :key="f.serie_id" class="flex gap-3.5 px-[18px] py-4 border-b border-hover">
                   <span class="w-10 h-10 rounded-field bg-accent/10 text-accent flex items-center justify-center shrink-0"><Folder :size="18" :stroke-width="1.75" /></span>
                   <div class="flex-1 min-w-0 flex flex-col gap-[3px]">
                     <span class="tag-label">Dossier à renommer</span>
                     <RouterLink :to="`/series/${f.serie_id}`" class="text-[14.5px] font-bold text-primary hover:text-accent transition-colors truncate">{{ f.serie_title }}</RouterLink>
-                    <span class="text-meta text-secondary break-words">{{ f.current.map(basename).join(', ') }} → {{ basename(f.expected) }}</span>
+                    <span class="text-meta text-secondary break-words">Actuel : {{ f.current.map(basename).join(', ') }} · Attendu : {{ basename(f.expected) }}</span>
                     <div class="flex items-center gap-x-3.5 gap-y-2 mt-[9px] max-sm:-ml-[54px]">
                       <button @click="renameFolder(f)" :disabled="busy[`folder-${f.serie_id}`]" class="btn-secondary btn-sm font-medium max-sm:flex-1">
                         {{ busy[`folder-${f.serie_id}`] ? 'Renommage…' : 'Renommer le dossier' }}
@@ -259,13 +252,13 @@
                 <div class="progress-bar" :class="{ 'bg-muted': t.state === 'paused', 'bg-err': t.state === 'error' }" :style="{ width: `${Math.min(100, t.progress)}%` }" />
               </div>
               <span class="text-xs text-muted">
-                {{ formatSize(t.downloaded) }} sur {{ formatSize(t.size) }}<template v-if="t.state === 'downloading' && t.eta > 0"> · reste {{ formatDuration(t.eta) }}</template><template v-else-if="t.state !== 'downloading'"> · {{ torrentStateLabel(t.state) }}</template>
+                {{ formatSize(t.downloaded) }} sur {{ formatSize(t.size) }}<template v-if="t.state === 'downloading' && t.eta > 0 && formatDuration(t.eta) !== '∞'"> · reste {{ formatDuration(t.eta) }}</template><template v-else-if="t.state !== 'downloading'"> · {{ torrentStateLabel(t.state) }}</template>
               </span>
             </div>
           </section>
         </div>
 
-        <!-- ── Colonne droite : invité ─────────────────────────── -->
+        <!-- ── Colonne droite : invité ── -->
         <div v-else class="flex flex-col gap-7 min-w-0 max-lg:contents">
 
           <section data-tour="dashboard-requests" class="flex flex-col gap-3 max-lg:order-2">
@@ -380,7 +373,7 @@ const manualImport    = ref<{ serieId: number; serieName: string; seasons: any[]
 
 let interval: ReturnType<typeof setInterval> | null = null
 
-// ── Séries et utilitaires ─────────────────────────────
+// ── Séries et utilitaires ──
 const seriesById = computed(() => new Map(seriesStore.series.map(s => [s.id, s])))
 const posterOf   = (id: number) => seriesById.value.get(id)?.poster_image ?? null
 const titleOf    = (id: number, fallback: string) => seriesById.value.get(id)?.title ?? fallback
@@ -395,7 +388,7 @@ const recentList = computed(() => recentWithSerie.value.slice(1, 7))
 const heroTitle  = computed(() => splitTitle(hero.value?.serie.title ?? ''))
 const heroMeta   = computed(() => [hero.value?.serie.year, statusLabel(hero.value?.serie.status)].filter(Boolean).map(String))
 
-// ── Chiffres 
+// ── Chiffres ──
 const stats = computed(() => ({
   catalogue  : catalogueCount.value || seriesStore.series.length,
   imported   : seriesStore.series.filter(s => s.download_state === 'complete').length,
@@ -412,8 +405,7 @@ function torrentStateLabel(state: string) {
   return ({ paused: 'en pause', checking: 'vérification', error: 'erreur du client' } as Record<string, string>)[state] ?? state
 }
 
-// ── À traiter (admin) 
-// Les plus anciennes d'abord
+// ── À traiter (admin) ──
 const pendingRequests = computed(() => requests.value.filter(r => r.status === 'pending').sort((a, b) => a.createdAt.localeCompare(b.createdAt)))
 
 
@@ -459,7 +451,7 @@ const overflowLinks = computed(() => {
   return links
 })
 
-// ── Invité ────────────────────────────────────────────────────
+// ── Invité ──
 const myPendingCount = computed(() => requests.value.filter(r => r.status === 'pending').length)
 
 const guestStatus: Record<string, { label: string; class: string }> = {
@@ -476,7 +468,7 @@ const notYetHere = computed(() => {
     .slice(0, 3)
 })
 
-// ── Chargement ────────────────────────────────────────────────
+// ── Chargement ──
 async function fetchSettings() {
   if (!auth.isAdmin) return
   const res = await fetch('/api/settings', { credentials: 'include' })
@@ -493,12 +485,12 @@ async function fetchDebug() {
 }
 
 const debugCards = computed(() => debug.value ? [
-  { label: 'Heap utilisé',     value: `${debug.value.memory.heapUsed} Mo`, hint: `sur ${debug.value.memory.heapTotal} Mo` },
-  { label: 'RSS',              value: `${debug.value.memory.rss} Mo`,      hint: 'mémoire système' },
-  { label: 'Uptime',           value: debug.value.uptime,                  hint: 'depuis le démarrage' },
-  { label: 'Cache GitHub',     value: debug.value.cache.entries,           hint: `entrées (TTL ${debug.value.cache.ttlHours} h)` },
-  { label: 'Fichiers suivis',  value: debug.value.organized.trackedFiles,  hint: 'dans organized.json' },
-  { label: 'Worker d’import',  value: debug.value.worker.running ? 'Actif' : 'Inactif', hint: `${debug.value.requests.notifs} import(s) en mémoire`, accent: debug.value.worker.running },
+  { label: 'Mémoire utilisée',      value: `${debug.value.memory.heapUsed} Mo`, hint: `sur ${debug.value.memory.heapTotal} Mo` },
+  { label: 'Mémoire système (RSS)', value: `${debug.value.memory.rss} Mo`,      hint: 'occupée par le serveur' },
+  { label: 'Durée de fonctionnement', value: debug.value.uptime,                hint: 'depuis le démarrage' },
+  { label: 'Entrées en cache',      value: debug.value.cache.entries,           hint: `gardées ${debug.value.cache.ttlHours} h` },
+  { label: 'Fichiers suivis',       value: debug.value.organized.trackedFiles,  hint: 'dans organized.json' },
+  { label: "Tâche d'import",        value: debug.value.worker.running ? 'Active' : 'Inactive', hint: `${plural(debug.value.requests.notifs, 'import récent', 'imports récents')} en mémoire`, accent: debug.value.worker.running },
 ] : [])
 
 async function fetchCatalogue() {
@@ -545,7 +537,7 @@ async function fetchFolders() {
   } catch {}
 }
 
-// ── Actions 
+// ── Actions ──
 async function patchRequest(req: SerieRequest, body: object) {
   busy[req.id] = true
   try {
@@ -553,7 +545,7 @@ async function patchRequest(req: SerieRequest, body: object) {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify(body),
     })
-    if (!res.ok) { toast((await res.json()).error ?? 'Erreur', 'error'); return false }
+    if (!res.ok) { toast((await res.json()).error ?? 'Impossible de mettre à jour la demande', 'error'); return false }
     await fetchRequests()
     reqStore.refreshPending()
     return true
@@ -580,9 +572,9 @@ async function retryImport(err: { hash: string; torrent: any }) {
       body: JSON.stringify({ hash: err.torrent.hash, save_path: err.torrent.save_path, name: err.torrent.name }),
     })
     const d = await res.json()
-    if (!res.ok) toast(d.error ?? "Erreur lors de l'import", 'error')
-    else if (d.errors?.length) toast(`${d.done} importé(s), ${d.errors.length} erreur(s)`, 'error')
-    else toast(`${d.done} fichier(s) importé(s) ✓`, 'success')
+    if (!res.ok) toast(d.error ?? "Impossible d'importer ce torrent", 'error')
+    else if (d.errors?.length) toast(`${plural(d.done, 'fichier importé', 'fichiers importés')}, ${plural(d.errors.length, 'erreur')}`, 'error')
+    else toast(plural(d.done, 'fichier importé', 'fichiers importés'), 'success')
     await Promise.all([fetchTorrents(), fetchRecent()])
   } catch { toast('Impossible de contacter le serveur', 'error') }
   finally { busy[err.hash] = false }
@@ -609,14 +601,14 @@ async function openManualImport(err: { serieId: number | null; title: string }) 
 }
 
 async function renameFolder(f: { serie_id: number; expected: string }) {
-  if (!confirm(`Déplacer le contenu vers « ${basename(f.expected)} » ? Les fichiers existants ne sont jamais écrasés.`)) return
+  if (!confirm(`Renommer le dossier en « ${basename(f.expected)} » ? Les fichiers déjà présents à destination ne seront pas écrasés.`)) return
   const key = `folder-${f.serie_id}`
   busy[key] = true
   try {
     const res = await fetch(`/api/organized/${f.serie_id}/folder`, { method: 'POST', credentials: 'include' })
     const d = await res.json()
-    if (!res.ok) { toast(d.error ?? 'Erreur lors du renommage du dossier', 'error'); return }
-    toast(`Dossier renommé ✓ (${plural(d.moved, 'fichier')} ${d.moved > 1 ? 'déplacés' : 'déplacé'})`, 'success')
+    if (!res.ok) { toast(d.error ?? 'Impossible de renommer le dossier', 'error'); return }
+    toast(`Dossier renommé (${plural(d.moved, 'fichier déplacé', 'fichiers déplacés')})`, 'success')
     await fetchFolders()
   } catch { toast('Impossible de contacter le serveur', 'error') }
   finally { busy[key] = false }
@@ -630,8 +622,8 @@ async function requestSerie(s: Serie) {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ serieId: s.id, serieName: s.title, seasons: [] }),
     })
-    if (!res.ok) { toast((await res.json()).error ?? 'Erreur', 'error'); return }
-    toast(`${s.title} demandée ✓`, 'success')
+    if (!res.ok) { toast((await res.json()).error ?? "Impossible d'envoyer la demande", 'error'); return }
+    toast(`« ${s.title} » demandée`, 'success')
     await fetchRequests()
     reqStore.refreshPending()
   } catch { toast('Impossible de contacter le serveur', 'error') }

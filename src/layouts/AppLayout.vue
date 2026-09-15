@@ -54,7 +54,7 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
   }
 })
 
-// Première visite : une seule fois par session, après l'assistant pour un admin
+// Visite guidée auto : une fois par session, après l'assistant pour un admin
 let tourAutoStarted = false
 watch(() => [auth.loggedIn, auth.tourSeen, auth.onboardingDone], () => {
   if (tourAutoStarted || tour.active) return
@@ -64,7 +64,6 @@ watch(() => [auth.loggedIn, auth.tourSeen, auth.onboardingDone], () => {
   }
 }, { immediate: true })
 
-// Compteurs de pour la barre latérale
 let pendingTimer: ReturnType<typeof setInterval> | null = null
 let downloadsTimer: ReturnType<typeof setInterval> | null = null
 
@@ -84,7 +83,6 @@ onUnmounted(() => {
 
 watch(() => route.path, () => reqStore.refreshPending())
 
-// Mobile
 const showMobileHeader = computed(() => route.path === '/dashboard' || route.path.startsWith('/settings'))
 
 const navItems = computed<NavItem[]>(() => {
@@ -120,6 +118,5 @@ const navItems = computed<NavItem[]>(() => {
   return items
 })
 
-// Mobile 2
 const tabItems = computed(() => navItems.value.filter(i => !i.separator && !(auth.isAdmin && i.to === '/settings')))
 </script>

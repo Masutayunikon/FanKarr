@@ -29,7 +29,6 @@ function isNewer(latest: string, current: string): boolean {
 
 async function checkForUpdates() {
     try {
-        // Version locale
         const vRes = await fetch('/api/version', { credentials: 'include' })
         if (vRes.ok) {
             const { version } = await vRes.json()
@@ -38,7 +37,6 @@ async function checkForUpdates() {
 
         if (currentVersion.value === 'dev') return
 
-        // Dernière release GitHub
         const gRes = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`, {
             headers: { Accept: 'application/vnd.github.v3+json' },
         })
@@ -57,7 +55,6 @@ export function useUpdateCheck() {
     onMounted(() => {
         if (users++ > 0) return
         checkForUpdates()
-        // Revérifier toutes les 6h
         timer = setInterval(checkForUpdates, 6 * 60 * 60 * 1000)
     })
 

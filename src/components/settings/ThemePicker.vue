@@ -1,5 +1,5 @@
 <template>
-  <div class="grid grid-cols-3 gap-3.5" role="radiogroup" aria-label="Accent">
+  <div class="grid grid-cols-3 gap-3.5" role="radiogroup" aria-label="Couleur de l'interface">
     <button
         v-for="theme in themes"
         :key="theme.id"

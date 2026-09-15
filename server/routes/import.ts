@@ -16,7 +16,9 @@ import { readOrganized, writeOrganized, updateOrganized, retargetEntries, type O
 
 const router = Router()
 
-const serieNotFound = (id: unknown) => `Série ${id} introuvable dans le scraper et sur l'API Fankai (voir les logs)`
+const serieNotFound = (id: unknown) => `Série ${id} introuvable dans le catalogue Fankai. Synchronisez le catalogue ou consultez les journaux.`
+const ORGANIZED_UNREADABLE = 'Fichier de suivi des imports (organized.json) illisible'
+const UNEXPECTED_ERROR     = 'Erreur inattendue, consultez les journaux'
 
 // Entrée d'un épisode sous n'importe quel hash (torrent absent des paths du scraper)
 function findEntry(organized: Organized, episodeId: number): { hash: string; entry: any } | null {
@@ -83,13 +85,13 @@ function removeEmptyDirs(dir: string): void {
 router.post('/manual-import', requireAuth, async (req, res) => {
     const { serie_id, items } = req.body
     if (!serie_id || !Array.isArray(items) || items.length === 0) {
-        res.status(400).json({ error: 'serie_id et items requis' }); return
+        res.status(400).json({ error: 'Série ou fichiers à importer manquants' }); return
     }
     const { mediaPath, organizeMode, nfoSupport, englishDirectory } = readSettings()
     let organized: Organized
     try { organized = readOrganized() }
-    catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return }
-    // Les copies de fichiers sont asynchrones : les modifications sont rejouées sur une relecture fraîche à la fin
+    catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : ORGANIZED_UNREADABLE }); return }
+    // Copies asynchrones : modifications réappliquées sur le fichier relu à la fin
     const ops: ((data: Organized) => void)[] = []
     const apply = (op: (data: Organized) => void) => { op(organized); ops.push(op) }
     const sd = await resolveSerieData(Number(serie_id), 'Import manuel')
@@ -125,12 +127,11 @@ router.post('/manual-import', requireAuth, async (req, res) => {
         try {
             if (!fs.existsSync(file_path)) throw new Error('Fichier source introuvable')
 
-            // Nettoyer toute entrée organized qui référence ce même fichier physique
-            // sous un épisode différent (réassignation → l'ancien enregistrement devient invalide)
+            // Réassignation : retirer les entrées qui pointent ce fichier sous un autre épisode
             for (const [h, eps] of Object.entries(organized)) {
                 for (const [epId, entry] of Object.entries(eps)) {
                     if (entry?.dest_path === file_path && Number(epId) !== Number(episode_id))
-                        logger.info('api', `Import manuel : suppression entrée stale ep ${epId} (fichier réassigné)`)
+                        logger.info('api', `Import manuel : entrée obsolète de l'épisode ${epId} retirée (fichier réassigné)`)
                 }
             }
             apply(data => {
@@ -143,16 +144,13 @@ router.post('/manual-import', requireAuth, async (req, res) => {
             if (file_path !== destPath) {
                 const serieRootPath  = path.join(mediaPath, serieTitle)
                 const isInSeriePath  = file_path.startsWith(serieRootPath + path.sep) || file_path.startsWith(serieRootPath + '/')
-                // Si une ancienne version de cet épisode existe à la destination (réassignation),
-                // la supprimer avant le rename pour éviter un état incohérent.
                 if (isInSeriePath && fs.existsSync(destPath) && destPath !== file_path) {
                     fs.unlinkSync(destPath)
-                    logger.info('api', `Import manuel (réassignation) : suppression ancien fichier "${destFilename}"`)
-                    // Nettoyer toute entrée organized qui pointait sur ce fichier supprimé
+                    logger.info('api', `Import manuel (réassignation) : suppression de l'ancien fichier « ${destFilename} »`)
                     for (const eps of Object.values(organized)) {
                         for (const [epId, entry] of Object.entries(eps)) {
                             if (entry?.dest_path === destPath)
-                                logger.info('api', `Import manuel : suppression entrée stale ep ${epId} (ancien fichier écrasé)`)
+                                logger.info('api', `Import manuel : entrée obsolète de l'épisode ${epId} retirée (ancien fichier supprimé)`)
                         }
                     }
                     apply(data => {
@@ -164,7 +162,7 @@ router.post('/manual-import', requireAuth, async (req, res) => {
                 if (isInSeriePath && !fs.existsSync(destPath)) {
                     fs.renameSync(file_path, destPath)
                     apply(data => { retargetEntries(data, new Map([[file_path, destPath]])) })
-                    logger.info('api', `Import manuel (rename) : "${srcFilename}" → "${destFilename}"`)
+                    logger.info('api', `Import manuel : « ${srcFilename} » renommé en « ${destFilename} »`)
                 } else if (!isInSeriePath && !fs.existsSync(destPath)) {
                     if (organizeMode === 'hardlink') {
                         try { fs.linkSync(file_path, destPath) }
@@ -176,10 +174,10 @@ router.post('/manual-import', requireAuth, async (req, res) => {
                     } else {
                         await fs.promises.copyFile(file_path, destPath)
                     }
-                    logger.info('api', `Import manuel : "${srcFilename}" → "${destPath}"`)
+                    logger.info('api', `Import manuel : « ${srcFilename} » importé vers « ${destPath} »`)
                 }
             } else {
-                logger.debug('api', `Import manuel : "${srcFilename}" déjà en place`)
+                logger.debug('api', `Import manuel : « ${srcFilename} » déjà en place`)
             }
             const torrentHash = String(hash || '').toLowerCase() || 'manual'
             const entry = {
@@ -190,16 +188,16 @@ router.post('/manual-import', requireAuth, async (req, res) => {
             apply(data => { (data[torrentHash] ??= {})[String(episode_id)] = entry })
             done.push(episode_id)
         } catch (err) {
-            const msg = err instanceof Error ? err.message : 'Erreur inconnue'
+            const msg = err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux'
             errors.push({ file: srcFilename, error: msg })
-            logger.error('api', `Import manuel échoué pour "${srcFilename}" : ${msg}`)
+            logger.error('api', `Échec de l'import manuel de « ${srcFilename} » : ${msg}`)
         }
     }
     if (ops.length > 0) {
         try { updateOrganized(data => { for (const op of ops) op(data) }) }
         catch (err) {
-            logger.error('api', `Import manuel : enregistrement impossible : ${err instanceof Error ? err.message : err}`)
-            res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return
+            logger.error('api', `Import manuel : échec de l'enregistrement (${err instanceof Error ? err.message : err})`)
+            res.status(500).json({ error: err instanceof Error ? err.message : ORGANIZED_UNREADABLE }); return
         }
     }
 
@@ -222,9 +220,9 @@ router.post('/manual-import', requireAuth, async (req, res) => {
                     fs.mkdirSync(path.dirname(dest), { recursive: true })
                     fs.writeFileSync(dest, Buffer.from(await raw.arrayBuffer()))
                 }
-                logger.info('api', `NFO téléchargés pour "${gitlabTitle}" (import manuel)`)
+                logger.info('api', `NFO téléchargés pour « ${gitlabTitle} » (import manuel)`)
             } catch (err) {
-                logger.warn('api', `Échec téléchargement NFO pour "${gitlabTitle}" : ${err instanceof Error ? err.message : err}`)
+                logger.warn('api', `Échec du téléchargement des NFO de « ${gitlabTitle} » :${err instanceof Error ? err.message : err}`)
             }
         })()
     }
@@ -232,7 +230,7 @@ router.post('/manual-import', requireAuth, async (req, res) => {
     res.json({ ok: true, done: done.length, errors })
 })
 
-// ── Récap organisés d'une série ────────────────────────────────
+// ── Épisodes importés d'une série ──────────────────────────────
 router.get('/organized/:serieId', requireAuth, async (req, res) => {
     const serieId = Number(req.params.serieId)
     try {
@@ -266,20 +264,20 @@ router.get('/organized/:serieId', requireAuth, async (req, res) => {
         }
         res.json(result)
     } catch (err) {
-        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
+        res.status(500).json({ error: err instanceof Error ? err.message : UNEXPECTED_ERROR })
     }
 })
 
-// ── Rename épisode ─────────────────────────────────────────────
+// ── Renommage d'un épisode ─────────────────────────────────────
 router.post('/rename-episode', requireAuth, async (req, res) => {
     const { serie_id, episode_id, torrent_hash } = req.body
-    if (!serie_id || !episode_id) { res.status(400).json({ error: 'serie_id et episode_id requis' }); return }
+    if (!serie_id || !episode_id) { res.status(400).json({ error: 'Série ou épisode manquant' }); return }
     const { nfoSupport } = readSettings()
     const sd = await resolveSerieData(Number(serie_id), 'Renommage')
     if (!sd) { res.status(404).json({ error: serieNotFound(serie_id) }); return }
     let organized: Organized
     try { organized = readOrganized() }
-    catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return }
+    catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : ORGANIZED_UNREADABLE }); return }
     let foundEp: any = null
     for (const season of sd.seasons ?? []) {
         for (const ep of season.episodes ?? []) {
@@ -302,30 +300,30 @@ router.post('/rename-episode', requireAuth, async (req, res) => {
     const oldPath = orgEntry.dest_path
     const newPath = path.join(path.dirname(oldPath), newName)
     try {
-        if (!fs.existsSync(oldPath)) throw new Error('Fichier source introuvable sur le disque')
-        if (fs.existsSync(newPath)) throw new Error(`Un fichier avec ce nom existe déjà : ${newName}`)
+        if (!fs.existsSync(oldPath)) throw new Error('Fichier introuvable sur le disque')
+        if (fs.existsSync(newPath)) throw new Error(`Un fichier nommé « ${newName} » existe déjà`)
         fs.renameSync(oldPath, newPath)
         organized[entryHash][String(episode_id)] = { ...orgEntry, dest_filename: newName, dest_path: newPath, at: new Date().toISOString() }
         retargetEntries(organized, new Map([[oldPath, newPath]]))
         writeOrganized(organized)
-        logger.info('api', `Rename : "${orgEntry.dest_filename}" → "${newName}"`)
+        logger.info('api', `Renommage : « ${orgEntry.dest_filename} » en « ${newName} »`)
         res.json({ ok: true, renamed: true, old_name: orgEntry.dest_filename, new_name: newName })
     } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Erreur inconnue'
-        logger.error('api', `Rename échoué pour ep ${episode_id} : ${msg}`)
+        const msg = err instanceof Error ? err.message : UNEXPECTED_ERROR
+        logger.error('api', `Échec du renommage de l'épisode ${episode_id} : ${msg}`)
         res.status(500).json({ error: msg })
     }
 })
 
-// ── Désimport série complète ───────────────────────────────────
+// ── Retrait d'une série ────────────────────────────────────────
 router.delete('/organized/:serieId', requireAuth, async (req, res) => {
     const serieId    = String(req.params.serieId)
     const deleteFile = req.query.deleteFile === 'true'
-    const sd = await resolveSerieData(Number(serieId), 'Désimport série')
+    const sd = await resolveSerieData(Number(serieId), 'Retrait de la série')
     if (!sd) { res.status(404).json({ error: serieNotFound(serieId) }); return }
     let organized: Organized
     try { organized = readOrganized() }
-    catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return }
+    catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : ORGANIZED_UNREADABLE }); return }
     const episodeIds = new Set<string>()
     for (const season of sd.seasons ?? []) {
         for (const ep of season.episodes ?? []) episodeIds.add(String(ep.id))
@@ -356,38 +354,36 @@ router.delete('/organized/:serieId', requireAuth, async (req, res) => {
             if (hash === 'manual') continue
             dispatchRemove(hash, false).catch(err => logger.warn('api', `Impossible de retirer le torrent ${hash.slice(0, 8)}… du client : ${err instanceof Error ? err.message : err}`))
         }
-        // Supprimer le dossier de la série s'il existe encore
         if (serieFolder && fs.existsSync(serieFolder)) {
             try {
                 fs.rmSync(serieFolder, { recursive: true, force: true })
-                logger.info('api', `Dossier série supprimé : ${serieFolder}`)
+                logger.info('api', `Dossier de la série supprimé : ${serieFolder}`)
             } catch (err) {
-                logger.warn('api', `Impossible de supprimer le dossier série "${serieFolder}" : ${err instanceof Error ? err.message : err}`)
+                logger.warn('api', `Impossible de supprimer le dossier de la série « ${serieFolder} » :${err instanceof Error ? err.message : err}`)
             }
         }
     }
-    // Supprimer les demandes "disponible" liées à cette série
     const completedRequests = readRequests().filter(r => r.serieId === Number(serieId) && r.status === 'completed')
     for (const r of completedRequests) {
         try { deleteRequest(r.id) } catch {}
     }
     if (completedRequests.length > 0)
-        logger.info('api', `Désimport série ${serieId} — ${completedRequests.length} demande(s) "disponible" supprimée(s)`)
+        logger.info('api', `Retrait de la série ${serieId} : ${completedRequests.length} demande(s) « disponible » supprimée(s)`)
 
-    logger.info('api', `Désimport série ${serieId} — ${removed} épisode(s) retirés${deleteFile && emptyHashes.length ? `, ${emptyHashes.length} torrent(s) retirés du client` : ''}`)
+    logger.info('api', `Retrait de la série ${serieId} : ${removed} épisode(s) retiré(s)${deleteFile && emptyHashes.length ? `, ${emptyHashes.length} torrent(s) retiré(s) du client` : ''}`)
     res.json({ ok: true, removed, errors })
 })
 
-// ── Désimport saison ───────────────────────────────────────────
+// ── Retrait d'une saison ───────────────────────────────────────
 router.delete('/organized/:serieId/seasons/:seasonId', requireAuth, async (req, res) => {
     const serieId    = String(req.params.serieId)
     const seasonId   = Number(req.params.seasonId)
     const deleteFile = req.query.deleteFile === 'true'
-    const sd = await resolveSerieData(Number(serieId), 'Désimport saison')
+    const sd = await resolveSerieData(Number(serieId), 'Retrait de la saison')
     if (!sd) { res.status(404).json({ error: serieNotFound(serieId) }); return }
     let organized: Organized
     try { organized = readOrganized() }
-    catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return }
+    catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : ORGANIZED_UNREADABLE }); return }
     const season = sd.seasons?.find((s: any) => s.id === seasonId)
     if (!season) { res.status(404).json({ error: 'Saison introuvable' }); return }
     const episodeIds = new Set<string>(season.episodes?.map((e: any) => String(e.id)) ?? [])
@@ -413,17 +409,17 @@ router.delete('/organized/:serieId/seasons/:seasonId', requireAuth, async (req, 
             dispatchRemove(hash, false).catch(err => logger.warn('api', `Impossible de retirer le torrent ${hash.slice(0, 8)}… du client : ${err instanceof Error ? err.message : err}`))
         }
     }
-    logger.info('api', `Désimport saison ${seasonId} (série ${serieId}) — ${removed} épisode(s) retirés${deleteFile && emptyHashes.length ? `, ${emptyHashes.length} torrent(s) retirés du client` : ''}`)
+    logger.info('api', `Retrait de la saison ${seasonId} (série ${serieId}) : ${removed} épisode(s) retiré(s)${deleteFile && emptyHashes.length ? `, ${emptyHashes.length} torrent(s) retiré(s) du client` : ''}`)
     res.json({ ok: true, removed, errors })
 })
 
-// ── Désimport épisode ──────────────────────────────────────────
+// ── Retrait d'un épisode ───────────────────────────────────────
 router.delete('/organized/:serieId/:episodeId', requireAuth, async (req, res) => {
     const episodeId  = String(req.params.episodeId)
     const deleteFile = req.query.deleteFile === 'true'
     let organized: Organized
     try { organized = readOrganized() }
-    catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return }
+    catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : ORGANIZED_UNREADABLE }); return }
     const found: { hash: string; entry: any }[] = []
     for (const [hash, episodes] of Object.entries(organized)) {
         if (episodes[episodeId]) found.push({ hash, entry: episodes[episodeId] })
@@ -437,7 +433,7 @@ router.delete('/organized/:serieId/:episodeId', requireAuth, async (req, res) =>
                 if (!p || deletedPaths.has(p) || !fs.existsSync(p)) continue
                 fs.unlinkSync(p)
                 deletedPaths.add(p)
-                logger.info('api', `Désimport + suppression fichier : "${p}"`)
+                logger.info('api', `Retrait et suppression du fichier « ${p} »`)
             }
         }
         const emptyHashes: string[] = []
@@ -446,7 +442,6 @@ router.delete('/organized/:serieId/:episodeId', requireAuth, async (req, res) =>
             if (Object.keys(organized[hash]).length === 0) { delete organized[hash]; emptyHashes.push(hash) }
         }
         writeOrganized(organized)
-        // Si plus aucun épisode d'un torrent n'est importé → retirer ce torrent du client
         if (deleteFile) {
             for (const hash of emptyHashes) {
                 if (hash === 'manual') continue
@@ -454,16 +449,16 @@ router.delete('/organized/:serieId/:episodeId', requireAuth, async (req, res) =>
             }
         }
         const removedTorrents = deleteFile ? emptyHashes.filter(h => h !== 'manual') : []
-        logger.info('api', `Désimport ep ${episodeId}${removedTorrents.length ? ` + ${removedTorrents.length} torrent(s) retiré(s) du client` : ''}`)
+        logger.info('api', `Retrait de l'épisode ${episodeId}${removedTorrents.length ? `, ${removedTorrents.length} torrent(s) retiré(s) du client` : ''}`)
         res.json({ ok: true })
     } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Erreur inconnue'
-        logger.error('api', `Désimport échoué : ${msg}`)
+        const msg = err instanceof Error ? err.message : UNEXPECTED_ERROR
+        logger.error('api', `Échec du retrait de l'épisode ${episodeId} : ${msg}`)
         res.status(500).json({ error: msg })
     }
 })
 
-// ── Récap global des imports ───────────────────────────────────
+// ── Récapitulatif des imports ──────────────────────────────────
 router.get('/organized-summary', requireAuth, async (_req, res) => {
     try {
         const { nfoSupport } = readSettings()
@@ -478,8 +473,7 @@ router.get('/organized-summary', requireAuth, async (_req, res) => {
                 for (const ep of season.episodes ?? []) {
                     let orgEntry: any = null
                     let orgHash: string | null = null
-                    // Même stratégie que organized/:serieId : on cherche via ep.paths d'abord
-                    // pour garantir le bon hash → bon formatted_name dans resolveEpNaming
+                    // Chercher d'abord via ep.paths : le hash détermine le formatted_name
                     for (const p of ep.paths ?? []) {
                         if (typeof p !== 'object' || !p.infohash) continue
                         const h = p.infohash.toLowerCase()
@@ -508,16 +502,16 @@ router.get('/organized-summary', requireAuth, async (_req, res) => {
             : []
         res.json({ series: result, nfo_support: nfoSupport, orphans, orphans_checked: complete })
     } catch (err) {
-        logger.error('api', `organized-summary échoué : ${err instanceof Error ? err.message : err}`)
-        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
+        logger.error('api', `Échec du récapitulatif des imports : ${err instanceof Error ? err.message : err}`)
+        res.status(500).json({ error: err instanceof Error ? err.message : UNEXPECTED_ERROR })
     }
 })
 
-// ── Retrait des entrées orphelines ─────────────────────────────
+// ── Retrait des épisodes disparus du catalogue ─────────────────
 router.delete('/organized-summary/orphans', requireAdmin, async (req, res) => {
     const only = Array.isArray(req.body?.episode_ids) ? new Set(req.body.episode_ids.map(String)) : null
     const { series, complete } = await loadCatalogStatus()
-    if (!complete) { res.status(503).json({ error: 'Catalogue incomplet (scraper ou API Fankai injoignable), réessayez plus tard' }); return }
+    if (!complete) { res.status(503).json({ error: 'Catalogue incomplet (scraper GitHub ou API Fankai injoignable), réessayez plus tard' }); return }
     let removed = 0
     try {
         updateOrganized(data => {
@@ -529,19 +523,19 @@ router.delete('/organized-summary/orphans', requireAdmin, async (req, res) => {
             return removed > 0
         })
     } catch (err) {
-        res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return
+        res.status(500).json({ error: err instanceof Error ? err.message : ORGANIZED_UNREADABLE }); return
     }
-    logger.info('api', `Entrées orphelines retirées du suivi : ${removed}`)
+    logger.info('api', `Épisodes disparus du catalogue retirés du suivi : ${removed}`)
     res.json({ ok: true, removed })
 })
 
-// ── Dossier série ──────────────────────────────────────────────
+// ── Dossier de série ───────────────────────────────────────────
 router.get('/organized-folders', requireAdmin, async (_req, res) => {
     const { mediaPath } = readSettings()
     if (!mediaPath) { res.json([]); return }
     let organized: Organized
     try { organized = readOrganized() }
-    catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return }
+    catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : ORGANIZED_UNREADABLE }); return }
     try {
         const result: { serie_id: number; serie_title: string; expected: string; current: string[] }[] = []
         const catalog = await loadCatalog()
@@ -553,8 +547,8 @@ router.get('/organized-folders', requireAdmin, async (_req, res) => {
         }
         res.json(result)
     } catch (err) {
-        logger.error('api', `organized-folders échoué : ${err instanceof Error ? err.message : err}`)
-        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
+        logger.error('api', `Échec de la vérification des dossiers de séries : ${err instanceof Error ? err.message : err}`)
+        res.status(500).json({ error: err instanceof Error ? err.message : UNEXPECTED_ERROR })
     }
 })
 
@@ -565,7 +559,7 @@ router.get('/organized/:serieId/folder', requireAuth, async (req, res) => {
     const { mediaPath } = readSettings()
     let organized: Organized
     try { organized = readOrganized() }
-    catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return }
+    catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : ORGANIZED_UNREADABLE }); return }
     const expected = path.join(mediaPath, serieFolderName(sd.title ?? sd.show_title ?? ''))
     const others   = otherSerieFolders(await loadCatalog().catch(() => []), serieId, mediaPath)
     const current  = [...serieFolders(sd, organized, mediaPath, others)].map(([folder, entries]) => ({ path: folder, entries, exists: fs.existsSync(folder) }))
@@ -574,13 +568,13 @@ router.get('/organized/:serieId/folder', requireAuth, async (req, res) => {
 
 router.post('/organized/:serieId/folder', requireAdmin, async (req, res) => {
     const serieId = Number(req.params.serieId)
-    const sd = await resolveSerieData(serieId, 'Renommage dossier')
+    const sd = await resolveSerieData(serieId, 'Renommage du dossier')
     if (!sd) { res.status(404).json({ error: serieNotFound(serieId) }); return }
     const { mediaPath } = readSettings()
-    if (!mediaPath) { res.status(400).json({ error: 'Chemin médiathèque non configuré' }); return }
+    if (!mediaPath) { res.status(400).json({ error: 'Chemin de la médiathèque non configuré' }); return }
     let organized: Organized
     try { organized = readOrganized() }
-    catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return }
+    catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : ORGANIZED_UNREADABLE }); return }
     let catalog: any[]
     try { catalog = await loadCatalog() }
     catch (err) { res.status(503).json({ error: `Catalogue indisponible : ${err instanceof Error ? err.message : err}` }); return }
@@ -595,7 +589,7 @@ router.post('/organized/:serieId/folder', requireAdmin, async (req, res) => {
     const targets   = [...moves.values()]
     const conflicts = targets.filter((to, i) => fs.existsSync(to) || targets.indexOf(to) !== i)
     if (conflicts.length > 0) {
-        res.status(409).json({ error: `${conflicts.length} fichier(s) existent déjà dans « ${path.basename(expected)} »`, conflicts: conflicts.slice(0, 10) }); return
+        res.status(409).json({ error: `${conflicts.length} fichier(s) existe(nt) déjà dans « ${path.basename(expected)} »`, conflicts: conflicts.slice(0, 10) }); return
     }
 
     const done = new Map<string, string>()
@@ -616,19 +610,19 @@ router.post('/organized/:serieId/folder', requireAdmin, async (req, res) => {
     let updated = 0
     try { updateOrganized(data => { updated = retargetEntries(data, done); return updated > 0 }) }
     catch (err) {
-        logger.error('api', `Renommage dossier série ${serieId} : fichiers déplacés mais suivi non mis à jour : ${err instanceof Error ? err.message : err}`)
-        res.status(500).json({ error: 'Fichiers déplacés mais suivi non mis à jour, lancez un scan de la médiathèque' }); return
+        logger.error('api', `Renommage du dossier de la série ${serieId} : fichiers déplacés mais suivi non mis à jour (${err instanceof Error ? err.message : err})`)
+        res.status(500).json({ error: 'Fichiers déplacés mais suivi non mis à jour, lancez une analyse de la médiathèque' }); return
     }
-    const label = `"${sources.map(s => path.basename(s)).join('", "')}" → "${path.basename(expected)}"`
+    const label = `« ${sources.map(s => path.basename(s)).join(' », « ')} » en « ${path.basename(expected)} »`
     if (failure) {
-        logger.error('api', `Renommage dossier ${label} interrompu après ${done.size} fichier(s) : ${failure}`)
-        res.status(500).json({ error: `Interrompu après ${done.size} fichier(s) : ${failure}`, moved: done.size, updated }); return
+        logger.error('api', `Renommage du dossier ${label} interrompu après ${done.size} fichier(s) : ${failure}`)
+        res.status(500).json({ error: `Déplacement interrompu après ${done.size} fichier(s) : ${failure}`, moved: done.size, updated }); return
     }
-    logger.info('api', `Dossier série renommé : ${label} (${done.size} fichier(s), ${updated} entrée(s))`)
+    logger.info('api', `Dossier de série renommé : ${label} (${done.size} fichier(s), ${updated} entrée(s))`)
     res.json({ ok: true, moved: done.size, updated })
 })
 
-// ── Rename en masse ────────────────────────────────────────────
+// ── Renommage groupé ───────────────────────────────────────────
 router.post('/rename-all', requireAdmin, async (req, res) => {
     const { serie_id, serie_ids } = req.body
     const onlyIds = Array.isArray(serie_ids) ? new Set(serie_ids.map(Number)) : serie_id ? new Set([Number(serie_id)]) : null
@@ -636,7 +630,7 @@ router.post('/rename-all', requireAdmin, async (req, res) => {
     const seriesData = await loadCatalog()
     let organized: Organized
     try { organized = readOrganized() }
-    catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : 'organized.json illisible' }); return }
+    catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : ORGANIZED_UNREADABLE }); return }
     const done: number[] = []
     const errors: { episode_id: number; error: string }[] = []
     for (const sd of seriesData) {
@@ -655,23 +649,23 @@ router.post('/rename-all', requireAdmin, async (req, res) => {
                 const newPath = path.join(path.dirname(oldPath), expectedName)
                 try {
                     if (!fs.existsSync(oldPath)) {
-                        const msg = `Fichier introuvable : "${oldPath}"`
-                        logger.error('api', `Rename masse ep ${ep.id} — ${msg}`)
+                        const msg = `Fichier introuvable : « ${oldPath} »`
+                        logger.error('api', `Renommage groupé, épisode ${ep.id} : ${msg}`)
                         errors.push({ episode_id: ep.id, error: msg }); continue
                     }
                     if (fs.existsSync(newPath)) {
-                        const msg = `Fichier existant : "${expectedName}"`
-                        logger.warn('api', `Rename masse ep ${ep.id} — ${msg}`)
+                        const msg = `Un fichier nommé « ${expectedName} » existe déjà`
+                        logger.warn('api', `Renommage groupé, épisode ${ep.id} : ${msg}`)
                         errors.push({ episode_id: ep.id, error: msg }); continue
                     }
                     fs.renameSync(oldPath, newPath)
                     organized[orgHash][String(ep.id)] = { ...orgEntry, dest_filename: expectedName, dest_path: newPath, at: new Date().toISOString() }
                     retargetEntries(organized, new Map([[oldPath, newPath]]))
                     done.push(ep.id)
-                    logger.info('api', `Rename masse : "${currentName}" → "${expectedName}"`)
+                    logger.info('api', `Renommage : « ${currentName} » en « ${expectedName} »`)
                 } catch (err) {
-                    const msg = err instanceof Error ? err.message : 'Erreur inconnue'
-                    logger.error('api', `Rename masse ep ${ep.id} — exception : ${msg}`)
+                    const msg = err instanceof Error ? err.message : UNEXPECTED_ERROR
+                    logger.error('api', `Échec du renommage de l'épisode ${ep.id} : ${msg}`)
                     errors.push({ episode_id: ep.id, error: msg })
                 }
             }
@@ -681,11 +675,11 @@ router.post('/rename-all', requireAdmin, async (req, res) => {
     res.json({ ok: true, done: done.length, errors })
 })
 
-// ── Purge NFO / images des dossiers série ─────────────────────
+// ── Purge des NFO et images ───────────────────────────────────
 router.post('/purge-nfo', requireAuth, (req, res) => {
     const { mediaPath } = readSettings()
     if (!mediaPath || !fs.existsSync(mediaPath)) {
-        res.status(400).json({ error: 'Chemin médiathèque non configuré ou introuvable' }); return
+        res.status(400).json({ error: 'Chemin de la médiathèque non configuré ou introuvable' }); return
     }
 
     const NFO_EXTS = new Set(['.nfo', '.png', '.jpg', '.jpeg', '.tbn', '.xml'])
@@ -703,10 +697,10 @@ router.post('/purge-nfo', requireAuth, (req, res) => {
                 try {
                     fs.unlinkSync(full)
                     deleted++
-                    logger.debug('api', `Purge NFO : supprimé "${full}"`)
+                    logger.debug('api', `Purge NFO : « ${full} » supprimé`)
                 } catch (err) {
-                    const msg = err instanceof Error ? err.message : 'Erreur inconnue'
-                    logger.error('api', `Purge NFO : impossible de supprimer "${full}" : ${msg}`)
+                    const msg = err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux'
+                    logger.error('api', `Purge NFO : impossible de supprimer « ${full} » : ${msg}`)
                     errors.push(full)
                 }
             }
@@ -714,7 +708,7 @@ router.post('/purge-nfo', requireAuth, (req, res) => {
     }
 
     walk(mediaPath)
-    logger.info('api', `Purge NFO — ${deleted} fichier(s) supprimé(s)${errors.length > 0 ? `, ${errors.length} erreur(s)` : ''}`)
+    logger.info('api', `Purge NFO : ${deleted} fichier(s) supprimé(s)${errors.length > 0 ? `, ${errors.length} erreur(s)` : ''}`)
     res.json({ ok: true, deleted, errors })
 })
 

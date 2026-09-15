@@ -8,14 +8,12 @@
       </button>
     </Teleport>
 
-    <!-- Chargement -->
     <div v-if="!loaded" class="flex items-center justify-center gap-2 py-16 text-muted text-body">
       <div class="w-4 h-4 border border-border border-t-accent rounded-full animate-spin" />
     </div>
 
     <template v-else>
 
-      <!-- Données manquantes -->
       <div v-if="status.empty" class="rounded-card border border-accent/30 bg-accent/5 px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
         <div class="flex items-start gap-3.5">
           <TriangleAlert :size="18" :stroke-width="1.75" class="text-accent shrink-0 mt-0.5" />
@@ -23,17 +21,16 @@
             <p class="card-title text-accent">Données manquantes</p>
             <p class="text-meta text-secondary">
               {{ status.exists ? 'Le catalogue est vide.' : 'Aucun catalogue trouvé.' }}
-              Téléchargez les données pour utiliser FanKarr.
+              Synchronisez le catalogue pour utiliser FanKarr.
             </p>
           </div>
         </div>
         <button @click="update" :disabled="updating" class="btn-primary">
-          {{ updating ? 'Téléchargement…' : 'Télécharger' }}
+          {{ updating ? 'Synchronisation…' : 'Synchroniser' }}
         </button>
       </div>
 
-      <!-- Sources -->
-      <SettingsSection title="Sources" description="Le scraper sert de source principale ; l’API Fankai prend le relais pour ce qui lui manque.">
+      <SettingsSection title="Sources" description="Les séries et les torrents viennent du scraper GitHub. L'API Fankai complète les séries qui n'y figurent pas encore.">
         <div class="flex items-center gap-5 flex-wrap sm:flex-nowrap">
           <div class="flex-1 min-w-0 flex flex-col gap-[3px]">
             <span class="flex items-center gap-2.5 text-sm font-medium text-primary">
@@ -41,36 +38,35 @@
               <span class="pill h-5 px-[9px] text-[11px]" :class="status.empty ? 'pill-err' : 'pill-ok'">{{ status.empty ? 'Vide' : 'Chargé' }}</span>
             </span>
             <span class="text-meta text-muted">
-              {{ status.empty ? 'Aucune donnée chargée' : `${status.count} séries disponibles` }}<template v-if="status.syncedAt"> · synchronisé {{ formatRelative(status.syncedAt) }}</template>
+              {{ status.empty ? 'Aucune donnée chargée' : plural(status.count, 'série disponible', 'séries disponibles') }}<template v-if="status.syncedAt"> · synchronisé {{ formatRelative(status.syncedAt) }}</template>
             </span>
           </div>
-          <span class="text-meta text-muted shrink-0">Cache d’une heure</span>
+          <span class="text-meta text-muted shrink-0">Données gardées en cache 1 h</span>
         </div>
         <div class="h-px bg-hover" />
         <div class="flex items-center gap-5 flex-wrap sm:flex-nowrap">
           <div class="flex-1 min-w-0 flex flex-col gap-[3px]">
             <span class="text-sm font-medium text-primary">API Fankai</span>
             <span class="text-meta text-muted">
-              <template v-if="apiOnlyCount > 0">{{ apiOnlyCount }} série{{ apiOnlyCount > 1 ? 's' : '' }} au catalogue sans données du scraper : fiches et images lues depuis l’API, sans torrents.</template>
-              <template v-else>Titres à jour et séries pas encore scrapées, lues depuis l’API.</template>
+              <template v-if="apiOnlyCount > 0">{{ plural(apiOnlyCount, 'série vient', 'séries viennent') }} uniquement de l'API : fiche et images, mais pas de torrents.</template>
+              <template v-else>Fournit les titres à jour et les séries absentes du scraper.</template>
             </span>
           </div>
         </div>
       </SettingsSection>
 
-      <!-- Surveillance RSS -->
-      <SettingsSection title="Surveillance RSS" description="Les nouveaux épisodes des séries surveillées sont envoyés au client sans rien demander. Vérification automatique toutes les 6 heures.">
+      <SettingsSection title="Surveillance RSS" description="Les nouveaux épisodes des séries surveillées sont envoyés automatiquement au client. Vérification toutes les 6 heures.">
         <template #actions>
           <button @click="runRss" :disabled="runningRss || watched.length === 0" class="btn-secondary btn-sm pointer-fine:h-[34px]">
             <Loader v-if="runningRss" :size="14" class="animate-spin" />
             <RefreshCw v-else :size="14" />
-            {{ runningRss ? 'Synchro…' : 'Lancer une synchro' }}
+            {{ runningRss ? 'Vérification…' : 'Vérifier maintenant' }}
           </button>
         </template>
 
         <div class="flex items-baseline gap-[9px]">
           <span class="font-display text-[30px] font-bold text-primary">{{ watched.length }}</span>
-          <span class="text-meta text-muted">série{{ watched.length > 1 ? 's' : '' }} surveillée{{ watched.length > 1 ? 's' : '' }}</span>
+          <span class="text-meta text-muted">{{ watched.length > 1 ? 'séries surveillées' : 'série surveillée' }}</span>
         </div>
         <div v-if="watched.length > 0" class="flex items-center gap-2 flex-wrap">
           <RouterLink
@@ -79,17 +75,16 @@
               class="h-[26px] px-2.5 rounded-full bg-hover text-meta text-secondary hover:text-primary transition-colors flex items-center"
           >{{ s.serieName }}</RouterLink>
           <button v-if="watched.length > visibleWatched.length" @click="showAllWatched = true" class="text-meta text-muted hover:text-primary">
-            + {{ watched.length - visibleWatched.length }} autre{{ watched.length - visibleWatched.length > 1 ? 's' : '' }}
+            + {{ plural(watched.length - visibleWatched.length, 'autre') }}
           </button>
         </div>
-        <p v-else class="text-meta text-muted">Activez la surveillance depuis une fiche série ou par la sélection de la médiathèque.</p>
+        <p v-else class="text-meta text-muted">Activez la surveillance depuis une fiche série ou en sélectionnant plusieurs séries dans la médiathèque.</p>
       </SettingsSection>
 
-      <!-- Surveillances orphelines -->
       <SettingsSection
           v-if="syncOrphans.length > 0"
-          :title="`Surveillances orphelines · ${syncOrphans.length}`"
-          description="Séries surveillées qui n'existent plus dans le catalogue (supprimées ou recréées sous un autre nom). Réactivez la surveillance sur la nouvelle fiche si besoin."
+          :title="`Séries surveillées disparues du catalogue · ${syncOrphans.length}`"
+          description="Ces séries n'existent plus dans le catalogue (supprimées ou recréées sous un autre nom). Réactivez la surveillance sur la nouvelle fiche si besoin."
       >
         <div class="flex flex-col rounded-field bg-main border border-border-light">
           <div v-for="s in syncOrphans" :key="s.serieId" class="flex items-center gap-3 px-3.5 py-2 border-b border-hover last:border-b-0">
@@ -111,7 +106,7 @@ import { RouterLink } from 'vue-router'
 import { Loader, RefreshCw, TriangleAlert } from 'lucide-vue-next'
 import { useToast } from '@/composables/useToast'
 import { useSeriesStore } from '@/stores/series'
-import { formatRelative } from '@/utils/format'
+import { formatRelative, plural } from '@/utils/format'
 import SettingsSection from '@/components/settings/SettingsSection.vue'
 
 const { add: toast } = useToast()
@@ -153,10 +148,10 @@ async function fetchSyncOrphans() {
 async function removeSyncOrphan(serieId: number) {
   try {
     const res = await fetch(`/api/rss-sync/${serieId}`, { method: 'DELETE', credentials: 'include' })
-    if (!res.ok) { toast('Erreur lors du retrait de la surveillance', 'error'); return }
+    if (!res.ok) { toast('Impossible de retirer la surveillance', 'error'); return }
     syncOrphans.value = syncOrphans.value.filter(s => s.serieId !== serieId)
     watched.value     = watched.value.filter(s => s.serieId !== serieId)
-    toast('Surveillance retirée ✓', 'success')
+    toast('Surveillance retirée', 'success')
   } catch {
     toast('Impossible de contacter le serveur', 'error')
   }
@@ -167,8 +162,8 @@ async function runRss() {
   try {
     const res  = await fetch('/api/rss-sync/run', { method: 'POST', credentials: 'include' })
     const data = await res.json()
-    if (!res.ok) { toast(data.error ?? 'Erreur lors de la synchro', 'error'); return }
-    toast(data.sent > 0 ? `${data.sent} épisode(s) envoyé(s) au client ✓` : 'Aucun nouvel épisode', data.errors > 0 ? 'error' : 'success')
+    if (!res.ok) { toast(data.error ?? 'Impossible de vérifier les séries surveillées', 'error'); return }
+    toast(data.sent > 0 ? `${plural(data.sent, 'épisode envoyé', 'épisodes envoyés')} au client` : 'Aucun nouvel épisode', data.errors > 0 ? 'error' : 'success')
   } catch {
     toast('Impossible de contacter le serveur', 'error')
   } finally {
@@ -183,11 +178,11 @@ async function update() {
     if (res.ok) {
       const { count } = await res.json()
       status.value = { exists: true, count, empty: count === 0, syncedAt: new Date().toISOString() }
-      toast(`${count} séries chargées ✓`, 'success')
+      toast(`Catalogue synchronisé : ${plural(count, 'série')}`, 'success')
       fetchSyncOrphans()
     } else {
       const { error } = await res.json()
-      toast(error ?? 'Erreur lors de la mise à jour', 'error')
+      toast(error ?? 'Impossible de synchroniser le catalogue', 'error')
     }
   } catch {
     toast('Impossible de contacter le serveur', 'error')

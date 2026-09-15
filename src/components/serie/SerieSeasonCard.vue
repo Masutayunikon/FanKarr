@@ -1,6 +1,5 @@
 <template>
   <section class="bg-card rounded-card">
-    <!-- En-tête de saison -->
     <div class="flex items-center gap-3.5 px-4 sm:px-5 py-3.5 flex-wrap" :class="{ 'border-b border-hover': !collapsed }">
       <button
           class="w-8 h-8 pointer-coarse:w-10 pointer-coarse:h-10 -ml-1.5 rounded-full flex items-center justify-center text-muted hover:text-primary hover:bg-hover transition-colors shrink-0"
@@ -14,13 +13,13 @@
       <div class="flex-1 min-w-[160px] flex flex-col gap-[3px] cursor-pointer" @click="emit('toggle', season.id)">
         <h2 class="font-display text-[17px] font-bold text-primary">
           {{ season.season_number === 0 ? 'Spéciaux' : `Saison ${season.season_number}` }}
-          <span v-if="season.title && season.title !== `Saison ${season.season_number}`" class="font-sans text-sm font-normal text-muted">— {{ season.title }}</span>
+          <span v-if="season.title && season.title !== `Saison ${season.season_number}`" class="font-sans text-sm font-normal text-muted">· {{ season.title }}</span>
         </h2>
         <p class="text-meta text-muted">{{ seasonMeta }}</p>
       </div>
 
       <div class="flex items-center gap-2.5 flex-wrap">
-        <!-- ── Mode demande ──── -->
+        <!-- ── Mode demande ── -->
         <template v-if="requestMode">
           <span v-if="season.organized_state === 'complete'" class="flex items-center gap-[7px] text-meta text-ok">
             <Check :size="14" :stroke-width="2.5" /> Saison complète
@@ -34,11 +33,11 @@
               class="btn-secondary btn-sm"
           >
             <Clock3 :size="14" :stroke-width="2" />
-            {{ missingCount === season.episodes.length ? 'Demander la saison' : `Demander ${missingCount > 1 ? `les ${missingCount} manquants` : 'le manquant'}` }}
+            {{ missingCount === season.episodes.length ? 'Demander la saison' : missingCount > 1 ? `Demander ${missingCount} épisodes` : "Demander l'épisode manquant" }}
           </button>
         </template>
 
-        <!-- ── Mode téléchargement (admin) ──────── -->
+        <!-- ── Mode téléchargement (admin) ── -->
         <template v-else>
           <span v-if="season.organized_state === 'complete'" class="flex items-center gap-[7px] text-meta text-ok">
             <Check :size="14" :stroke-width="2.5" /> Saison complète
@@ -80,7 +79,6 @@
             </button>
           </template>
 
-          <!-- Pack saison unique -->
           <button
               v-if="season.torrents.length === 1 && season.organized_state !== 'complete'"
               class="btn-secondary btn-sm"
@@ -91,7 +89,6 @@
             {{ seasonBtnLabel }}
           </button>
 
-          <!-- Packs saison multiples -->
           <div v-if="season.torrents.length > 1 && season.organized_state !== 'complete'" class="relative" @click.stop>
             <button class="btn-secondary btn-sm" @click="seasonMenuOpen = !seasonMenuOpen" aria-haspopup="menu" :aria-expanded="seasonMenuOpen">
               <Download :size="14" />
@@ -114,13 +111,12 @@
             </div>
           </div>
 
-          <!-- Désimport de la saison -->
           <button
               v-if="season.organized_count > 0"
               @click.stop="openUnimportSeasonModal"
               class="w-8 h-8 pointer-coarse:w-10 pointer-coarse:h-10 rounded-full flex items-center justify-center text-muted hover:text-err hover:bg-err/10 transition-colors"
-              title="Désimporter la saison"
-              aria-label="Désimporter la saison"
+              title="Retirer la saison de la médiathèque"
+              aria-label="Retirer la saison de la médiathèque"
           >
             <Trash2 :size="15" />
           </button>
@@ -128,7 +124,6 @@
       </div>
     </div>
 
-    <!-- Épisodes -->
     <div v-if="!collapsed">
       <div
           v-for="ep in season.episodes"
@@ -136,7 +131,6 @@
           class="px-4 sm:px-5 py-2 border-t border-hover first:border-t-0 hover:bg-hover/30 transition-colors last:rounded-b-card"
       >
         <div class="flex items-center gap-3 sm:gap-3.5">
-          <!-- Vignette -->
           <div
               class="shrink-0 w-[64px] h-[36px] sm:w-[88px] sm:h-[50px] rounded-[4px] overflow-hidden bg-main flex items-center justify-center text-muted text-xs"
               :class="{ 'opacity-50': !requestMode && !ep.available && !ep.organized }"
@@ -145,7 +139,6 @@
             <span v-else>{{ season.season_number === 0 ? 'SP' : `E${ep.episode_number}` }}</span>
           </div>
 
-          <!-- Infos épisode -->
           <div class="flex-1 min-w-0 flex flex-col gap-[3px]">
             <div class="flex items-center gap-2.5 min-w-0">
               <span class="w-[26px] shrink-0 text-[11.5px] text-muted tabular-nums max-sm:hidden">
@@ -157,13 +150,13 @@
               <span
                   v-if="ep.fankai === false || ep.torrent?.fankai === false"
                   class="shrink-0 h-[19px] px-[7px] rounded-[4px] border border-border text-[10.5px] font-bold text-muted flex items-center"
-                  title="Ce fichier ne provient pas du catalogue Fan-Kai officiel"
+                  title="Ce fichier n'est pas une version officielle Fankai"
               >Hors Fankai</span>
             </div>
             <span v-if="episodeMeta(ep)" class="sm:pl-9 text-meta text-muted truncate" :title="episodeMeta(ep)">{{ episodeMeta(ep) }}</span>
           </div>
 
-          <!-- ── État et actions, mode demande ─────────────────── -->
+          <!-- ── État et actions, mode demande ── -->
           <template v-if="requestMode">
             <span v-if="ep.organized" class="shrink-0 flex items-center gap-[7px] text-meta text-ok">
               <Check :size="14" :stroke-width="2.5" /> <span class="max-sm:sr-only">Disponible</span>
@@ -177,7 +170,7 @@
                 <ChevronDown v-if="ep.torrents && ep.torrents.length > 1" :size="12" :stroke-width="2.5" />
               </button>
               <div v-if="epOptionsOpen === ep.id && ep.torrents && ep.torrents.length > 1" class="menu absolute right-0 bottom-full mb-1.5 w-80 max-w-[90vw] z-20" role="menu">
-                <p class="tag-label px-3 pt-1.5 pb-1">Choisir le torrent</p>
+                <p class="tag-label px-3 pt-1.5 pb-1">Choisir la version</p>
                 <button
                     v-for="(t, i) in (ep.torrents as any[])"
                     :key="i"
@@ -193,7 +186,7 @@
             </div>
           </template>
 
-          <!-- ── État et actions, admin ────────────────────────── -->
+          <!-- ── État et actions, admin ── -->
           <template v-else>
             <template v-if="ep.organized">
               <button
@@ -246,14 +239,13 @@
                 @click.stop="openUnimportModal(ep, season)"
                 :disabled="epActionLoading[ep.id]"
                 class="w-[30px] h-[30px] pointer-coarse:w-10 pointer-coarse:h-10 shrink-0 rounded-full flex items-center justify-center text-muted hover:text-err hover:bg-err/10 transition-colors"
-                title="Désimporter l'épisode"
-                aria-label="Désimporter l'épisode"
+                title="Retirer l'épisode de la médiathèque"
+                aria-label="Retirer l'épisode de la médiathèque"
             >
               <Trash2 :size="14" />
             </button>
           </template>
 
-          <!-- Synopsis -->
           <button
               v-if="ep.plot"
               @click.stop="togglePlot(ep.id)"
@@ -266,12 +258,10 @@
           </button>
         </div>
 
-        <!-- Progression de l'épisode -->
         <div v-if="epProgress(ep) && epProgress(ep)!.progress < 100" class="progress mt-2 sm:ml-[138px]">
           <div class="progress-bar" :style="{ width: `${epProgress(ep)!.progress}%` }" />
         </div>
 
-        <!-- Synopsis -->
         <p v-if="plotOpen === ep.id && ep.plot" class="mt-2 mb-1 sm:ml-[138px] text-meta text-secondary leading-relaxed whitespace-pre-line max-w-[760px]">
           {{ parseEpChap(ep.plot).cleanPlot }}
         </p>
@@ -279,13 +269,12 @@
     </div>
   </section>
 
-  <!-- Modal désimport épisode -->
   <Teleport to="body">
     <div v-if="unimportModal" class="modal-backdrop" @click.self="unimportModal = false">
       <div class="modal max-w-sm" role="dialog" aria-modal="true" aria-labelledby="unimport-ep-title">
         <div class="flex flex-col gap-1">
-          <h3 id="unimport-ep-title" class="card-title">Désimporter l'épisode</h3>
-          <p class="text-meta text-muted">L'épisode sera retiré de la bibliothèque.</p>
+          <h3 id="unimport-ep-title" class="card-title">Retirer l'épisode de la médiathèque</h3>
+          <p class="text-meta text-muted">L'épisode sera retiré de la médiathèque. Le fichier reste sur le disque, sauf si vous cochez la case.</p>
         </div>
         <label class="flex items-center gap-3 cursor-pointer select-none">
           <input type="checkbox" v-model="deleteFileOnUnimport" class="w-4 h-4 rounded" />
@@ -294,20 +283,19 @@
         <div class="flex gap-2.5 justify-end">
           <button @click="unimportModal = false" class="btn-ghost">Annuler</button>
           <button @click="confirmUnimport" class="btn-danger">
-            {{ deleteFileOnUnimport ? 'Supprimer' : 'Désimporter' }}
+            {{ deleteFileOnUnimport ? 'Supprimer' : 'Retirer' }}
           </button>
         </div>
       </div>
     </div>
   </Teleport>
 
-  <!-- Modal désimport saison -->
   <Teleport to="body">
     <div v-if="unimportSeasonModal" class="modal-backdrop" @click.self="unimportSeasonModal = false">
       <div class="modal max-w-sm" role="dialog" aria-modal="true" aria-labelledby="unimport-season-title">
         <div class="flex flex-col gap-1">
-          <h3 id="unimport-season-title" class="card-title">Désimporter la saison</h3>
-          <p class="text-meta text-muted">Tous les épisodes importés de cette saison seront retirés de la bibliothèque.</p>
+          <h3 id="unimport-season-title" class="card-title">Retirer la saison de la médiathèque</h3>
+          <p class="text-meta text-muted">Les épisodes importés de cette saison seront retirés de la médiathèque. Les fichiers restent sur le disque, sauf si vous cochez la case.</p>
         </div>
         <label class="flex items-center gap-3 cursor-pointer select-none">
           <input type="checkbox" v-model="deleteSeasonFiles" class="w-4 h-4 rounded" />
@@ -316,7 +304,7 @@
         <div class="flex gap-2.5 justify-end">
           <button @click="unimportSeasonModal = false" class="btn-ghost">Annuler</button>
           <button @click="confirmUnimportSeason" class="btn-danger">
-            {{ deleteSeasonFiles ? 'Supprimer' : 'Désimporter' }}
+            {{ deleteSeasonFiles ? 'Supprimer' : 'Retirer' }}
           </button>
         </div>
       </div>
@@ -327,6 +315,7 @@
 <script setup lang="ts">
 import { ref, computed, h, onMounted, onUnmounted } from 'vue'
 import { ChevronDown, ChevronUp, Clock3, Download, Loader, Check, PencilLine, Plus, X, Trash2 } from 'lucide-vue-next'
+import { plural } from '@/utils/format'
 
 interface ActiveTorrent { hash: string; progress: number; state: string; files?: { index: number; progress: number; priority?: number }[] }
 
@@ -341,9 +330,9 @@ const props = defineProps<{
   downloadingSeason ?: boolean
   nfoSupport        ?: boolean
   requestMode       ?: boolean   // true = boutons demande au lieu de téléchargement
-  requestedSeasons  ?: number[]  // saisons déjà demandées par cet user pour cette série
-  requestedEpisodes ?: number[]  // IDs d'épisodes déjà demandés par cet user pour cette série
-  requestStatus     ?: string    // statut de la demande en cours de cet user
+  requestedSeasons  ?: number[]  // saisons déjà demandées par l'utilisateur pour cette série
+  requestedEpisodes ?: number[]  // IDs d'épisodes déjà demandés par l'utilisateur pour cette série
+  requestStatus     ?: string    // statut de la demande en cours de l'utilisateur
 }>()
 
 const emit = defineEmits<{
@@ -362,7 +351,6 @@ const isSeasonRequested = computed(() =>
   props.requestedSeasons?.includes(props.season.season_number) ?? false
 )
 
-/** Un épisode est "demandé" si sa saison l'est, ou si son ID est dans requestedEpisodes */
 function isEpisodeRequested(episodeId: number): boolean {
   return isSeasonRequested.value || (props.requestedEpisodes?.includes(episodeId) ?? false)
 }
@@ -378,7 +366,7 @@ const deleteSeasonFiles  = ref(false)
 const downloadIcon = h(Download, { size: 14, class: 'shrink-0' })
 const checkIcon    = h(Check, { size: 14, class: 'shrink-0' })
 
-// ── Helpers hash / progress ────────────────────────────────────
+// ── Hash et progression ──
 function extractHash(torrent: any): string | null {
   // Préférer l'infohash direct (présent même si le magnet est absent)
   if (torrent?.infohash) return torrent.infohash.toLowerCase()
@@ -393,16 +381,14 @@ function torrentProgress(hash: string | null | undefined): ActiveTorrent | null 
 function isDownloading(key: string) { return props.downloading.includes(key) }
 function isDownloaded(key: string)  { return props.downloaded.includes(key) }
 function isAlreadyQueued(torrent: any): boolean {
-  // Pour un fichier dans un pack (file_index défini), le hash seul ne suffit pas :
-  // le pack peut être actif sans que CE fichier spécifique soit en téléchargement.
-  // On s'appuie uniquement sur downloading/downloaded pour ces cas.
+  // Fichier d'un pack : le hash ne suffit pas, on se fie à downloading/downloaded
   if (torrent?.file_index != null) return false
   const hash = extractHash(torrent)
   if (!hash) return false
   return props.activeTorrents.some(t => t.hash.toLowerCase() === hash.toLowerCase())
 }
 
-// ── Computed saison ────────────────────────────────────────────
+// ── État de la saison ──
 const availableCount = computed(() => props.season.episodes.filter((e: any) => e.available).length)
 const hasDownloadable = computed(() =>
     props.season.episodes.some((ep: any) =>
@@ -414,8 +400,8 @@ const canDownloadSeason = computed(() =>
 )
 const seasonBtnLabel = computed(() => {
   if (props.season.organized_state === 'complete') return 'Importée'
-  if (isAlreadyQueued(props.season.torrent)) return 'Déjà ajoutée'
-  if (isDownloaded(`season-${props.season.id}`)) return 'Envoyée'
+  if (isAlreadyQueued(props.season.torrent)) return 'Déjà dans le client'
+  if (isDownloaded(`season-${props.season.id}`)) return 'Envoyée au client'
   return 'Télécharger la saison'
 })
 const seasonBtnIcon = computed(() => {
@@ -425,7 +411,7 @@ const seasonBtnIcon = computed(() => {
   return h(Download, { size: 14 })
 })
 
-// ── Résumés de saison ──────────────────────────────────────────
+// ── Résumés de saison ──
 const queuedCount = computed(() => props.season.episodes.filter((ep: any) => !ep.organized && epState(ep) === 'loading').length)
 const missingCount = computed(() => props.season.episodes.filter((ep: any) => !ep.organized).length)
 const downloadableCount = computed(() =>
@@ -433,36 +419,35 @@ const downloadableCount = computed(() =>
 )
 const downloadableLabel = computed(() => {
   if (downloadableCount.value === props.season.episodes.length) return 'la saison'
-  return downloadableCount.value > 1 ? `les ${downloadableCount.value} manquants` : 'le manquant'
+  return downloadableCount.value > 1 ? `${downloadableCount.value} épisodes` : "l'épisode"
 })
 
 // Admin : « 12 épisodes · 12 disponibles · 5 importés · 1 en file » ; invité : ce qui est déjà visible
 const seasonMeta = computed(() => {
   const total = props.season.episodes.length
-  const parts = [`${total} épisode${total > 1 ? 's' : ''}`]
+  const parts = [plural(total, 'épisode')]
   if (props.requestMode) {
     const ready = props.season.organized_count ?? 0
-    parts.push(ready === 0 ? 'aucun disponible' : ready >= total ? 'tous disponibles' : `${ready} disponible${ready > 1 ? 's' : ''}`)
+    parts.push(ready === 0 ? 'aucun disponible' : ready >= total ? 'tous disponibles' : plural(ready, 'disponible'))
     return parts.join(' · ')
   }
-  if (availableCount.value > 0) parts.push(`${availableCount.value} disponible${availableCount.value > 1 ? 's' : ''}`)
-  if (props.season.organized_count > 0) parts.push(`${props.season.organized_count} importé${props.season.organized_count > 1 ? 's' : ''}`)
+  if (availableCount.value > 0) parts.push(plural(availableCount.value, 'disponible'))
+  if (props.season.organized_count > 0) parts.push(plural(props.season.organized_count, 'importé'))
   if (queuedCount.value > 0) parts.push(`${queuedCount.value} en file`)
   return parts.join(' · ')
 })
 
-// Date · durée · langue · sources · plages d'épisodes et de chapitres, en texte
+// Date · durée · langue · versions · plages d'épisodes et de chapitres, en texte
 function episodeMeta(ep: any): string {
   const { episodes, chapters } = parseEpChap(ep.plot)
-  const sources = ep.torrents?.length > 1 ? `${ep.torrents.length} sources` : ''
+  const sources = ep.torrents?.length > 1 ? `${ep.torrents.length} versions` : ''
   return [ep.aired && formatDate(ep.aired), ep.duration && formatDuration(ep.duration), epLang(ep), sources, episodes, chapters]
     .filter(Boolean).join(' · ')
 }
 
-// ── État épisode ───────────────────────────────────────────────
+// ── État de l'épisode ──
 
-// Vérifie si n'importe quelle clé de téléchargement pour cet épisode est marquée done/downloading
-// (couvre ep-{id} pour torrent unique ET ep-{id}-{i} pour multi-torrent)
+// Clés ep-{id} (torrent unique) et ep-{id}-{i} (plusieurs torrents)
 function epAnyDownloaded(ep: any): boolean {
   if (isDownloaded(`ep-${ep.id}`)) return true
   const count = ep.torrents?.length ?? 0
@@ -495,15 +480,12 @@ function epProgress(ep: any): ActiveTorrent | null {
       const sessionDl = isDownloaded(key0) || isDownloaded(keyI)
       if (active.files && active.files.length > 0) {
         const file = active.files.find(f => f.index === t.file_index)
-        // Avec données par fichier on se fie à la progression réelle du fichier précis.
-        // Si le fichier est à 100% sans session active → déjà téléchargé hors session
-        // (ex : désimporté puis re-consulté) → ne pas afficher le spinner.
+        // Fichier à 100 % hors session (ex. retiré puis revu) : pas d'indicateur
         if (file != null && file.priority !== 0 && (sessionDl || file.progress < 1)) {
           return { ...active, progress: Math.round(file.progress * 100) }
         }
         if (!sessionDl) continue
       } else {
-        // Pas de données par fichier : ignorer si pas de session active
         if (!sessionDl) continue
         return { ...active, progress: active.state === 'seeding' ? 100 : active.progress }
       }
@@ -517,11 +499,9 @@ function epProgress(ep: any): ActiveTorrent | null {
 function handleEpBtnClick(ep: any) {
   if (ep.organized) return
   if (ep.torrents && ep.torrents.length > 1) {
-    // Plusieurs options → toggle dropdown
     epOptionsOpen.value = epOptionsOpen.value === ep.id ? null : ep.id
     return
   }
-  // Option unique → téléchargement direct
   if (ep.torrent && !isAlreadyQueued(ep.torrent)) {
     emit('download', `ep-${ep.id}`, ep.torrent.torrent_url, ep.torrent.magnet, ep.torrent.file_index ?? null, ep.torrent.file_path ?? null, ep.torrent.infohash ?? null)
   }
@@ -530,25 +510,22 @@ function handleEpBtnClick(ep: any) {
 function handleEpRequestClick(ep: any) {
   if (isEpisodeRequested(ep.id)) return
   if (ep.torrents && ep.torrents.length > 1) {
-    // Plusieurs torrents → afficher le picker
     epOptionsOpen.value = epOptionsOpen.value === ep.id ? null : ep.id
     return
   }
-  // Torrent unique ou aucun → émettre directement
   emit('requestEpisode', props.season.season_number, ep.id, ep.torrent ?? undefined)
 }
 
 function epState(ep: any): 'idle' | 'loading' | 'done' | 'unavailable' {
-  // Vert uniquement quand importé dans la bibliothèque
   if (ep.organized) return 'done'
-  // Spinner si : envoyé au client, déjà en cours dans le client, ou fichier en cours/terminé
   if (epAnyDownloaded(ep) || epAnyDownloading(ep) || isAlreadyQueued(ep.torrent)) return 'loading'
   const prog = epProgress(ep)
   if (prog) return 'loading'
   if (!ep.torrent || !ep.available) return 'unavailable'
   return 'idle'
 }
-// ── Rename helpers ─────────────────────────────────────────────
+
+// ── Renommage ──
 function epExpectedName(ep: any): string {
   const entry = props.organizedByEpisode[String(ep.id)]
   if (!entry) return ''
@@ -556,9 +533,6 @@ function epExpectedName(ep: any): string {
   if (props.nfoSupport) {
     return ep.nfo_filename ? ep.nfo_filename.replace(/\.[^.]+$/, '') + srcExt : entry.dest_filename
   } else {
-    // Préférer le formatted_name du torrent qui correspond au fichier importé.
-    // On essaie de matcher par hash (si l'entrée organized l'expose), sinon on
-    // cherche le premier torrent qui a un formatted_name.
     const usedHash = entry.hash?.toLowerCase() ?? null
     const matchedName = usedHash
       ? (ep.torrents ?? []).find((t: any) => t.infohash === usedHash)?.formatted_name
@@ -575,15 +549,10 @@ function epNeedsRename(ep: any): boolean {
   return entry.needs_rename === true
 }
 
-// ── Extraction épisodes / chapitres depuis le synopsis ─────────
-// Cache léger pour éviter de recalculer pour chaque accès template (badges + synopsis)
+// ── Épisodes et chapitres cités dans le synopsis ──
+// Cache : le synopsis est analysé plusieurs fois par rendu
 const _epChapCache = new Map<string | null | undefined, ReturnType<typeof _parseEpChap>>()
-/**
- * Extrait les plages d'épisodes et chapitres depuis un synopsis.
- * Ex: "...épisodes 628 à 634 soit les chapitres 700 à 706."
- * → { episodes: "628–634", chapters: "700–706", cleanPlot: "..." }
- * La phrase (ou ligne) contenant ces infos est retirée du synopsis affiché.
- */
+// Extrait les plages d'épisodes et de chapitres, et retire du synopsis les lignes qui les citent
 function _parseEpChap(plot: string | null | undefined): {
   episodes: string | null
   season: string | null
@@ -637,7 +606,7 @@ function parseEpChap(plot: string | null | undefined) {
   return result
 }
 
-// ── Détection langue ───────────────────────────────────────────
+// ── Langue ──
 function epLang(ep: any): 'MULTI' | 'VOSTFR' | null {
   const sources: string[] = [
     ep.formatted_name ?? '',
@@ -653,9 +622,7 @@ function epLang(ep: any): 'MULTI' | 'VOSTFR' | null {
   return null
 }
 
-// ── Labels de groupe ───────────────────────────────────────────
-// Si tous les torrent_name sont présents ET distincts → on les utilise.
-// Sinon → titre Nyaa brut (raw), plus informatif quand les noms se ressemblent.
+// ── Libellés des versions ──
 function labelFromRaw(raw: string, index: number): string {
   if (!raw) return `Option ${index + 1}`
   return raw.length > 65 ? raw.slice(0, 65) + '…' : raw
@@ -666,18 +633,13 @@ function groupLabels(torrents: any[]): string[] {
   const allPresent = names.every(n => n !== null && String(n).trim() !== '')
   const allUnique  = allPresent && new Set(names).size === names.length
   if (allUnique) return names as string[]
-  // Fallback : titre Nyaa brut
   return torrents.map((t: any, i: number) => labelFromRaw(t.raw ?? '', i))
 }
 
-// Packs parents distincts couvrant cette saison (quand pas de pack saison explicite)
-// Permet le dropdown "Saison ▾" quand une saison est couverte par plusieurs intégrales.
-// Un torrent individuel par épisode (hash unique) n'est PAS un pack → ignoré ici,
-// le bouton "Saison" simple suffira pour lancer tous les épisodes.
+// Packs couvrant ≥ 2 épisodes, proposés si la saison n'a pas de pack dédié
 const uniquePackOptions = computed(() => {
   if (props.season.torrents?.length) return []
 
-  // Compter combien d'épisodes chaque hash couvre
   const hashCount   = new Map<string, number>()
   const hashTorrent = new Map<string, any>()
   for (const ep of props.season.episodes) {
@@ -690,7 +652,6 @@ const uniquePackOptions = computed(() => {
     }
   }
 
-  // Garder uniquement les hash qui couvrent ≥ 2 épisodes (= vrais packs / intégrales)
   const packs = [...hashCount.entries()]
     .filter(([, count]) => count > 1)
     .map(([hash]) => ({ infohash: hash, torrent: hashTorrent.get(hash)! }))

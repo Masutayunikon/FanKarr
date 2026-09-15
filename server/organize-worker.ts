@@ -1,8 +1,3 @@
-/**
- * organize-worker.ts
- * ==================
- * Worker thread dédié à l'organisation des fichiers.
- */
 
 import fs   from 'fs'
 import fsp  from 'fs/promises'
@@ -12,7 +7,7 @@ import { DATA_DIR } from './config.js'
 import { getGitlabTitle } from './gitlab-map.js'
 import { readOrganized } from './lib/organized-store.js'
 
-// ─── Utils log ────────────────────────────────────────────────
+// ─── Journal ──────────────────────────────────────────────────
 function log(msg: string)   { parentPort?.postMessage({ type: 'log', level: 'info',  msg }) }
 function warn(msg: string)  { parentPort?.postMessage({ type: 'log', level: 'warn',  msg }) }
 function error(msg: string) { parentPort?.postMessage({ type: 'log', level: 'error', msg }) }
@@ -33,7 +28,7 @@ export interface OrgEntry {
 // organized.json : Record<hash, Record<episode_id_string, OrgEntry>>
 type Organized = Record<string, Record<string, OrgEntry>>
 
-// ─── Settings ─────────────────────────────────────────────────
+// ─── Réglages ─────────────────────────────────────────────────
 function readSettings(): { mediaPath: string; completePath: string; organizeMode: string; nfoSupport: boolean, englishDirectory: boolean } {
     try {
         const p = path.join(DATA_DIR, 'settings.json')
@@ -42,7 +37,7 @@ function readSettings(): { mediaPath: string; completePath: string; organizeMode
     } catch { return { mediaPath: '', completePath: '', organizeMode: 'hardlink', nfoSupport: false , englishDirectory: false } }
 }
 
-// ─── Organized log ────────────────────────────────────────────
+// ─── Suivi des imports ────────────────────────────────────────
 function markOrganized(hash: string, episodeId: number, entry: OrgEntry) {
     parentPort?.postMessage({ type: 'mark', hash, episodeId, entry })
 }
@@ -51,11 +46,8 @@ function isOrganized(hash: string, episodeId: number): boolean {
     return !!readOrganized()[hash]?.[String(episodeId)]
 }
 
-// ─── Lookup torrent dans les seriesData ───────────────────────
+// ─── Recherche du torrent dans le catalogue ───────────────────
 
-/**
- * Recherche par infohash (méthode principale).
- */
 function findTorrentByHash(hash: string, seriesData: any[]): { torrent: any; serieData: any } | null {
     const h = hash.toLowerCase()
     for (const sd of seriesData) {
@@ -94,11 +86,7 @@ function findTorrentByHash(hash: string, seriesData: any[]): { torrent: any; ser
     return null
 }
 
-/**
- * Fallback quand le hash n'est pas résolu (ex: dbid_X Synology).
- * Cherche par torrent_name (nom réel du dossier torrent) ou title dans le catalogue.
- * Retourne aussi le vrai infohash BT pour que l'import soit correctement indexé.
- */
+/** Hash non résolu (ex. dbid_X Synology) : recherche par torrent_name ou title, renvoie le vrai infohash. */
 function findTorrentByName(
     name      : string,
     seriesData: any[],
@@ -117,7 +105,6 @@ function findTorrentByName(
         }
 
         for (const season of sd.seasons ?? []) {
-            // Pack saison
             for (const t of season.torrents ?? []) {
                 if (!t.infohash) continue
                 if (
@@ -126,7 +113,6 @@ function findTorrentByName(
                 ) return { torrent: { ...t, _season: season }, serieData: sd, infohash: t.infohash.toLowerCase() }
             }
 
-            // Torrent épisode unique
             for (const ep of season.episodes ?? []) {
                 for (const t of ep.torrents ?? []) {
                     if (!t.infohash) continue
@@ -170,7 +156,6 @@ function buildFileMap(
             if (!matchedPath) continue
             const filename = matchedPath.split('/').pop() ?? matchedPath
 
-            // Nommage : priorité aux valeurs du path entry (spécifique au torrent/encoding)
             const rawFmt      = matchedPathObj?.formatted_name    ?? ep.formatted_name
             const rawNfo      = matchedPathObj?.nfo_filename      ?? ep.nfo_filename
             const rawOriginal = matchedPathObj?.original_filename ?? ep.original_filename
@@ -179,7 +164,7 @@ function buildFileMap(
                 : null
 
             if (!nfoSupport && !fmtName) {
-                warn(`formatted_name manquant pour épisode ${ep.id} (S${season.season_number}E${ep.episode_number}) — fallback nfo_filename`)
+                warn(`formatted_name absent pour l'épisode ${ep.id} (S${season.season_number}E${ep.episode_number}) : nom NFO ou nom d'origine utilisé`)
             }
 
             const srcExt = path.extname(filename)
@@ -218,7 +203,7 @@ function isInExcludedFolder(filePath: string[]): boolean {
     return false
 }
 
-// ─── GitLab NFO downloader ────────────────────────────────────
+// ─── Téléchargement des NFO ───────────────────────────────────
 const GITLAB_API      = 'https://gitlab.com/api/v4/projects/ElPouki%2Ffankai_pack/repository'
 const GITLAB_RAW_BASE = 'https://gitlab.com/ElPouki/fankai_pack/-/raw/main/pack'
 
@@ -239,7 +224,7 @@ async function fetchBinary(url: string): Promise<Buffer> {
 async function downloadGitlabFolder(serieTitle: string, destRoot: string): Promise<void> {
     const gitlabTitle = getGitlabTitle(serieTitle)
     const folderPath  = `pack/${gitlabTitle}`
-    log(`Téléchargement NFO/images depuis GitLab pour "${gitlabTitle}"`)
+    log(`Téléchargement des NFO et images depuis GitLab pour « ${gitlabTitle} »`)
 
     let files: any[] = []
     try {
@@ -254,14 +239,14 @@ async function downloadGitlabFolder(serieTitle: string, destRoot: string): Promi
             page++
         }
     } catch (err) {
-        warn(`Dossier GitLab introuvable pour "${gitlabTitle}" : ${err instanceof Error ? err.message : err}`)
+        warn(`Dossier GitLab introuvable pour « ${gitlabTitle} » : ${err instanceof Error ? err.message : err}`)
         return
     }
 
-    if (files.length === 0) { warn(`Aucun fichier NFO trouvé pour "${gitlabTitle}"`); return }
+    if (files.length === 0) { warn(`Aucun fichier NFO trouvé pour « ${gitlabTitle} »`); return }
 
     const fileEntries = files.filter((f: any) => f.type === 'blob')
-    log(`${fileEntries.length} fichiers NFO/images à télécharger pour "${gitlabTitle}"`)
+    log(`${fileEntries.length} fichier(s) NFO et images à télécharger pour « ${gitlabTitle} »`)
 
     let downloaded = 0, skipped = 0, failed = 0
     for (const entry of fileEntries) {
@@ -275,14 +260,14 @@ async function downloadGitlabFolder(serieTitle: string, destRoot: string): Promi
             fs.writeFileSync(destPath, data)
             downloaded++
         } catch (err) {
-            warn(`Échec téléchargement NFO "${relativePath}" : ${err instanceof Error ? err.message : err}`)
+            warn(`Échec du téléchargement de « ${relativePath} » : ${err instanceof Error ? err.message : err}`)
             failed++
         }
     }
-    log(`NFO "${gitlabTitle}" — ${downloaded} téléchargés, ${skipped} déjà présents${failed > 0 ? `, ${failed} échecs` : ''}`)
+    log(`NFO de « ${gitlabTitle} » : ${downloaded} téléchargé(s), ${skipped} déjà présent(s)${failed > 0 ? `, ${failed} échec(s)` : ''}`)
 }
 
-// ─── Filesystem ops ───────────────────────────────────────────
+// ─── Fichiers ─────────────────────────────────────────────────
 
 function swapExtension(filename: string, ext: string): string {
     const currentExt = path.extname(filename)
@@ -295,10 +280,7 @@ function seasonFolder(n: number): string {
     return n === 0 ? 'Specials' : (englishDirectory ? `Season ${String(n).padStart(2, '0')}` : `Saison ${n}`)
 }
 
-/**
- * Supprime un fichier avec retry en cas d'EBUSY (Windows : fichier encore ouvert par qBit/autre).
- * 5 tentatives × 500 ms = 2,5 s max avant de remonter l'erreur.
- */
+/** Supprime un fichier en réessayant si EBUSY (fichier ouvert sous Windows). */
 async function unlinkWithRetry(filePath: string, maxAttempts = 5): Promise<void> {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
         try {
@@ -306,7 +288,7 @@ async function unlinkWithRetry(filePath: string, maxAttempts = 5): Promise<void>
             return
         } catch (err: any) {
             if (err?.code === 'EBUSY' && attempt < maxAttempts - 1) {
-                warn(`EBUSY sur "${path.basename(filePath)}" — retry ${attempt + 1}/${maxAttempts - 1}`)
+                warn(`Fichier « ${path.basename(filePath)} » occupé, nouvelle tentative (${attempt + 1}/${maxAttempts - 1})`)
                 await new Promise(r => setTimeout(r, 500))
             } else {
                 throw err
@@ -318,7 +300,7 @@ async function unlinkWithRetry(filePath: string, maxAttempts = 5): Promise<void>
 function tryHardlink(src: string, dest: string): boolean {
     try { fs.linkSync(src, dest); return true }
     catch (err) {
-        debug(`Hardlink échoué (${err instanceof Error ? err.message : err}), fallback copie`)
+        debug(`Hardlink impossible (${err instanceof Error ? err.message : err}), copie du fichier`)
         return false
     }
 }
@@ -331,7 +313,7 @@ function sanitizeDirName(name: string): string {
         .trim()
 }
 
-// ─── Organise un torrent ──────────────────────────────────────
+// ─── Import d'un torrent ──────────────────────────────────────
 async function organizeTorrent(
     hash              : string,
     name              : string,
@@ -344,7 +326,7 @@ async function organizeTorrent(
 
     const found = findTorrentByHash(hash, seriesData)
     if (!found) {
-        error(`Hash ${hash} introuvable dans les données série`)
+        error(`Hash ${hash} introuvable dans le catalogue`)
         throw new Error(`Torrent introuvable : ${hash}`)
     }
 
@@ -352,13 +334,13 @@ async function organizeTorrent(
     const rawTitle   = serieData.title ?? serieData.show_title ?? name
     const serieTitle = sanitizeDirName(rawTitle)
 
-    debug(`Série identifiée : "${serieTitle}" (mode: ${organizeMode}${nfoSupport ? ', NFO' : ''})`)
+    debug(`Série identifiée : « ${serieTitle} » (mode : ${organizeMode}${nfoSupport ? ', NFO' : ''})`)
 
     if (nfoSupport) {
         await downloadGitlabFolder(serieTitle, path.join(mediaPath, serieTitle))
     }
 
-    // ── Cas torrent épisode unique ────────────────────────────
+    // ── Torrent d'un seul épisode ─────────────────────────────
     if (torrent._episode) {
         const ep      = torrent._episode
         const season  = torrent._season
@@ -374,7 +356,6 @@ async function organizeTorrent(
             }
         }
         const filename = filePath?.split('/').pop() ?? name
-        // Nommage : priorité aux valeurs du path entry (spécifique au torrent/encoding)
         const rawFmt      = matchedPathObj?.formatted_name    ?? ep.formatted_name
         const rawNfo      = matchedPathObj?.nfo_filename      ?? ep.nfo_filename
         const rawOriginal = matchedPathObj?.original_filename ?? ep.original_filename
@@ -393,9 +374,8 @@ async function organizeTorrent(
 
         if (isOrganized(hash, ep.id)) return { ...result, total: 1, skipped: 1 }
 
-        // Vérification de complétion pour épisode unique
         if (completedFileNames !== null && !completedFileNames.has(filename.toLowerCase())) {
-            warn(`Skip (incomplet / priorité 0) : ${filename}`)
+            warn(`Ignoré (téléchargement incomplet ou fichier non sélectionné) : ${filename}`)
             return { ...result, total: 1, skipped: 1 }
         }
 
@@ -414,7 +394,7 @@ async function organizeTorrent(
 
         if (!src) {
             error(`Fichier source introuvable : ${filename}\n  Chemins essayés :\n${candidates.map(c => `    - ${c}`).join('\n')}`)
-            return { ...result, total: 1, errors: [{ file: filename, error: `Source introuvable (chemins essayés : ${candidates.join(', ')})` }] }
+            return { ...result, total: 1, errors: [{ file: filename, error: `Fichier source introuvable (chemins essayés : ${candidates.join(', ')})` }] }
         }
 
         if (!fs.existsSync(dest)) {
@@ -431,7 +411,7 @@ async function organizeTorrent(
                     src_filename: filename, dest_filename: destName, dest_path: dest, dest_dir: destDir,
                 })
                 await unlinkWithRetry(src)
-                log(`${destName} → Saison ${season.season_number}`)
+                log(`${destName} importé dans ${path.basename(destDir)}`)
                 return { ...result, total: 1, done: 1 }
             }
         }
@@ -441,16 +421,16 @@ async function organizeTorrent(
             episode: ep.episode_number, episode_id: ep.id,
             src_filename: filename, dest_filename: destName, dest_path: dest, dest_dir: destDir,
         })
-        log(`${destName} → Saison ${season.season_number}`)
+        log(`${destName} importé dans ${path.basename(destDir)}`)
         return { ...result, total: 1, done: 1 }
     }
 
-    // ── Pack saison / intégrale ───────────────────────────────
+    // ── Pack saison ou intégrale ──────────────────────────────
     const seasonFilter = torrent._season?.season_number
     const fileMap      = buildFileMap(serieData, hash, nfoSupport, seasonFilter)
 
     if (fileMap.size === 0) {
-        warn(`Aucun fichier mappé pour "${name}"`)
+        warn(`Aucun fichier de « ${name} » ne correspond au catalogue`)
         return result
     }
 
@@ -459,10 +439,8 @@ async function organizeTorrent(
     for (const [filename, { season_number, episode_number, episode_id, nfo_filename, fullPath }] of fileMap) {
         if (isOrganized(hash, episode_id)) { result.skipped++; continue }
 
-        // Vérification de complétion : si on a les infos de progression par fichier,
-        // on skip les fichiers pas encore à 100% (ex: priorité 0 ou en cours de téléchargement).
         if (completedFileNames !== null && !completedFileNames.has(filename.toLowerCase())) {
-            warn(`Skip (incomplet / priorité 0) : ${filename}`)
+            warn(`Ignoré (téléchargement incomplet ou fichier non sélectionné) : ${filename}`)
             result.skipped++
             continue
         }
@@ -477,8 +455,8 @@ async function organizeTorrent(
         for (const c of candidates) { if (fs.existsSync(c)) { src = c; break } }
 
         if (!src) {
-            // Fichier absent du disque : pas encore téléchargé ou hors sélection (priorité 0).
-            warn(`Skip (fichier absent) : ${filename}\n  Chemins essayés :\n${candidates.map(c => `    - ${c}`).join('\n')}`)
+            // Pas encore téléchargé ou hors sélection (priorité 0)
+            warn(`Ignoré (fichier absent du disque) : ${filename}\n  Chemins essayés :\n${candidates.map(c => `    - ${c}`).join('\n')}`)
             result.skipped++
             continue
         }
@@ -522,10 +500,10 @@ async function organizeTorrent(
                 await unlinkWithRetry(src)
             }
             result.done++
-            debug(`${nfo_filename} → Saison ${season_number}`)
+            debug(`${nfo_filename} importé dans ${path.basename(destDir)}`)
         } catch (err) {
-            const msg = err instanceof Error ? err.message : 'Erreur inconnue'
-            error(`Échec import "${filename}" : ${msg}`)
+            const msg = err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux'
+            error(`Échec de l'import de « ${filename} » : ${msg}`)
             result.errors.push({ file: filename, error: msg })
         }
     }
@@ -552,24 +530,21 @@ parentPort?.on('message', async (msg: any) => {
     for (const t of torrents) {
         if (t.state !== 'seeding') continue
 
-        // Résolution principale : par infohash
         let found = findTorrentByHash(t.hash, seriesData)
         let effectiveHash = t.hash
 
-        // Fallback : si le hash n'est pas résolu (ex: dbid_X Synology), on cherche
-        // par torrent_name — le nom du dossier racine tel que rapporté par le client,
-        // qui correspond au champ torrent_name dans les données série.
+        // Hash non résolu (ex. dbid_X Synology) : recherche par nom de dossier
         if (!found && t.name) {
             const byName = findTorrentByName(t.name, seriesData)
             if (byName) {
                 found         = byName
                 effectiveHash = byName.infohash
-                debug(`Hash résolu par torrent_name : "${t.name}" → ${effectiveHash.slice(0, 8)}…`)
+                debug(`Hash résolu par nom de torrent : « ${t.name} » (${effectiveHash.slice(0, 8)}…)`)
             }
         }
 
         if (!found) {
-            debug(`Torrent "${t.name}" (${t.hash.slice(0, 8)}…) non trouvé dans les données série — catalogue peut-être pas à jour`)
+            debug(`Torrent « ${t.name} » (${t.hash.slice(0, 8)}…) absent du catalogue (pas encore à jour ?)`)
             continue
         }
 
@@ -582,25 +557,20 @@ parentPort?.on('message', async (msg: any) => {
             : Object.keys(orgHash).length > 0
 
         if (allDone) {
-            debug(`"${t.name}" déjà entièrement importé — skip`)
+            debug(`« ${t.name} » déjà entièrement importé`)
             continue
         }
 
         try {
-            // Construire l'ensemble des fichiers 100% complets à partir des infos de progression.
-            // On ne filtre QUE si le client fournit des noms de fichiers (qBittorrent, Transmission).
-            // Si aucun fichier n'a de nom (rtorrent…), on passe null → pas de filtrage.
+            // Fichiers terminés (nom seul) ; null si le client ne donne pas les noms
             let completedFileNames: Set<string> | null = null
             if (Array.isArray(t.files) && t.files.length > 0) {
-                // Vérifier qu'au moins un fichier a un nom non vide
                 const hasNames = t.files.some((f: any) => f.name && String(f.name).trim())
                 if (hasNames) {
                     completedFileNames = new Set(
                         t.files
                             .filter((f: any) => (f.progress ?? 0) >= 1 && f.name && String(f.name).trim())
                             .map((f: any) => {
-                                // f.name est un chemin relatif ex: "Pack S1/Episode1.mkv"
-                                // on ne garde que le basename pour comparer au filename du fileMap
                                 const parts = String(f.name).replace(/\\/g, '/').split('/')
                                 return (parts[parts.length - 1] ?? '').toLowerCase()
                             })
@@ -612,7 +582,7 @@ parentPort?.on('message', async (msg: any) => {
             const result = await organizeTorrent(effectiveHash, t.name, t.save_path, seriesData, completedFileNames)
             parentPort?.postMessage({ type: 'result', hash: effectiveHash, name: t.name, serieId: serieData.id ?? null, ...result })
         } catch (err) {
-            error(`Erreur lors de l'import de "${t.name}" : ${err instanceof Error ? err.message : err}`)
+            error(`Échec de l'import de « ${t.name} » :${err instanceof Error ? err.message : err}`)
         }
     }
 

@@ -2,20 +2,18 @@
   <div class="flex flex-col gap-4">
 
     <Teleport defer to="#settings-actions">
-      <span v-if="dirtyCount > 0" class="text-meta text-accent">{{ dirtyCount }} modification{{ dirtyCount > 1 ? 's' : '' }} non enregistrée{{ dirtyCount > 1 ? 's' : '' }}</span>
+      <span v-if="dirtyCount > 0" class="text-meta text-accent">{{ plural(dirtyCount, 'modification non enregistrée', 'modifications non enregistrées') }}</span>
       <button @click="save" :disabled="saving || !loaded" class="btn-primary pointer-fine:h-[38px]">
         {{ saving ? 'Enregistrement…' : 'Enregistrer' }}
       </button>
     </Teleport>
 
-    <!-- Chargement -->
     <div v-if="!loaded" class="flex items-center justify-center gap-2 py-16 text-muted text-body">
       <div class="w-4 h-4 border border-border border-t-accent rounded-full animate-spin" />
     </div>
 
     <template v-else>
 
-      <!-- Dossiers -->
       <SettingsSection title="Dossiers" :description="isDocker ? 'Ces deux chemins sont vus depuis le conteneur FanKarr.' : 'Où FanKarr trouve les téléchargements terminés et où il range la médiathèque.'">
         <div class="grid md:grid-cols-2 gap-4">
           <div v-for="field in pathFields" :key="field.key" class="flex flex-col gap-[7px] min-w-0">
@@ -39,18 +37,16 @@
         </div>
       </SettingsSection>
 
-      <!-- Alerte chemins non configurés -->
       <div v-if="hasUnconfiguredPaths" class="rounded-card border border-accent/30 bg-accent/5 px-5 py-4 flex items-start gap-3.5">
         <TriangleAlert :size="18" :stroke-width="1.75" class="text-accent shrink-0 mt-0.5" />
         <div class="flex flex-col gap-1">
           <p class="card-title text-accent">Chemins non configurés</p>
           <p class="text-meta text-secondary">
-            L'import automatique est désactivé tant que les dossiers ne sont pas configurés. Configurez-les ci-dessus avant d'enregistrer.
+            L'import automatique reste désactivé tant que ces deux dossiers ne sont pas choisis.
           </p>
         </div>
       </div>
 
-      <!-- Import -->
       <SettingsSection title="Import" description="Ce que FanKarr fait des fichiers une fois le téléchargement terminé.">
         <div class="flex items-center gap-x-[18px] gap-y-3 flex-wrap">
           <div class="segmented segmented-lg" role="group" aria-label="Mode d'import">
@@ -66,40 +62,39 @@
               {{ mode === 'hardlink' ? 'Hardlink' : mode === 'copy' ? 'Copier' : 'Déplacer' }}
             </button>
           </div>
-          <span class="text-meta text-muted">Le hardlink, recommandé, garde le fichier dans le client torrent pour le ratio, sans occuper deux fois la place.</span>
+          <span class="text-meta text-muted">Recommandé : le hardlink laisse le fichier en partage dans le client sans occuper deux fois l'espace. Les deux dossiers doivent être sur le même disque.</span>
         </div>
         <div class="h-px bg-hover" />
         <SettingsToggle
             v-model="form.autoImport"
             label="Import automatique"
-            description="Importe dès qu'un téléchargement est terminé. Vérifie toutes les 5 minutes."
+            description="Importe les téléchargements terminés (vérification toutes les 5 minutes)."
         />
         <SettingsToggle
             :model-value="form.nfoSupport"
             @update:model-value="onNfoToggle"
-            label="NFO et métadonnées"
-            description="Télécharge les NFO et les images depuis GitLab à l'import, pour Infuse ou un lecteur qui lit les NFO locaux."
+            label="Fichiers NFO et images"
+            description="À chaque import, ajoute les fichiers de description (.nfo) et les images. Utile pour Infuse ou les lecteurs sans agent Fankai."
         />
         <SettingsToggle
             v-if="form.organizeMode === 'move'"
             v-model="form.deleteTorrentOnMove"
             label="Supprimer le torrent après déplacement"
-            description="Retire automatiquement le torrent du client après un import en mode Déplacer."
+            description="Le torrent quitte le client une fois ses fichiers déplacés et n'est plus partagé."
         />
         <SettingsToggle
             v-model="form.autoUnimportMissing"
-            label="Désimporter si le fichier a disparu"
-            description="Au scan, retire de la bibliothèque les épisodes dont le fichier n'est plus sur le disque."
+            label="Retirer les épisodes dont le fichier a disparu"
+            description="Lors de l'analyse, retire de la médiathèque les épisodes dont le fichier n'existe plus."
         />
         <SettingsToggle
             v-model="form.englishDirectory"
-            label="Dossiers « Season » plutôt que « Saison »"
-            description="Les dossiers de saisons seront nommés « Season 01 » au lieu de « Saison 01 »."
+            label="Dossiers de saison en anglais"
+            description="« Season 01 » au lieu de « Saison 1 »."
         />
       </SettingsSection>
 
-      <!-- Serveurs média -->
-      <SettingsSection title="Serveurs média" description="Les applications qui liront la médiathèque.">
+      <SettingsSection title="Serveurs multimédias" description="Les applications qui liront la médiathèque.">
         <div class="flex items-center gap-5 flex-wrap sm:flex-nowrap">
           <div class="flex-1 min-w-0 flex flex-col gap-[3px]">
             <span class="flex items-center gap-2.5 text-sm font-medium text-primary">
@@ -120,7 +115,6 @@
         </div>
       </SettingsSection>
 
-      <!-- Scan -->
       <div class="flex items-center gap-3 flex-wrap">
         <button @click="scan" :disabled="scanning" class="btn-secondary pointer-fine:h-[38px]">
           <Loader v-if="scanning" :size="15" class="animate-spin" />
@@ -128,13 +122,12 @@
           {{ scanning ? 'Analyse…' : 'Analyser la médiathèque' }}
         </button>
         <span v-if="lastScan" class="text-meta text-muted">
-          Dernier scan {{ formatRelative(lastScan.at) }} · {{ lastScan.found }} fichier{{ lastScan.found > 1 ? 's' : '' }} trouvé{{ lastScan.found > 1 ? 's' : '' }}<template v-if="lastScan.added"> · {{ lastScan.added }} ajouté{{ lastScan.added > 1 ? 's' : '' }}</template>
+          Dernière analyse {{ formatRelative(lastScan.at) }} · {{ plural(lastScan.found, 'fichier trouvé', 'fichiers trouvés') }}<template v-if="lastScan.added"> · {{ plural(lastScan.added, 'ajouté') }}</template>
         </span>
       </div>
 
     </template>
 
-    <!-- Choix de dossier -->
     <FolderPicker
         v-if="picker.open"
         :initial-path="picker.currentPath"
@@ -142,14 +135,12 @@
         @cancel="picker.open = false"
     />
 
-    <!-- Assistant Plex -->
     <PlexWizard
         v-if="plexOpen"
         :media-path="form.mediaPath"
         @close="plexOpen = false"
     />
 
-    <!-- Confirmation NFO -->
     <Teleport to="body">
       <div v-if="nfoConfirmOpen" class="modal-backdrop" @click.self="nfoConfirmOpen = false">
         <div class="modal max-w-sm" role="dialog" aria-modal="true" aria-labelledby="nfo-title">
@@ -178,7 +169,7 @@ import { ref, computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Loader, ScanSearch, TriangleAlert } from 'lucide-vue-next'
 import { useToast } from '@/composables/useToast'
-import { formatRelative } from '@/utils/format'
+import { formatRelative, plural } from '@/utils/format'
 import SettingsSection from '@/components/settings/SettingsSection.vue'
 import FolderPicker from '@/components/FolderPicker.vue'
 import SettingsToggle from '@/components/settings/SettingsToggle.vue'
@@ -198,7 +189,7 @@ const savedSnapshot  = ref('')
 
 const pathFields = [
   { key: 'completePath', label: 'Dossier des téléchargements terminés', hint: 'Là où le client torrent dépose ses fichiers.' },
-  { key: 'mediaPath',    label: 'Médiathèque Fankai',                   hint: 'Racine de la bibliothèque lue par Jellyfin, Plex ou Kodi.' },
+  { key: 'mediaPath',    label: 'Médiathèque Fankai',                   hint: 'Dossier racine lu par Jellyfin, Plex ou Kodi.' },
 ] as const
 
 function onNfoToggle(val: boolean) {
@@ -231,7 +222,6 @@ const picker = ref<{ open: boolean; field: 'completePath' | 'mediaPath'; current
 
 function isRootPath(p: string): boolean { return !p || p === '/' }
 
-// Réglages modifiés
 const dirtyCount = computed(() => {
   if (!savedSnapshot.value) return 0
   const saved = JSON.parse(savedSnapshot.value)
@@ -259,7 +249,7 @@ async function save() {
       body: JSON.stringify(form.value),
     })
     if (res.ok) { toast('Configuration enregistrée', 'success'); savedSnapshot.value = JSON.stringify(form.value) }
-    else        toast('Erreur lors de la sauvegarde', 'error')
+    else        toast("Impossible d'enregistrer les réglages", 'error')
   } finally {
     saving.value = false
   }
@@ -272,9 +262,9 @@ async function scan() {
     if (res.ok) {
       const data = await res.json()
       lastScan.value = { at: new Date().toISOString(), found: data.found, added: data.added }
-      toast(data.added > 0 ? `${data.found} fichiers analysés — ${data.added} ajoutés` : `${data.found} fichiers analysés — rien de nouveau`, 'success')
+      toast(data.added > 0 ? `${plural(data.found, 'fichier analysé', 'fichiers analysés')} · ${plural(data.added, 'ajouté')}` : `${plural(data.found, 'fichier analysé', 'fichiers analysés')} · rien de nouveau`, 'success')
     } else {
-      toast("Erreur lors de l'analyse", 'error')
+      toast("Impossible d'analyser la médiathèque", 'error')
     }
   } catch {
     toast('Impossible de contacter le serveur', 'error')

@@ -1,9 +1,4 @@
-/**
- * gitlab-map.ts
- * =============
- * Map des titres API → titres GitLab pour le téléchargement des NFO.
- * Partagé entre organize-worker.ts et index.ts.
- */
+/** Titres de l'API Fankai vers les noms de dossiers du dépôt GitLab des NFO. */
 
 export const SERIE_TITLE_GITLAB_MAP: Record<string, string> = {
     'Enfer Et Paradis Henshū'          : 'Enfer et Paradis Henshū',

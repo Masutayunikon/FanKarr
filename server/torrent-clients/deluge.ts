@@ -1,20 +1,10 @@
-/**
- * Deluge Web JSON-RPC driver
- *
- * Auth   : POST {url}/json → auth.login(password) → cookie _session_id
- * RPC    : POST {url}/json avec { method, params, id } + Cookie header
- * States : "Downloading" | "Seeding" | "Paused" | "Checking"
- *          "Error" | "Queued" | "Allocating" | "Moving"
- * Progress : float 0–100 (déjà en pourcentage, pas 0–1)
- */
+/** Deluge via l'API JSON-RPC de l'interface web. Progression en pourcentage (0–100). */
 
 import type { TorrentClientDriver, TorrentInfo, TorrentFileProgress, DownloadOptions, ClientConfig } from './index.js'
 import { clientFetch } from './index.js'
 import { logger } from '../logger.js'
 
-// ─── Session cache ─────────────────────────────────────────────────────────────
-// Chaque entrée est indexée par "url::password" pour supporter plusieurs instances.
-// TTL 30 min — Deluge invalide les sessions inactives, on relogine automatiquement.
+// ─── Sessions ──────────────────────────────────────────────────────────────────
 
 interface SessionEntry { cookie: string; expires: number }
 const _sessions = new Map<string, SessionEntry>()
@@ -23,14 +13,14 @@ function sessionKey(config: ClientConfig): string {
     return `${config.url}::${config.password}`
 }
 
-// ─── Helpers HTTP ──────────────────────────────────────────────────────────────
+// ─── HTTP ──────────────────────────────────────────────────────────────────────
 
 function delugeUrl(config: ClientConfig): string {
     return String(config.url ?? '').replace(/\/+$/, '') + '/json'
 }
 
 function parseCookie(raw: string): string {
-    // "set-cookie: _session_id=abc123; Path=/; HttpOnly" → "_session_id=abc123"
+    // "_session_id=abc123; Path=/; HttpOnly" devient "_session_id=abc123"
     return raw.split(';')[0].trim()
 }
 
@@ -51,14 +41,11 @@ async function delugeRPC(
         body: JSON.stringify({ method, params, id: 1 }),
     })
 
-    if (!res.ok) {
-        const text = await res.text().catch(() => '')
-        throw new Error(`Deluge HTTP ${res.status} : ${text}`)
-    }
+    if (!res.ok) throw new Error(`Deluge a répondu HTTP ${res.status} : vérifiez l'URL de l'interface web`)
 
     const json = await res.json()
     if (json.error) {
-        throw new Error(`Deluge RPC : ${json.error.message ?? JSON.stringify(json.error)}`)
+        throw new Error(`Erreur Deluge : ${json.error.message ?? `code ${json.error.code ?? 'inconnu'}`}`)
     }
 
     const setCookie = res.headers.get('set-cookie')
@@ -68,7 +55,7 @@ async function delugeRPC(
     }
 }
 
-// ─── Login ─────────────────────────────────────────────────────────────────────
+// ─── Connexion ─────────────────────────────────────────────────────────────────
 
 async function delugeLogin(config: ClientConfig): Promise<string> {
     const url = delugeUrl(config)
@@ -78,22 +65,19 @@ async function delugeLogin(config: ClientConfig): Promise<string> {
         body   : JSON.stringify({ method: 'auth.login', params: [String(config.password ?? '')], id: 1 }),
     })
 
-    if (!res.ok) {
-        const text = await res.text().catch(() => '')
-        throw new Error(`Deluge HTTP ${res.status} : ${text}`)
-    }
+    if (!res.ok) throw new Error(`Deluge a répondu HTTP ${res.status} : vérifiez l'URL de l'interface web`)
 
     const json = await res.json()
-    if (json.error) throw new Error(`Deluge login : ${json.error.message ?? JSON.stringify(json.error)}`)
-    if (!json.result) throw new Error('Deluge : authentification échouée (mot de passe incorrect ?)')
+    if (json.error) throw new Error(`Connexion à Deluge refusée : ${json.error.message ?? `code ${json.error.code ?? 'inconnu'}`}`)
+    if (!json.result) throw new Error('Connexion à Deluge refusée : mot de passe incorrect ?')
 
     const setCookie = res.headers.get('set-cookie')
-    if (!setCookie) throw new Error('Deluge : pas de cookie de session reçu après login')
+    if (!setCookie) throw new Error('Échec de la connexion à Deluge : aucun cookie de session reçu')
 
     return parseCookie(setCookie)
 }
 
-// ─── Call avec gestion de session ─────────────────────────────────────────────
+// ─── Appel avec gestion de session ────────────────────────────────────────────
 
 async function delugeCall(
     config : ClientConfig,
@@ -103,7 +87,6 @@ async function delugeCall(
     const url = delugeUrl(config)
     const key = sessionKey(config)
 
-    // Récupère ou rafraîchit la session
     let entry = _sessions.get(key)
     if (!entry || Date.now() >= entry.expires) {
         const cookie = await delugeLogin(config)
@@ -113,7 +96,6 @@ async function delugeCall(
 
     try {
         const { result, newCookie } = await delugeRPC(config, url, method, params, entry.cookie)
-        // Mise à jour du cookie si Deluge en renvoie un nouveau
         if (newCookie) {
             entry.cookie  = newCookie
             entry.expires = Date.now() + 30 * 60_000
@@ -121,7 +103,6 @@ async function delugeCall(
         return result
     } catch (err) {
         const msg = err instanceof Error ? err.message : ''
-        // Session expirée → relogin unique
         if (msg.includes('Not authorized') || msg.includes('auth') || msg.includes('401')) {
             _sessions.delete(key)
             const cookie = await delugeLogin(config)
@@ -134,7 +115,7 @@ async function delugeCall(
     }
 }
 
-// ─── Mapping état ──────────────────────────────────────────────────────────────
+// ─── États ─────────────────────────────────────────────────────────────────────
 
 function mapState(state: string): TorrentInfo['state'] {
     switch (state) {
@@ -175,9 +156,7 @@ function flattenDelugeFiles(
     return result
 }
 
-// ─── Sélection de fichier (asynchrone, best-effort) ──────────────────────────
-// Attend que les métadonnées soient disponibles (~60 s max) puis applique
-// les priorités : fichier voulu = 1 (normal), tous les autres = 0 (skip).
+// ─── Sélection de fichier (en arrière-plan) ──────────────────────────────────
 
 async function applyFilePriority(
     config   : ClientConfig,
@@ -193,14 +172,14 @@ async function applyFilePriority(
 
             const priorities = Array.from({ length: numFiles }, (_, i) => i === fileIndex ? 1 : 0)
             await delugeCall(config, 'core.set_torrent_options', [[hash], { file_priorities: priorities }])
-            logger.info('deluge', `Fichier ${fileIndex} sélectionné pour ${hash.slice(0, 8)}…`)
+            logger.info('deluge', `Fichier n° ${fileIndex} sélectionné pour ${hash.slice(0, 8)}…`)
             return
         } catch {}
     }
-    logger.warn('deluge', `Timeout : priorité fichier non appliquée pour ${hash.slice(0, 8)}…`)
+    logger.warn('deluge', `Délai dépassé : priorité de fichier non appliquée pour ${hash.slice(0, 8)}…`)
 }
 
-// ─── Driver ───────────────────────────────────────────────────────────────────
+// ─── Client ───────────────────────────────────────────────────────────────────
 
 const delugeDriver: TorrentClientDriver = {
     definition: {
@@ -209,15 +188,14 @@ const delugeDriver: TorrentClientDriver = {
         fields: [
             { key: 'url',        label: 'URL',                           type: 'url',      placeholder: 'http://localhost:8112', required: true  },
             { key: 'password',   label: 'Mot de passe',                  type: 'password', placeholder: '••••••••',             required: true  },
-            { key: 'category',   label: 'Catégorie (Label plugin)',       type: 'text',     placeholder: 'fankai',               required: false, default: 'fankai' },
-            { key: 'savePath',   label: 'Dossier cible',                 type: 'text',     placeholder: '/downloads/fankai',    required: false },
-            { key: 'remotePath', label: 'Chemin distant (client)',        type: 'text',     placeholder: '/downloads',           required: false },
-            { key: 'localPath',  label: 'Chemin local (FanKarr)',         type: 'text',     placeholder: '/mnt/nas/downloads',   required: false },
+            { key: 'category',   label: 'Catégorie (plugin Label)',      type: 'text',     placeholder: 'fankai',               required: false, default: 'fankai' },
+            { key: 'savePath',   label: 'Dossier de téléchargement',     type: 'text',     placeholder: '/downloads/fankai',    required: false },
+            { key: 'remotePath', label: 'Dossier vu par le client',      type: 'text',     placeholder: '/downloads',           required: false },
+            { key: 'localPath',  label: 'Dossier vu par FanKarr',        type: 'text',     placeholder: '/mnt/nas/downloads',   required: false },
             { key: 'ignoreCertificateErrors', label: 'Ignorer les erreurs de certificat SSL', type: 'boolean', required: false },
         ],
     },
 
-    // ── Test ───────────────────────────────────────────────────────────────────
     async test(config) {
         try {
             _sessions.delete(sessionKey(config))
@@ -226,16 +204,14 @@ const delugeDriver: TorrentClientDriver = {
             logger.info('deluge', `Test de connexion réussi sur ${config.url}`)
             return { ok: true, message: 'Connexion réussie' }
         } catch (err) {
-            const msg = err instanceof Error ? err.message : 'Erreur inconnue'
-            logger.warn('deluge', `Test de connexion échoué sur ${config.url} : ${msg}`)
+            const msg = err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux'
+            logger.warn('deluge', `Échec du test de connexion sur ${config.url} : ${msg}`)
             return { ok: false, message: msg }
         }
     },
 
-    // ── Healthcheck ────────────────────────────────────────────────────────────
     async healthcheck(config) {
         try {
-            // daemon.get_version() retourne la version du daemon Deluge
             const version = await delugeCall(config, 'daemon.get_version')
             return { online: true, version: String(version ?? 'inconnue') }
         } catch {
@@ -243,15 +219,13 @@ const delugeDriver: TorrentClientDriver = {
         }
     },
 
-    // ── List ───────────────────────────────────────────────────────────────────
     async list(config, category?) {
         const keys = [
             'name', 'state', 'progress', 'total_size', 'total_done',
             'total_uploaded', 'ratio', 'download_payload_rate', 'upload_payload_rate',
             'eta', 'save_path', 'label',
         ]
-        // filter_dict vide → tous les torrents ; le filtrage par label se fait en JS
-        // pour ne pas dépendre du Label plugin côté serveur.
+        // Tous les torrents, filtrés par label ici pour ne pas dépendre du plugin Label
         const raw: Record<string, any> = await delugeCall(config, 'core.get_torrents_status', [{}, keys]) ?? {}
 
         return Object.entries(raw)
@@ -273,7 +247,6 @@ const delugeDriver: TorrentClientDriver = {
             }))
     },
 
-    // ── Add ────────────────────────────────────────────────────────────────────
     async add(config, url, options?: DownloadOptions) {
         const addOpts: Record<string, unknown> = {}
         if (config.savePath) addOpts['download_location'] = String(config.savePath)
@@ -282,36 +255,32 @@ const delugeDriver: TorrentClientDriver = {
 
         if (url.startsWith('magnet:')) {
             hash = await delugeCall(config, 'core.add_torrent_magnet', [url, addOpts])
-            logger.info('deluge', `Magnet ajouté → ${hash?.slice(0, 8) ?? '?'}…`)
+            logger.info('deluge', `Magnet ajouté (hash ${hash?.slice(0, 8) ?? '?'}…)`)
         } else {
-            // Télécharge le .torrent puis l'envoie en base64 via core.add_torrent_file
             const torrentRes = await fetch(url)
-            if (!torrentRes.ok) throw new Error(`Impossible de télécharger le .torrent : ${torrentRes.status}`)
+            if (!torrentRes.ok) throw new Error(`Impossible de télécharger le fichier .torrent (HTTP ${torrentRes.status})`)
             const buf      = await torrentRes.arrayBuffer()
             const b64      = Buffer.from(buf).toString('base64')
             const filename = url.split('/').pop()?.replace(/\?.*$/, '') ?? 'torrent.torrent'
             hash = await delugeCall(config, 'core.add_torrent_file', [filename, b64, addOpts])
-            logger.info('deluge', `.torrent uploadé → ${hash?.slice(0, 8) ?? '?'}…`)
+            logger.info('deluge', `Fichier .torrent envoyé (hash ${hash?.slice(0, 8) ?? '?'}…)`)
         }
 
-        // Label plugin — best-effort (silencieux si plugin absent)
+        // Plugin Label facultatif : erreurs ignorées
         if (config.category && hash) {
             delugeCall(config, 'label.set_torrent', [hash, String(config.category)]).catch(() => {})
         }
 
-        // Sélection de fichier — asynchrone, best-effort
         if (options?.file_index != null && hash) {
             applyFilePriority(config, hash, options.file_index).catch(() => {})
         }
     },
 
-    // ── Remove ─────────────────────────────────────────────────────────────────
     async remove(config, hash, deleteFiles = false) {
         await delugeCall(config, 'core.remove_torrent', [hash, deleteFiles])
         logger.info('deluge', `Torrent ${hash.slice(0, 8)}… supprimé${deleteFiles ? ' (avec fichiers)' : ''}`)
     },
 
-    // ── Get files ──────────────────────────────────────────────────────────────
     async getFiles(config, hash) {
         const data = await delugeCall(config, 'web.get_torrent_files', [hash])
         if (!data?.contents) return []

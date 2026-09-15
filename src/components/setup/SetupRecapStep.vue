@@ -21,14 +21,14 @@
     <div class="flex flex-col sm:flex-row gap-2">
       <button @click="done(true)" :disabled="finishing || !settings.mediaPath" class="btn-primary">
         <Compass :size="15" />
-        {{ context.relaunch ? 'Revoir la visite guidée' : "Terminer et découvrir l'interface" }}
+        {{ context.relaunch ? 'Revoir la visite guidée' : 'Terminer avec la visite guidée' }}
       </button>
       <button @click="done(false)" :disabled="finishing || !settings.mediaPath" class="btn-secondary">
         {{ context.relaunch ? 'Fermer' : 'Terminer sans la visite' }}
       </button>
     </div>
     <p v-if="!context.relaunch" class="text-meta text-muted -mt-3">
-      La visite guidée présente chaque écran en une minute. Vous pourrez la relancer depuis le bouton « ? » de la barre latérale.
+      La visite guidée présente les écrans principaux en une minute. Vous pourrez la relancer avec le bouton « ? ».
     </p>
 
   </div>
@@ -38,6 +38,7 @@
 import { ref, reactive, inject, onMounted } from 'vue'
 import { Check, Compass, Minus, TriangleAlert, X } from 'lucide-vue-next'
 import { checkPaths, setupContextKey, type SetupSettings, type SetupStepId } from './setup'
+import { plural } from '@/utils/format'
 
 type RowState = 'loading' | 'ok' | 'warn' | 'error' | 'neutral'
 interface Row { label: string; value: string; state: RowState; step: SetupStepId }
@@ -55,7 +56,7 @@ const stateClass: Record<RowState, string> = {
   neutral: 'bg-hover text-muted',
 }
 
-const modeLabel = { hardlink: 'Hardlink', copy: 'Copie', move: 'Déplacement' }
+const modeLabel = { hardlink: 'Hardlink', copy: 'Copier', move: 'Déplacer' }
 
 const row = (label: string, step: SetupStepId, value = '…', state: RowState = 'loading'): Row => ({ label, step, value, state })
 
@@ -64,11 +65,11 @@ const rows = reactive({
   mode    : row("Mode d'import", 'paths'),
   client  : row('Client torrent', 'client'),
   import  : row('Import automatique', 'import',
-      props.settings.autoImport ? 'Activé' : 'Désactivé : import manuel depuis Activité',
+      props.settings.autoImport ? 'Activé' : 'Désactivé : import manuel depuis la page Activité',
       props.settings.autoImport ? 'ok' : 'neutral'),
-  nfo     : row('NFO et images', 'import', props.settings.nfoSupport ? 'Activés' : 'Désactivés', 'neutral'),
+  nfo     : row('Fichiers NFO et images', 'import', props.settings.nfoSupport ? 'Activés' : 'Désactivés', 'neutral'),
   jellyfin: row('Jellyfin', 'media-server'),
-  plex    : row('Plex', 'media-server', context.plexOpened ? 'Assistant Plex lancé' : 'Non configuré', 'neutral'),
+  plex    : row('Plex', 'media-server', context.plexOpened ? 'Assistant ouvert, non vérifié' : 'Non configuré', 'neutral'),
   catalog : row('Catalogue Fankai', 'catalog'),
 })
 
@@ -90,7 +91,7 @@ async function loadPaths() {
     set(rows.paths, 'Médiathèque non configurée', 'error')
   } else {
     set(rows.paths,
-        `${s.mediaPath}${s.completePath ? ` ← ${s.completePath}` : ' · téléchargements non renseignés'}`,
+        `Médiathèque : ${s.mediaPath} · ${s.completePath ? `Téléchargements : ${s.completePath}` : 'dossier des téléchargements non renseigné'}`,
         !res.ok ? 'error' : s.completePath ? 'ok' : 'warn')
   }
 
@@ -139,7 +140,7 @@ async function loadCatalog() {
   try {
     const { count, empty } = await getJson('/api/torrents/status')
     if (empty) set(rows.catalog, 'Catalogue vide', 'warn')
-    else       set(rows.catalog, `${count} séries disponibles`, 'ok')
+    else       set(rows.catalog, plural(count, 'série disponible', 'séries disponibles'), 'ok')
   } catch {
     set(rows.catalog, 'Impossible de vérifier', 'warn')
   }

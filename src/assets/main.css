@@ -167,7 +167,7 @@ body {
     .pill-err     { @apply border-err/35 text-err; }
     .pill-muted   { @apply border-border-light text-muted; }
 
-    /* Filtres et onglets compteurs */
+    /* Filtres et onglets à compteur */
     .chip {
         @apply inline-flex items-center gap-2 h-[34px] px-3.5 rounded-full border border-border-light text-[13px] font-medium
         text-secondary whitespace-nowrap transition-colors cursor-pointer hover:text-primary hover:bg-hover;
@@ -210,7 +210,7 @@ body {
         @apply translate-x-5 bg-on-accent;
     }
 
-    /* Sélecteur */
+    /* Sélecteur segmenté */
     .segmented {
         @apply inline-flex items-center gap-0.5 h-[34px] p-[3px] rounded-full border border-border-light;
     }
@@ -236,7 +236,7 @@ body {
         @apply h-full rounded-[2px] bg-accent transition-[width] duration-500;
     }
 
-    /* Menus déroulants et pop */
+    /* Menus déroulants et modales */
     .menu {
         @apply bg-card border border-border rounded-card p-1.5 shadow-[0_16px_40px_rgb(0_0_0/0.5)] flex flex-col gap-0.5;
     }

@@ -4,9 +4,9 @@ set -e
 PUID=${PUID:-1000}
 PGID=${PGID:-1000}
 
-echo "[fankarr] Running as UID=${PUID} GID=${PGID}"
+echo "[fankarr] Exécution en tant que UID=${PUID} GID=${PGID}"
 
-# Corriger les permissions du dossier data
+# Attribuer /config à PUID:PGID
 chown -R "$PUID:$PGID" /config
 
 exec gosu "$PUID:$PGID" node dist/server/index.js

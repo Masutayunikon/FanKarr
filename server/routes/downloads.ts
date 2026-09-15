@@ -17,7 +17,7 @@ router.post('/download', requireAuth, async (req, res) => {
     const torrent_url: string | null = req.body.torrent_url ?? null
     const magnet     : string | null = req.body.magnet      ?? null
     const url = torrent_url ?? magnet
-    if (!url) { res.status(400).json({ error: 'torrent_url ou magnet requis' }); return }
+    if (!url) { res.status(400).json({ error: 'Lien du torrent ou magnet requis' }); return }
     const file_index: number | null = req.body.file_index != null ? Number(req.body.file_index) : null
     const file_path : string | null = req.body.file_path  ?? null
     const infohash  : string | null = req.body.infohash   ?? null
@@ -29,13 +29,13 @@ router.post('/download', requireAuth, async (req, res) => {
 router.delete('/torrent/:hash', requireAuth, async (req, res) => {
     const hash        = String(req.params.hash)
     const deleteFiles = req.query.deleteFiles === 'true'
-    if (!hash) { res.status(400).json({ error: 'hash requis' }); return }
+    if (!hash) { res.status(400).json({ error: 'Hash du torrent requis' }); return }
     try {
         const result = await dispatchRemove(hash, deleteFiles)
         res.json(result)
     } catch (err) {
-        logger.error('api', `Suppression torrent échouée : ${err instanceof Error ? err.message : err}`)
-        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
+        logger.error('api', `Échec de la suppression du torrent : ${err instanceof Error ? err.message : err}`)
+        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux' })
     }
 })
 
@@ -76,8 +76,8 @@ router.get('/downloads', requireAuth, async (_req, res) => {
         }))
         res.json(enriched)
     } catch (err) {
-        logger.error('api', `GET /api/downloads échoué : ${err instanceof Error ? err.message : err}`)
-        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
+        logger.error('api', `Échec du chargement des téléchargements : ${err instanceof Error ? err.message : err}`)
+        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux' })
     }
 })
 

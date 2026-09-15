@@ -9,8 +9,8 @@
       <div class="flex flex-col gap-[7px]">
         <label for="jellyfin-token" class="field-label">Clé API administrateur</label>
         <input id="jellyfin-token" v-model="jellyfinAdminToken" type="password" class="field" autocomplete="off"
-          :placeholder="hasToken ? '•••••••••••••••••••• (configurée)' : 'Tableau de bord → Clés API'" />
-        <p class="text-xs text-muted">Dans Jellyfin : Tableau de bord → Clés API → Créer une clé.</p>
+          :placeholder="hasToken ? '•••••••••••••••••••• (configurée)' : 'Collez la clé API'" />
+        <p class="text-xs text-muted">Dans Jellyfin : Tableau de bord › Clés API › Créer une clé.</p>
       </div>
     </div>
 
@@ -27,6 +27,7 @@
         {{ testResult.ok ? `Connecté · Jellyfin ${testResult.version}` : testResult.error }}
       </span>
       <span v-if="saved" class="text-meta text-ok flex items-center gap-1.5"><Check :size="14" /> Enregistré</span>
+      <span v-if="saveError" class="text-meta text-err">{{ saveError }}</span>
     </div>
   </div>
 </template>
@@ -46,6 +47,7 @@ const jellyfinAdminToken = ref('')
 const hasToken           = ref(false)
 const saving             = ref(false)
 const saved              = ref(false)
+const saveError          = ref<string | null>(null)
 const testing            = ref(false)
 const testResult         = ref<JellyfinTestResult | null>(null)
 
@@ -64,15 +66,19 @@ onMounted(async () => {
 })
 
 async function save() {
-  saving.value = true
-  saved.value  = false
+  saving.value    = true
+  saved.value     = false
+  saveError.value = null
   const body: Record<string, string> = { jellyfinUrl: jellyfinUrl.value }
   if (jellyfinAdminToken.value) body.jellyfinAdminToken = jellyfinAdminToken.value
   const res = await fetch('/api/jellyfin/settings', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
     body: JSON.stringify(body),
-  })
-  if (res.ok) {
+  }).catch(() => null)
+  if (!res?.ok) {
+    const d = await res?.json().catch(() => ({}))
+    saveError.value = d?.error ?? 'Impossible d\'enregistrer les réglages Jellyfin.'
+  } else {
     const d = await res.json()
     hasToken.value = d.hasToken
     jellyfinAdminToken.value = ''

@@ -20,7 +20,7 @@ export function readOnboarding(): OnboardingState {
     return { step: isOnboardingStep(onboardingStep) ? onboardingStep : null, completedAt: onboardingCompletedAt }
 }
 
-// Installation antérieure à l'assistant : déjà configurée → rien n'est imposé
+// Installation configurée avant l'assistant : on ne l'impose pas
 export function migrateOnboarding(): boolean {
     const settings = readSettings()
     if (settings.onboardingCompletedAt || settings.onboardingStep) return false
@@ -29,7 +29,7 @@ export function migrateOnboarding(): boolean {
     const now = new Date().toISOString()
     writeSettings({ onboardingCompletedAt: now })
     markAllToursSeen(now)
-    logger.info('onboarding', 'Installation existante détectée — assistant marqué comme terminé')
+    logger.info('onboarding', 'Installation existante détectée : assistant marqué comme terminé')
     return true
 }
 

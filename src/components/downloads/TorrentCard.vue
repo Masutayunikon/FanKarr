@@ -2,7 +2,6 @@
   <article class="bg-card rounded-xl px-4 py-3 flex flex-col md:flex-row md:items-center gap-x-4 gap-y-3">
 
     <div class="flex items-center gap-4 flex-1 min-w-0">
-      <!-- Affiche -->
       <RouterLink v-if="torrent.serieId" :to="`/series/${torrent.serieId}`" class="shrink-0">
         <img v-if="poster" :src="poster" alt="" class="w-[34px] h-[51px] object-cover rounded-[4px]" />
         <span v-else class="w-[34px] h-[51px] rounded-[4px] bg-hover text-muted flex items-center justify-center"><Tv :size="16" :stroke-width="1.75" /></span>
@@ -12,17 +11,15 @@
       </span>
 
       <div class="flex-1 min-w-0 flex flex-col gap-[7px]">
-        <!-- Nom, état, client -->
         <div class="flex items-center gap-2.5 min-w-0">
           <div class="relative group/eps min-w-0">
             <p class="text-sm font-medium truncate cursor-default" :class="isImported ? 'text-secondary' : 'text-primary'" :title="torrent.name">
               {{ torrent.serieName && !torrent.name.startsWith(torrent.serieName) ? torrent.serieName : torrent.name }}
             </p>
-            <!-- Épisodes du torrent -->
             <div v-if="episodesWithProgress.length > 0" class="absolute bottom-full left-0 mb-2 hidden group-hover/eps:block z-20 min-w-56 max-w-80">
               <div class="menu p-3 gap-0">
                 <p class="text-meta text-primary font-medium truncate mb-1">{{ torrent.name }}</p>
-                <p class="tag-label mb-2">{{ episodesWithProgress.length }} épisode{{ episodesWithProgress.length > 1 ? 's' : '' }}</p>
+                <p class="tag-label mb-2">{{ plural(episodesWithProgress.length, 'épisode') }}</p>
                 <div class="flex flex-col gap-1 max-h-48 overflow-y-auto">
                   <div v-for="ep in episodesWithProgress" :key="ep.episode_id" class="flex items-center justify-between gap-3 text-meta">
                     <span class="text-primary shrink-0 tabular-nums">S{{ String(ep.season_number).padStart(2,'0') }}E{{ String(ep.episode_number).padStart(2,'0') }}</span>
@@ -31,7 +28,7 @@
                         class="pill h-5 px-2 text-[10.5px]"
                         :class="ep.progress >= 100 ? 'pill-ok' : ep.priority === 0 ? 'pill-muted' : 'pill-active'"
                     >
-                      {{ ep.priority === 0 ? 'ignoré' : ep.progress >= 100 ? '✓' : `${ep.progress} %` }}
+                      {{ ep.priority === 0 ? 'Exclu' : ep.progress >= 100 ? '✓' : `${ep.progress} %` }}
                     </span>
                   </div>
                 </div>
@@ -43,20 +40,18 @@
           <span v-if="!isDone" class="ml-auto text-[13px] tabular-nums shrink-0" :class="torrent.state === 'error' ? 'text-err' : 'text-primary'">{{ clampedProgress }}&nbsp;%</span>
         </div>
 
-        <!-- Progression, vitesse, ETA -->
         <template v-if="!isDone">
           <div class="progress">
             <div class="progress-bar" :class="{ 'bg-muted': torrent.state === 'paused', 'bg-err': torrent.state === 'error' }" :style="{ width: `${clampedProgress}%` }" />
           </div>
           <div class="flex items-center gap-x-4 gap-y-1 flex-wrap text-xs text-muted">
             <span v-if="torrent.state === 'downloading'">{{ formatSpeed(torrent.speed ?? 0) }}</span>
-            <span v-if="torrent.state === 'downloading' && torrent.eta > 0">reste {{ formatDuration(torrent.eta) }}</span>
+            <span v-if="torrent.state === 'downloading' && torrent.eta > 0 && formatDuration(torrent.eta) !== '∞'">reste {{ formatDuration(torrent.eta) }}</span>
             <span v-if="torrent.state === 'error'" class="text-err">Le client signale une erreur sur ce torrent</span>
             <span v-if="columns.size">{{ formatSize(torrent.downloaded) }} sur {{ formatSize(torrent.size) }}</span>
           </div>
         </template>
 
-        <!-- Terminé : erreurs d'import ou détails -->
         <template v-else>
           <div v-if="torrent.errorFiles?.length > 0" class="relative group/err flex items-center gap-[9px] text-meta text-err min-w-0 w-fit max-w-full">
             <TriangleAlert :size="14" :stroke-width="2" class="shrink-0" />
@@ -75,20 +70,19 @@
             <span>
               <template v-if="torrent.organizeProgress?.total > 1">{{ torrent.organizeProgress.total }} fichiers · </template>{{ formatSize(torrent.size) }}
             </span>
-            <span v-if="torrent.state === 'unknown'" class="text-accent">État non remonté par le client</span>
+            <span v-if="torrent.state === 'unknown'" class="text-accent">Le client n'indique pas l'état de ce torrent</span>
             <span v-if="isImported && torrent.importedAt">importé {{ formatRelative(torrent.importedAt) }}</span>
             <span v-else-if="!isImported && autoImportIn">import automatique {{ autoImportIn }}</span>
-            <span v-if="columns.uploaded && torrent.uploaded">↑ {{ formatSize(torrent.uploaded) }}</span>
-            <span v-if="columns.upspeed && torrent.upspeed > 0">{{ formatSpeed(torrent.upspeed) }}</span>
+            <span v-if="columns.uploaded && torrent.uploaded">Envoyé {{ formatSize(torrent.uploaded) }}</span>
+            <span v-if="columns.upspeed && torrent.upspeed > 0">Envoi {{ formatSpeed(torrent.upspeed) }}</span>
           </div>
         </template>
       </div>
     </div>
 
-    <!-- État d'import et actions -->
     <div class="md:w-[260px] shrink-0 flex items-center justify-end gap-2.5 flex-wrap">
       <template v-if="!isDone">
-        <span class="text-meta text-muted max-md:mr-auto">{{ torrent.serieName ? (autoImport ? 'Import auto à la fin' : 'Import manuel à la fin') : 'Série non reconnue' }}</span>
+        <span class="text-meta text-muted max-md:mr-auto">{{ torrent.serieName ? (autoImport ? 'Import automatique à la fin' : 'À importer une fois terminé') : 'Série non reconnue' }}</span>
       </template>
       <template v-else>
         <span v-if="isImported" class="flex items-center gap-1.5 text-meta text-ok max-md:mr-auto">
@@ -109,30 +103,29 @@
         </button>
       </template>
 
-      <!-- Supprimer -->
       <div class="relative">
         <button
             @click="emit('toggle-confirm', showConfirmDelete ? null : torrent.hash)"
             :disabled="deleting"
             class="w-8 h-8 pointer-coarse:w-10 pointer-coarse:h-10 rounded-full border border-border-light text-muted flex items-center justify-center hover:text-err hover:border-err/30 transition-colors"
-            :title="isDone ? 'Supprimer le torrent' : 'Annuler le téléchargement'"
-            :aria-label="isDone ? 'Supprimer le torrent' : 'Annuler le téléchargement'"
+            :title="isDone ? 'Supprimer le torrent' : 'Arrêter le téléchargement'"
+            :aria-label="isDone ? 'Supprimer le torrent' : 'Arrêter le téléchargement'"
         >
           <Trash2 :size="14" />
         </button>
         <div v-if="showConfirmDelete" class="menu absolute bottom-full right-0 mb-2 w-60 z-20 p-3 gap-3">
           <p class="text-body text-primary font-medium">
-            {{ isDone ? 'Supprimer ce torrent ?' : 'Annuler ce téléchargement ?' }}
+            {{ isDone ? 'Supprimer ce torrent du client ?' : 'Arrêter ce téléchargement ?' }}
           </p>
           <label class="flex items-center gap-2 text-meta text-secondary cursor-pointer">
             <input type="checkbox" v-model="withFiles" class="w-4 h-4 rounded" />
-            Supprimer aussi les fichiers
+            Supprimer aussi les fichiers du disque
           </label>
           <div class="flex gap-2">
             <button @click="emit('delete', torrent, withFiles)" :disabled="deleting" class="btn-danger btn-sm flex-1">
-              {{ deleting ? '…' : 'Confirmer' }}
+              {{ deleting ? 'Suppression…' : isDone ? 'Supprimer' : 'Arrêter' }}
             </button>
-            <button @click="emit('toggle-confirm', null)" class="btn-ghost btn-sm flex-1">Annuler</button>
+            <button @click="emit('toggle-confirm', null)" class="btn-ghost btn-sm flex-1">{{ isDone ? 'Garder' : 'Continuer' }}</button>
           </div>
         </div>
       </div>
@@ -145,7 +138,7 @@
 import { ref, computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Check, FileQuestion, Loader, Trash2, TriangleAlert, Tv } from 'lucide-vue-next'
-import { formatDuration, formatRelative, formatSize, formatSpeed } from '@/utils/format'
+import { formatDuration, formatRelative, formatSize, formatSpeed, plural } from '@/utils/format'
 
 const props = defineProps<{
   torrent          : any
@@ -172,7 +165,7 @@ const isImported = computed(() => isDone.value && props.torrent.organizeState ==
 
 const clientLine = computed(() => [
   props.columns.client ? props.torrent.client_name : null,
-  isDone.value && props.columns.ratio ? `R ${(props.torrent.ratio ?? 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : null,
+  isDone.value && props.columns.ratio ? `Ratio ${(props.torrent.ratio ?? 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : null,
 ].filter(Boolean).join(' · '))
 
 
@@ -184,7 +177,6 @@ const errorSummary = computed(() => {
   return `${ep ? `E${ep[1]}` : name} · ${errs[0]!.error}${errs.length > 1 ? ` (+${errs.length - 1})` : ''}`
 })
 
-// Épisodes enrichis avec leur progression depuis les données de fichiers du client
 const episodesWithProgress = computed(() => {
   const eps: any[] = props.torrent.episodes ?? []
   if (!eps.length) return []
@@ -208,5 +200,5 @@ const badge = computed(() => ({
   checking   : { label: 'Vérification',   class: 'pill-wait' },
   error      : { label: 'Erreur',         class: 'pill-err' },
   unknown    : { label: 'État inconnu',   class: 'pill-wait' },
-} as Record<string, { label: string; class: string }>)[props.torrent.state] ?? { label: 'Inconnu', class: 'pill-muted' })
+} as Record<string, { label: string; class: string }>)[props.torrent.state] ?? { label: 'État inconnu', class: 'pill-muted' })
 </script>

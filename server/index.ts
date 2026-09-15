@@ -71,11 +71,11 @@ if (fs.existsSync(PUBLIC_PATH)) {
     app.use(express.static(PUBLIC_PATH))
 }
 
-// ── Migration mono-user → multi-user ──────────────────────────
+// ── Migration vers le multi-utilisateur ───────────────────────
 migrateIfNeeded()
 migrateOnboarding()
 
-// ── Auth ───────────────────────────────────────────────────────
+// ── Authentification ───────────────────────────────────────────
 app.get ('/api/auth/status',          authStatus)
 app.post('/api/auth/setup',           authSetup)
 app.post('/api/auth/login',           authLogin)
@@ -85,14 +85,11 @@ app.post('/api/auth/change-password',  requireAuth,  authChangePassword)
 app.post('/api/auth/regenerate-token', requireAuth,  authRegenerateToken)
 app.post('/api/auth/tour-seen',        requireAuth,  authTourSeen)
 
-// ── API publique v1 (auth par token) ──────────────────────────
+// ── API publique v1 (authentification par jeton) ──────────────
 app.use('/api', publicApiRouter)
 
-// ── Garde admin : protège les préfixes réservés aux admins ────
-// NOTE : app.use('/api', requireAdmin, router) s'applique à TOUTES
-// les requêtes /api/* avant même que le router vérifie ses routes,
-// ce qui bloquerait les utilisateurs standard. On utilise donc un
-// middleware ciblé sur les chemins réellement admin-only.
+// ── Garde admin par préfixe ───────────────────────────────────
+// requireAdmin sur app.use('/api') bloquerait tous les utilisateurs
 const ADMIN_PREFIXES = [
     '/users', '/jellyfin', '/settings', '/torrent-clients',
     '/downloads', '/download', '/organize', '/import',
@@ -108,7 +105,7 @@ app.use('/api', (req, res, next) => {
     next()
 })
 
-// ── Routers (admin + utilisateurs connectés) ───────────────────
+// ── Routes (admins et utilisateurs connectés) ──────────────────
 app.use('/api', usersRouter)
 app.use('/api', jellyfinRouter)
 app.use('/api', settingsRouter)
@@ -124,7 +121,7 @@ app.use('/api', invitesRouter)
 app.use('/api', requireAuth, seriesRouter)
 app.use('/api', requireAuth, requestsRouter)
 
-// ── Catch-all SPA ──────────────────────────────────────────────
+// ── Application web (toutes les autres routes) ─────────────────
 if (fs.existsSync(PUBLIC_PATH)) {
     app.get('*path', (_req, res) => { res.sendFile(path.join(PUBLIC_PATH, 'index.html')) })
 }
@@ -134,32 +131,31 @@ const server = http.createServer({ maxHeaderSize: 32768 }, app)
 
 server.listen(PORT, async () => {
     const url = `http://localhost:${PORT}`
-    console.log(`\n  FanKarr  →  \x1b]8;;${url}\x1b\\${url}\x1b]8;;\x1b\\\n`)
-    logger.info('api', `Serveur démarré — ${url}`)
+    console.log(`\n  FanKarr  \x1b]8;;${url}\x1b\\${url}\x1b]8;;\x1b\\\n`)
+    logger.info('api', `Serveur démarré sur ${url}`)
     try {
         const available = await readAvailable()
-        logger.info('api', `Cache GitHub initialisé — ${available.length} séries disponibles`)
+        logger.info('api', `Catalogue chargé : ${available.length} séries`)
     } catch (err) {
-        logger.warn('api', `Impossible de charger available.json au démarrage : ${err instanceof Error ? err.message : err}`)
+        logger.warn('api', `Impossible de charger le catalogue (available.json) au démarrage : ${err instanceof Error ? err.message : err}`)
     }
 
     const { mediaPath }  = readSettings()
 
-    // Migration organized.json : si ancien format (valeurs string) → reset + rescan
+    // Ancien format d'organized.json (valeurs texte) : réinitialisation, l'analyse le reconstruit
     try {
         const raw = readOrganized()
         const isOldFormat = Object.values(raw).some((entries: any) =>
             Object.values(entries).some(v => typeof v === 'string')
         )
         if (isOldFormat) {
-            logger.info('api', 'Migration organized.json : ancien format détecté → réinitialisation')
+            logger.info('api', 'Migration organized.json : ancien format détecté, fichier réinitialisé')
             writeOrganized({})
         }
     } catch (err) {
-        logger.error('api', `Migration organized.json ignorée : ${err instanceof Error ? err.message : err}`)
+        logger.error('api', `Migration organized.json annulée : ${err instanceof Error ? err.message : err}`)
     }
 
-    // Migration organized.json : backfill dest_dir manquant sur les anciennes entrées
     try {
         const raw = readOrganized()
         let patched = 0
@@ -173,10 +169,10 @@ server.listen(PORT, async () => {
         }
         if (patched > 0) {
             writeOrganized(raw)
-            logger.info('api', `Migration organized.json : ${patched} entrée(s) backfillées avec dest_dir`)
+            logger.info('api', `Migration organized.json : ${patched} entrée(s) complétée(s) (dest_dir)`)
         }
     } catch (err) {
-        logger.warn('api', `Migration dest_dir échouée : ${err instanceof Error ? err.message : err}`)
+        logger.warn('api', `Échec de la migration dest_dir : ${err instanceof Error ? err.message : err}`)
     }
 
     loadCatalog()
@@ -185,7 +181,7 @@ server.listen(PORT, async () => {
             dedupeOrganizedEpisodes(ORGANIZED_PATH)
             return scanMediaPath(mediaPath, ORGANIZED_PATH, seriesData)
         })
-        .catch(err => logger.error('api', `Scan initial échoué : ${err instanceof Error ? err.message : err}`))
+        .catch(err => logger.error('api', `Échec de l'analyse initiale de la médiathèque : ${err instanceof Error ? err.message : err}`))
 
     const autoOrganize = async () => {
         autoImportSchedule.lastRunAt = new Date().toISOString()
@@ -201,7 +197,7 @@ server.listen(PORT, async () => {
                     if (result.done > 0 || result.errors > 0) {
                         pushNotif({ ...result, at: new Date().toISOString() })
                     }
-                    // Marquer les demandes actives comme disponibles quand des fichiers sont importés
+                    // Demandes actives passées en « disponible » dès qu'un fichier est importé
                     if (result.done > 0 && result.serieId != null) {
                         try {
                             const toComplete = readRequests().filter(r =>
@@ -210,25 +206,25 @@ server.listen(PORT, async () => {
                             )
                             for (const r of toComplete) {
                                 completeRequest(r.id)
-                                logger.info('requests', `Demande "${r.serieName}" passée en disponible (import automatique)`)
+                                logger.info('requests', `Demande « ${r.serieName} » passée en disponible (import automatique)`)
                             }
                         } catch (err) {
-                            logger.warn('api', `Impossible de compléter les demandes pour série ${result.serieId} : ${err instanceof Error ? err.message : err}`)
+                            logger.warn('api', `Impossible de passer en « disponible » les demandes de la série ${result.serieId} : ${err instanceof Error ? err.message : err}`)
                         }
                     }
                     const { organizeMode, deleteTorrentOnMove } = readSettings()
                     if (organizeMode === 'move' && deleteTorrentOnMove && result.done > 0) {
                         const removeResult = await dispatchRemove(result.hash, false)
                         if (removeResult.ok) {
-                            logger.info('api', `Torrent "${result.name}" supprimé après move`)
+                            logger.info('api', `Torrent « ${result.name} » retiré du client après déplacement`)
                         } else {
-                            logger.warn('api', `Torrent "${result.name}" — suppression échouée après move : ${removeResult.error ?? 'aucun client n\'a pu supprimer'}`)
+                            logger.warn('api', `Échec du retrait de « ${result.name} » après déplacement : ${removeResult.error ?? 'aucun client n\'a pu le supprimer'}`)
                         }
                     }
                 }
             )
         } catch (err) {
-            logger.error('api', `Auto-organise échoué : ${err instanceof Error ? err.message : err}`)
+            logger.error('api', `Échec de l'import automatique : ${err instanceof Error ? err.message : err}`)
         }
     }
 
@@ -239,45 +235,42 @@ server.listen(PORT, async () => {
     }, 10_000)
 
     setTimeout(() => {
-        checkNfoUpdates().catch(err => logger.error('nfo-update', `Vérif initiale échouée : ${err instanceof Error ? err.message : err}`))
+        checkNfoUpdates().catch(err => logger.error('nfo-update', `Échec de la vérification des mises à jour NFO : ${err instanceof Error ? err.message : err}`))
         setInterval(() => {
-            checkNfoUpdates().catch(err => logger.error('nfo-update', `Vérif horaire échouée : ${err instanceof Error ? err.message : err}`))
+            checkNfoUpdates().catch(err => logger.error('nfo-update', `Échec de la vérification des mises à jour NFO : ${err instanceof Error ? err.message : err}`))
         }, 60 * 60_000)
     }, 30_000)
 
-    // Sync automatique des noms de fichiers toutes les heures.
-    // Le TTL du cache GitHub est de 1h — ce setInterval tire toujours sur des données fraîches.
     setInterval(async () => {
         try {
             const seriesData   = await loadCatalog()
             const organizedPath = path.join(DATA_DIR, 'organized.json')
             const { updated }  = await migrateOrganizedEpisodeIds(organizedPath, seriesData)
             if (updated > 0)
-                logger.info('api', `Migration IDs auto — ${updated} ID(s) mis à jour`)
+                logger.info('api', `Migration automatique des IDs : ${updated} ID(s) mis à jour`)
             const { removed }  = dedupeOrganizedEpisodes(organizedPath)
             if (removed > 0)
-                logger.info('api', `Dédoublonnage auto — ${removed} entrée(s) redondante(s) supprimée(s)`)
+                logger.info('api', `Dédoublonnage automatique : ${removed} entrée(s) redondante(s) supprimée(s)`)
             const { renamed }  = await syncFilenameChanges(seriesData, organizedPath)
             if (renamed > 0)
-                logger.info('api', `Sync noms auto — ${renamed} fichier(s) renommé(s)`)
+                logger.info('api', `Renommage automatique : ${renamed} fichier(s) renommé(s)`)
         } catch (err) {
-            logger.error('api', `Sync noms auto échoué : ${err instanceof Error ? err.message : err}`)
+            logger.error('api', `Échec de la mise à jour horaire des imports : ${err instanceof Error ? err.message : err}`)
         }
     }, 60 * 60_000)
 
-    // RSS sync — auto-téléchargement des nouveaux épisodes toutes les 6 heures.
     setTimeout(() => {
-        runRssSync().catch(err => logger.error('rss-sync', `Sync initial échoué : ${err instanceof Error ? err.message : err}`))
+        runRssSync().catch(err => logger.error('rss-sync', `Échec de la surveillance des nouveaux épisodes : ${err instanceof Error ? err.message : err}`))
         setInterval(() => {
-            runRssSync().catch(err => logger.error('rss-sync', `Sync périodique échoué : ${err instanceof Error ? err.message : err}`))
+            runRssSync().catch(err => logger.error('rss-sync', `Échec de la surveillance des nouveaux épisodes : ${err instanceof Error ? err.message : err}`))
         }, 6 * 60 * 60_000)
-    }, 60_000) // premier cycle 1 min après le démarrage
+    }, 60_000)
 
-    // Jellyfin sync — toutes les heures (no-op si Jellyfin non configuré)
+    // Sans effet si Jellyfin n'est pas configuré
     setTimeout(() => {
-        runJellyfinSync().catch(err => logger.error('jellyfin', `Sync initiale échouée : ${err instanceof Error ? err.message : err}`))
+        runJellyfinSync().catch(err => logger.error('jellyfin', `Échec de la synchronisation Jellyfin : ${err instanceof Error ? err.message : err}`))
         setInterval(() => {
-            runJellyfinSync().catch(err => logger.error('jellyfin', `Sync périodique échouée : ${err instanceof Error ? err.message : err}`))
+            runJellyfinSync().catch(err => logger.error('jellyfin', `Échec de la synchronisation Jellyfin : ${err instanceof Error ? err.message : err}`))
         }, 60 * 60_000)
-    }, 2 * 60_000) // premier cycle 2 min après le démarrage
+    }, 2 * 60_000)
 })

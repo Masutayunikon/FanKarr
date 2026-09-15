@@ -6,7 +6,6 @@
     </div>
 
     <template v-else>
-      <!-- Clients existants -->
       <div v-if="clients.length > 0" class="flex flex-col gap-2">
         <div v-for="client in clients" :key="client.uuid" class="card flex items-center gap-3">
           <span
@@ -25,7 +24,6 @@
         </div>
       </div>
 
-      <!-- Formulaire -->
       <div v-if="formOpen" class="card flex flex-col gap-4">
         <p class="text-sm font-semibold text-primary">{{ editing ? 'Modifier le client' : 'Ajouter un client' }}</p>
         <TorrentClientForm
@@ -41,7 +39,6 @@
         <Plus :size="14" /> {{ clients.length > 0 ? 'Ajouter un autre client' : 'Ajouter un client' }}
       </button>
 
-      <!-- Rappel chemins -->
       <div class="flex items-start gap-3 px-4 py-3 rounded-field border border-border bg-card/50">
         <Info :size="15" class="text-muted mt-0.5 shrink-0" />
         <p class="text-meta text-muted leading-relaxed">
@@ -58,8 +55,8 @@
         <div class="flex flex-col gap-0.5">
           <p class="text-body text-accent font-medium">Aucun client configuré</p>
           <p class="text-meta text-muted">
-            Sans client, FanKarr ne pourra rien télécharger. Cliquez à nouveau sur « Suivant » pour continuer quand même,
-            vous pourrez l'ajouter plus tard dans Paramètres → Clients de téléchargement.
+            Sans client, FanKarr ne pourra rien télécharger. Cliquez à nouveau sur « Suivant » pour passer cette étape.
+            Vous pourrez en ajouter un plus tard dans Paramètres › Clients torrent.
           </p>
         </div>
       </div>

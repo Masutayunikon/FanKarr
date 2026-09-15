@@ -1,8 +1,3 @@
-/**
- * organize.ts
- * ===========
- * Lance l'organizer dans un Worker Thread dédié pour ne pas bloquer Express.
- */
 
 import fs   from 'fs'
 import path from 'path'
@@ -63,7 +58,7 @@ function runWorker(torrents: any[], seriesData: any[], onResult: (r: WorkerResul
                 try {
                     updateOrganized(data => { (data[msg.hash] ??= {})[String(msg.episodeId)] = msg.entry })
                 } catch (err) {
-                    logger.error('organize', `Enregistrement de l'import impossible (ep ${msg.episodeId}) : ${err instanceof Error ? err.message : err}`)
+                    logger.error('organize', `Échec de l'enregistrement de l'import (épisode ${msg.episodeId}) :${err instanceof Error ? err.message : err}`)
                 }
             } else if (msg.type === 'result') {
                 onResult(msg)
@@ -72,13 +67,13 @@ function runWorker(torrents: any[], seriesData: any[], onResult: (r: WorkerResul
             }
         })
         worker.on('error', err => finish(err))
-        worker.on('exit', code => finish(code > 1 ? new Error(`Worker exit inattendu : code ${code}`) : undefined))
+        worker.on('exit', code => finish(code > 1 ? new Error(`Arrêt inattendu du worker (code ${code})`) : undefined))
 
         worker.postMessage({ type: 'run', torrents, seriesData })
     })
 }
 
-// ── Scan initial ──────────────────────────────────────────────
+// ── Analyse de la médiathèque ─────────────────────────────────
 
 function swapExt(filename: string, ext: string): string {
     const cur = path.extname(filename)
@@ -96,11 +91,11 @@ export async function scanMediaPath(
     const result = { found: 0, added: 0 }
 
     if (!fs.existsSync(mediaPath)) {
-        logger.warn('organize', `Dossier médiathèque introuvable : ${mediaPath}`)
+        logger.warn('organize', `Dossier de la médiathèque introuvable : ${mediaPath}`)
         return result
     }
 
-    logger.info('organize', `Scan de la médiathèque : ${mediaPath}`)
+    logger.info('organize', `Analyse de la médiathèque : ${mediaPath}`)
 
     const filenameIndex = new Map<string, {
         hashes      : string[]
@@ -115,7 +110,6 @@ export async function scanMediaPath(
         for (const season of sd.seasons ?? []) {
             for (const ep of season.episodes ?? []) {
 
-                // Helper : indexer par nom sans extension
                 const idx = (filename: string, hash: string, destFilename?: string) => {
                     const base = filename.replace(/\.[^.]+$/, '')
                     if (!base) return
@@ -134,14 +128,12 @@ export async function scanMediaPath(
                     })
                 }
 
-                // 1. Noms depuis les paths (avec vrai infohash)
                 for (const p of ep.paths ?? []) {
                     if (typeof p !== 'object' || !p.infohash || !p.path) continue
                     const hash        = p.infohash.toLowerCase()
                     const srcFilename = p.path.replace(/\\/g, '/').split('/').pop()
                     if (!srcFilename) continue
                     idx(srcFilename, hash)
-                    // nfo_filename et formatted_name du path en priorité sur ceux de l'épisode
                     const pathNfo = p.nfo_filename ?? ep.nfo_filename
                     if (pathNfo) idx(pathNfo, hash, pathNfo)
                     const pathFmt = p.formatted_name ?? ep.formatted_name
@@ -151,7 +143,6 @@ export async function scanMediaPath(
                     }
                 }
 
-                // 2. original_filename, nfo_filename et formatted_name épisode — fallback
                 const fallbackHash = ep.paths?.[0]?.infohash?.toLowerCase() ?? 'manual'
                 if (ep.original_filename) idx(ep.original_filename, fallbackHash, ep.original_filename)
                 if (ep.nfo_filename)      idx(ep.nfo_filename, fallbackHash, ep.nfo_filename)
@@ -166,11 +157,10 @@ export async function scanMediaPath(
     let organized: Organized
     try { organized = readOrganized(organizedPath) }
     catch (err) {
-        logger.error('organize', `Scan annulé : ${err instanceof Error ? err.message : err}`)
+        logger.error('organize', `Analyse annulée : ${err instanceof Error ? err.message : err}`)
         return result
     }
 
-    // Track les paires hash:episodeId présentes
     const presentFiles = new Set<string>()
     let noMatch = 0
 
@@ -205,8 +195,7 @@ export async function scanMediaPath(
                 const nameWithoutExt = entry.name.replace(/\.[^.]+$/, '')
                 let match = filenameIndex.get(nameWithoutExt)
 
-                // Fallback : chercher si un candidat de l'index est un préfixe du nom du fichier
-                // ex: index a "Wind Breaker.S01E01.MULTI.1080p" et le fichier est "Wind Breaker.S01E01.MULTI.1080p.x264-FANKAI"
+                // À défaut, un nom de l'index qui préfixe le fichier (ex. "X.S01E01.MULTI.1080p" pour "X.S01E01.MULTI.1080p.x264-FANKAI")
                 if (!match) {
                     const lower = nameWithoutExt.toLowerCase()
                     for (const [key, val] of filenameIndex.entries()) {
@@ -221,8 +210,8 @@ export async function scanMediaPath(
                     noMatch++
                     const prefix    = nameWithoutExt.slice(0, 20).toLowerCase()
                     const close     = [...filenameIndex.keys()].filter(k => k.toLowerCase().startsWith(prefix)).slice(0, 3)
-                    const closeStr  = close.length > 0 ? ` | candidats : ${close.map(c => `"${c}"`).join(', ')}` : ' | aucun candidat proche'
-                    logger.warn('organize', `Scan no match : "${nameWithoutExt}"${closeStr}`)
+                    const closeStr  = close.length > 0 ? ` (candidats : ${close.map(c => `« ${c} »`).join(', ')})` : ' (aucun candidat proche)'
+                    logger.warn('organize', `Analyse : aucune correspondance pour « ${nameWithoutExt} »${closeStr}`)
                     continue
                 }
 
@@ -239,11 +228,11 @@ export async function scanMediaPath(
                     episode,
                     episode_id   : episodeId,
                     src_filename : srcFilename,
-                    dest_filename: entry.name,   // vrai nom sur disque
+                    dest_filename: entry.name,
                     dest_path    : full,
                 }
                 result.added++
-                logger.debug('organize', `Scan match : "${entry.name}" → ep ${episodeId} (S${season}E${episode})`)
+                logger.debug('organize', `Analyse : « ${entry.name} » associé à l'épisode ${episodeId} (S${season}E${episode})`)
             }
         }
     }
@@ -251,7 +240,7 @@ export async function scanMediaPath(
     walk(mediaPath)
 
     const mediaEmpty = result.found === 0 && Object.keys(organized).length > 0
-    if (mediaEmpty) logger.warn('organize', `Scan : aucun fichier dans ${mediaPath} — suppression des entrées ignorée`)
+    if (mediaEmpty) logger.warn('organize', `Analyse : aucun fichier trouvé dans ${mediaPath}, entrées existantes conservées`)
 
     // Supprimer uniquement les entrées connues dans l'index et absentes du disque
     const allEpisodeIds = new Set(
@@ -270,7 +259,6 @@ export async function scanMediaPath(
         if (Object.keys(organized[hash]).length === 0) delete organized[hash]
     }
 
-    // Désimport automatique des fichiers manquants sur le disque
     const { autoUnimportMissing } = readSettings()
     let autoRemoved = 0
     if (autoUnimportMissing && !mediaEmpty) {
@@ -280,7 +268,7 @@ export async function scanMediaPath(
                 if (destPath && !fs.existsSync(destPath)) {
                     delete (organized[hash] as any)[episodeId]
                     autoRemoved++
-                    logger.info('organize', `Désimport auto : fichier introuvable "${destPath}"`)
+                    logger.info('organize', `Retrait automatique : fichier introuvable « ${destPath} »`)
                 }
             }
             if (Object.keys(organized[hash]).length === 0) delete organized[hash]
@@ -292,12 +280,12 @@ export async function scanMediaPath(
     }
 
     lastScan = { at: new Date().toISOString(), ...result }
-    logger.info('organize', `Scan terminé — ${result.found} fichiers, ${result.added} ajoutés, ${removed} orphelins supprimés${autoRemoved > 0 ? `, ${autoRemoved} désimportés auto (fichier manquant)` : ''}${noMatch > 0 ? `, ${noMatch} non matchés` : ''}`)
+    logger.info('organize', `Analyse terminée : ${result.found} fichier(s), ${result.added} ajouté(s), ${removed} entrée(s) obsolète(s) retirée(s) du suivi${autoRemoved > 0 ? `, ${autoRemoved} retirée(s) (fichier manquant)` : ''}${noMatch > 0 ? `, ${noMatch} sans correspondance` : ''}`)
 
     return result
 }
 
-// ── Auto-import ───────────────────────────────────────────────
+// ── Import automatique ────────────────────────────────────────
 
 export async function autoOrganizeAll(
     listFn     : () => Promise<any[]>,
@@ -306,16 +294,16 @@ export async function autoOrganizeAll(
 ): Promise<void> {
     const { autoImport, mediaPath } = readSettings()
     if (!autoImport) {
-        logger.debug('organize', 'Import automatique désactivé — skip')
+        logger.debug('organize', 'Import automatique désactivé')
         return
     }
     if (!mediaPath?.trim()) {
-        logger.debug('organize', 'Médiathèque non configurée — skip')
+        logger.debug('organize', 'Médiathèque non configurée')
         return
     }
 
     if (_queued > 0) {
-        logger.debug('organize', 'Import déjà en cours — skip')
+        logger.debug('organize', 'Import déjà en cours')
         return
     }
 
@@ -354,25 +342,25 @@ export async function autoOrganizeAll(
     if (seedingCount === 0) return
 
     if (newlySeeding.length > 0 && !isFirstRun) {
-        logger.info('organize', `${newlySeeding.length} torrent(s) terminé(s) → lancement de l'import automatique`)
+        logger.info('organize', `${newlySeeding.length} torrent(s) terminé(s) : lancement de l'import automatique`)
         for (const t of newlySeeding) {
-            logger.debug('organize', `Nouveau seeding : "${t.name}"`)
+            logger.debug('organize', `Torrent terminé : « ${t.name} »`)
         }
     } else {
-        logger.debug('organize', `Lancement worker (${seedingCount} torrents en seeding, vérification initiale)`)
+        logger.debug('organize', `Import automatique : vérification de ${seedingCount} torrent(s) terminé(s)`)
     }
 
     try {
         await enqueue(() => runWorker(torrents, seriesData, msg => {
             if (msg.errors.length > 0) {
-                logger.warn('organize', `"${msg.name}" — ${msg.done} importé(s), ${msg.skipped} skippé(s), ${msg.errors.length} erreur(s)`)
+                logger.warn('organize', `« ${msg.name} » : ${msg.done} importé(s), ${msg.skipped} ignoré(s), ${msg.errors.length} erreur(s)`)
                 for (const e of msg.errors) {
-                    logger.error('organize', `Erreur sur "${e.file}" : ${e.error}`)
+                    logger.error('organize', `Erreur sur « ${e.file} » : ${e.error}`)
                 }
             } else if (msg.done > 0) {
-                logger.info('organize', `"${msg.name}" — ${msg.done} fichier(s) importé(s), ${msg.skipped} skippé(s)`)
+                logger.info('organize', `« ${msg.name} » : ${msg.done} fichier(s) importé(s), ${msg.skipped} ignoré(s)`)
             } else {
-                logger.debug('organize', `"${msg.name}" — rien à importer (${msg.skipped} skippé(s))`)
+                logger.debug('organize', `« ${msg.name} » : rien à importer (${msg.skipped} ignoré(s))`)
             }
             onResult?.({
                 hash      : msg.hash,
@@ -384,25 +372,21 @@ export async function autoOrganizeAll(
                 errorFiles: msg.errors,
             })
         }))
-        logger.debug('organize', 'Worker terminé')
+        logger.debug('organize', 'Worker d\'import terminé')
     } catch (err) {
-        logger.error('organize', `Worker erreur : ${err instanceof Error ? err.message : err}`)
+        logger.error('organize', `Erreur du worker : ${err instanceof Error ? err.message : err}`)
     }
 }
 
-// ── Migration des IDs épisodes ────────────────────────────────
-//
-// Les IDs d'épisodes, saisons et séries peuvent changer entre deux passages
-// du scraper. On utilise (infohash, season_number, episode_number) comme clé
-// stable pour retrouver le nouvel ID et mettre à jour organized.json.
+// ── Migration des IDs d'épisodes ──────────────────────────────
+// Les IDs du scraper changent : on les retrouve via (infohash, saison, épisode)
 
 export async function migrateOrganizedEpisodeIds(
     organizedPath: string,
     seriesData   : any[]
 ): Promise<{ updated: number; orphaned: number }> {
 
-    // 1. Construire les tables de lookup depuis le catalogue actuel
-    //    hashEpMap : infohash → Map<"S:E", new_episode_id>
+    // infohash : Map<"saison:épisode", ID actuel>
     const hashEpMap = new Map<string, Map<string, number>>()
     const validIds  = new Set<number>()
 
@@ -421,11 +405,10 @@ export async function migrateOrganizedEpisodeIds(
         }
     }
 
-    // 2. Charger organized.json
     let organized: Organized
     try { organized = readOrganized(organizedPath) }
     catch (err) {
-        logger.error('organize', `Migration IDs annulée : ${err instanceof Error ? err.message : err}`)
+        logger.error('organize', `Migration des IDs annulée :${err instanceof Error ? err.message : err}`)
         return { updated: 0, orphaned: 0 }
     }
 
@@ -442,51 +425,45 @@ export async function migrateOrganizedEpisodeIds(
             const oldId = Number(oldIdStr)
 
             if (validIds.has(oldId)) {
-                // ID encore valide, aucun changement
                 newEpisodes[oldIdStr] = entry
                 continue
             }
 
-            // ID orphelin — chercher le nouvel ID via (hash, saison, épisode)
             const key   = `${entry.season}:${entry.episode}`
             const newId = epMap?.get(key)
 
             if (newId && newId !== oldId) {
-                // Vérifier qu'on n'écrase pas une entrée déjà présente avec le nouvel ID
                 if (newEpisodes[String(newId)] || (episodes as any)[String(newId)]) {
-                    // Le nouvel ID est déjà présent → l'ancien est un orphelin inutile, on le supprime simplement
                     changed = true
-                    logger.info('organize', `Migration ID : ep ${oldId} orphelin supprimé (${newId} déjà présent) (${hash.slice(0, 8)}… S${entry.season}E${entry.episode})`)
+                    logger.info('organize', `Migration des IDs : entrée de l'épisode ${oldId} supprimée, ${newId} déjà présent (${hash.slice(0, 8)}…, S${entry.season}E${entry.episode})`)
                 } else {
                     newEpisodes[String(newId)] = { ...entry, episode_id: newId }
                     updated++
                     changed = true
-                    logger.info('organize', `Migration ID : ep ${oldId} → ${newId} (${hash.slice(0, 8)}… S${entry.season}E${entry.episode})`)
+                    logger.info('organize', `Migration des IDs : épisode ${oldId} remplacé par ${newId} (${hash.slice(0, 8)}…, S${entry.season}E${entry.episode})`)
                 }
             } else {
-                // Introuvable — on conserve pour ne pas perdre l'entrée
                 orphaned++
                 newEpisodes[oldIdStr] = entry
-                logger.warn('organize', `Migration ID : ep ${oldId} introuvable dans le catalogue (${hash.slice(0, 8)}… S${entry.season}E${entry.episode})`)
+                logger.warn('organize', `Migration des IDs : épisode ${oldId} introuvable dans le catalogue (${hash.slice(0, 8)}…, S${entry.season}E${entry.episode})`)
             }
         }
 
         organized[hash] = newEpisodes
-        // Nettoyer les hash vides
         if (Object.keys(organized[hash]).length === 0) delete organized[hash]
     }
 
     if (changed) {
         writeOrganized(organized, organizedPath)
-        logger.info('organize', `Migration IDs terminée — ${updated} mis à jour${orphaned > 0 ? `, ${orphaned} non résolus` : ''}`)
+        logger.info('organize', `Migration des IDs terminée : ${updated} mis à jour${orphaned > 0 ? `, ${orphaned} non résolu(s)` : ''}`)
     } else {
-        logger.debug('organize', `Migration IDs — aucun changement nécessaire${orphaned > 0 ? ` (${orphaned} IDs inconnus conservés)` : ''}`)
+        logger.debug('organize', `Migration des IDs : aucun changement${orphaned > 0 ? ` (${orphaned} ID(s) inconnu(s) conservé(s))` : ''}`)
     }
 
     return { updated, orphaned }
 }
 
-// ── Déduplication ─────────────────────────────────────────────
+// ── Dédoublonnage ─────────────────────────────────────────────
 export function dedupeOrganizedEpisodes(
     organizedPath: string,
 ): { removed: number } {
@@ -497,7 +474,7 @@ export function dedupeOrganizedEpisodes(
         return { removed: 0 }
     }
 
-    // episode_id → [{ hash, entry }]
+    // episode_id : [{ hash, entry }]
     const byEpisode = new Map<string, { hash: string; entry: any }[]>()
     for (const [hash, episodes] of Object.entries(organized)) {
         for (const [episodeId, entry] of Object.entries(episodes as Record<string, any>)) {
@@ -517,19 +494,19 @@ export function dedupeOrganizedEpisodes(
             if (present.includes(c)) continue
             delete (organized[c.hash] as any)[episodeId]
             removed++
-            logger.info('organize', `Dédoublonnage : ep ${episodeId} retiré de ${c.hash.slice(0, 8)}… (fichier absent, conservé sous ${present[0].hash.slice(0, 8)}…)`)
+            logger.info('organize', `Dédoublonnage : épisode ${episodeId} retiré de ${c.hash.slice(0, 8)}… (fichier absent, conservé sous ${present[0].hash.slice(0, 8)}…)`)
         }
     }
 
     if (removed > 0) {
         writeOrganized(organized, organizedPath)
-        logger.info('organize', `Dédoublonnage terminé — ${removed} entrée(s) redondante(s) supprimée(s)`)
+        logger.info('organize', `Dédoublonnage terminé : ${removed} entrée(s) redondante(s) supprimée(s)`)
     }
 
     return { removed }
 }
 
-// ── Sync des noms de fichiers après mise à jour du scraper ────
+// ── Renommage selon le catalogue ──────────────────────────────
 
 export async function syncFilenameChanges(
     seriesData   : any[],
@@ -539,7 +516,7 @@ export async function syncFilenameChanges(
     let organized: Organized
     try { organized = readOrganized(organizedPath) }
     catch (err) {
-        logger.error('organize', `Sync noms annulée : ${err instanceof Error ? err.message : err}`)
+        logger.error('organize', `Renommage selon le catalogue annulé :${err instanceof Error ? err.message : err}`)
         return { renamed: 0, errors: 0 }
     }
 
@@ -565,7 +542,6 @@ export async function syncFilenameChanges(
                     ? path.basename(orgEntry.dest_path)
                     : orgEntry.dest_filename
                 const srcExt = path.extname(currentName)
-                // Priorité aux valeurs du path entry correspondant au hash organisé
                 const matchedPathEntry = (ep.paths ?? []).find((p: any) =>
                     typeof p === 'object' && p.infohash?.toLowerCase() === orgHash
                 )
@@ -583,7 +559,7 @@ export async function syncFilenameChanges(
                 const newPath = path.join(path.dirname(oldPath), expectedName)
                 try {
                     if (fs.existsSync(newPath)) {
-                        logger.warn('organize', `Sync rename : "${expectedName}" existe déjà — skip`)
+                        logger.warn('organize', `Renommage ignoré : « ${expectedName} » existe déjà`)
                         continue
                     }
                     fs.renameSync(oldPath, newPath)
@@ -596,10 +572,10 @@ export async function syncFilenameChanges(
                     retargetEntries(organized, new Map([[oldPath, newPath]]))
                     renamed++
                     changed = true
-                    logger.info('organize', `Sync rename : "${currentName}" → "${expectedName}"`)
+                    logger.info('organize', `Renommage : « ${currentName} » en « ${expectedName} »`)
                 } catch (err) {
                     errors++
-                    logger.error('organize', `Sync rename échoué pour ep ${ep.id} : ${err instanceof Error ? err.message : err}`)
+                    logger.error('organize', `Échec du renommage de l'épisode ${ep.id} :${err instanceof Error ? err.message : err}`)
                 }
             }
         }
@@ -609,7 +585,7 @@ export async function syncFilenameChanges(
         writeOrganized(organized, organizedPath)
 
     if (renamed > 0 || errors > 0)
-        logger.info('organize', `Sync noms scraper — ${renamed} renommé(s)${errors > 0 ? `, ${errors} erreur(s)` : ''}`)
+        logger.info('organize', `Noms de fichiers mis à jour : ${renamed} renommé(s)${errors > 0 ? `, ${errors} erreur(s)` : ''}`)
 
     return { renamed, errors }
 }
@@ -626,14 +602,12 @@ export async function organizeTorrent(
     const key     = hash.toLowerCase()
     const pending = _pendingManual.get(key)
     if (pending) {
-        logger.info('organize', `Import manuel de "${name}" déjà en attente — demande fusionnée`)
+        logger.info('organize', `Import manuel de « ${name} » déjà en file d'attente`)
         return pending
     }
-    logger.info('organize', `Import manuel ${_queued > 0 ? 'mis en file' : 'lancé'} pour "${name}" (${hash})`)
+    logger.info('organize', `Import manuel ${_queued > 0 ? 'mis en file d\'attente' : 'lancé'} pour « ${name} » (${hash})`)
 
-    // files : progression par fichier récupérée depuis le client torrent.
-    // Permet au worker de ne traiter que les fichiers à 100% et d'éviter
-    // les EBUSY sur Windows quand qBit est encore en train d'écrire les autres.
+    // Progression par fichier : le worker ignore les fichiers incomplets (évite EBUSY sous Windows)
     const fakeTorrent = { hash, name, save_path: savePath, state: 'seeding', files: files ?? [] }
     const result: OrganizeResult = { total: 0, skipped: 0, done: 0, errors: [] }
 
@@ -647,16 +621,16 @@ export async function organizeTorrent(
                 result.done    = msg.done
                 result.errors  = msg.errors
                 if (msg.errors.length > 0) {
-                    logger.warn('organize', `Import "${name}" — ${msg.done} OK, ${msg.errors.length} erreur(s)`)
+                    logger.warn('organize', `Import de « ${name} » : ${msg.done} importé(s), ${msg.errors.length} erreur(s)`)
                     for (const e of msg.errors) {
-                        logger.error('organize', `Erreur sur "${e.file}" : ${e.error}`)
+                        logger.error('organize', `Erreur sur « ${e.file} » : ${e.error}`)
                     }
                 } else {
-                    logger.info('organize', `Import "${name}" terminé — ${msg.done} fichier(s) importé(s), ${msg.skipped} skippé(s)`)
+                    logger.info('organize', `Import de « ${name} » terminé : ${msg.done} fichier(s) importé(s), ${msg.skipped} ignoré(s)`)
                 }
             })
         } catch (err) {
-            logger.error('organize', `Worker erreur lors de l'import de "${name}" : ${err instanceof Error ? err.message : err}`)
+            logger.error('organize', `Échec de l'import de « ${name} » :${err instanceof Error ? err.message : err}`)
             throw err
         }
         return result

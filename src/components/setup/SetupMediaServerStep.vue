@@ -1,7 +1,6 @@
 <template>
   <div class="flex flex-col gap-4">
 
-    <!-- Jellyfin -->
     <section class="card flex flex-col gap-4">
       <div class="flex items-start gap-3">
         <span class="w-9 h-9 rounded-full bg-accent-muted text-accent flex items-center justify-center shrink-0">
@@ -13,7 +12,7 @@
             <span v-if="jellyfin?.test?.ok" class="pill pill-ok h-5 px-2 text-[10.5px]">Connecté</span>
           </p>
           <p class="text-meta text-muted mt-0.5 leading-relaxed">
-            Permet à vos utilisateurs Jellyfin de se connecter à FanKarr et de faire des demandes depuis le plugin FanKarr Search.
+            Vos utilisateurs Jellyfin se connectent à FanKarr et font leurs demandes depuis le plugin FanKarr Search.
           </p>
         </div>
         <button @click="jellyfinOpen = !jellyfinOpen" :aria-expanded="jellyfinOpen" class="btn-secondary btn-sm shrink-0">
@@ -31,7 +30,7 @@
               {{ syncing ? 'Synchronisation…' : 'Synchroniser les utilisateurs' }}
             </button>
             <span v-if="syncResult" class="text-meta text-ok">
-              {{ syncResult.created }} créé{{ syncResult.created > 1 ? 's' : '' }} · {{ syncResult.skipped }} ignoré{{ syncResult.skipped > 1 ? 's' : '' }}
+              {{ plural(syncResult.created, 'créé', 'créés') }} · {{ plural(syncResult.skipped, 'déjà existant', 'déjà existants') }}
             </span>
             <span v-if="syncError" class="text-meta text-err">{{ syncError }}</span>
           </div>
@@ -40,7 +39,6 @@
       </template>
     </section>
 
-    <!-- Plex -->
     <section class="card flex flex-col gap-4">
       <div class="flex items-start gap-3">
         <span class="w-9 h-9 rounded-full bg-accent-muted text-accent flex items-center justify-center shrink-0">
@@ -53,7 +51,7 @@
           </p>
           <p class="text-meta text-muted mt-0.5 leading-relaxed">
             Crée une bibliothèque Plex sur votre médiathèque, reliée à l'agent de métadonnées Fankai.
-            Requiert Plex Media Server 1.43 ou plus récent pour la configuration automatique.
+            Nécessite Plex Media Server 1.43 ou plus récent pour la configuration automatique.
           </p>
         </div>
         <button @click="openPlex" :disabled="!settings.mediaPath" class="btn-secondary btn-sm shrink-0">
@@ -63,7 +61,7 @@
       <p v-if="!settings.mediaPath" class="text-meta text-accent">Renseignez d'abord la médiathèque à l'étape Dossiers.</p>
     </section>
 
-    <p class="text-meta text-muted">Pas de serveur multimédia pour l'instant ? Passez cette étape, tout se configure aussi plus tard.</p>
+    <p class="text-meta text-muted">Pas encore de Jellyfin ni de Plex ? Passez cette étape : vous pourrez les configurer plus tard dans les paramètres.</p>
 
   </div>
 
@@ -76,6 +74,7 @@ import { Server, Tv } from 'lucide-vue-next'
 import JellyfinConnectionForm from '@/components/settings/JellyfinConnectionForm.vue'
 import PlexWizard from '@/components/settings/PlexWizard.vue'
 import { setupContextKey, type SetupSettings } from './setup'
+import { plural } from '@/utils/format'
 
 defineProps<{ settings: SetupSettings; isDocker: boolean; defaultPath: string }>()
 
@@ -101,7 +100,7 @@ async function syncUsers() {
     const res  = await fetch('/api/jellyfin/sync', { method: 'POST', credentials: 'include' })
     const data = await res.json()
     if (res.ok) syncResult.value = data
-    else        syncError.value  = data.error ?? 'Erreur lors de la synchronisation'
+    else        syncError.value  = data.error ?? 'Impossible de synchroniser les utilisateurs Jellyfin'
   } catch {
     syncError.value = 'Impossible de contacter le serveur'
   } finally {

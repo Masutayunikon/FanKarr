@@ -14,7 +14,6 @@ export function splitTitle(title: string): { name: string; suffix: string } {
     return m ? { name: m[1]!, suffix: m[2]! } : { name: title, suffix: '' }
 }
 
-// Nouveauté : si importe il y a moins de 7 jours
 export function isNew(lastImportedAt: string | null | undefined): boolean {
     return !!lastImportedAt && Date.now() - new Date(lastImportedAt).getTime() < 7 * 86_400_000
 }

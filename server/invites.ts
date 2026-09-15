@@ -1,6 +1,3 @@
-/**
- * Système d'invitations
- */
 
 import fs     from 'fs'
 import path   from 'path'
@@ -20,7 +17,7 @@ export interface Invite {
 
 const INVITES_PATH = path.join(DATA_DIR, 'invites.json')
 
-// ── Helpers fichier ───────────────────────────────────────────
+// ── Fichier des invitations ───────────────────────────────────
 
 export function readInvites(): Invite[] {
     try {
@@ -34,7 +31,7 @@ function writeInvites(invites: Invite[]): void {
     fs.writeFileSync(INVITES_PATH, JSON.stringify(invites, null, 2))
 }
 
-// ── CRUD ──────────────────────────────────────────────────────
+// ── Gestion des invitations ───────────────────────────────────
 
 export function createInvite(opts: {
     createdBy: string
@@ -49,12 +46,12 @@ export function createInvite(opts: {
         expiresAt: opts.expiresInHours
             ? new Date(Date.now() + opts.expiresInHours * 3_600_000).toISOString()
             : null,
-        maxUses  : opts.maxUses === undefined ? 1 : opts.maxUses, // null = illimité
+        maxUses  : opts.maxUses === undefined ? 1 : opts.maxUses,
         uses     : 0,
         note     : opts.note,
     }
     writeInvites([...readInvites(), invite])
-    logger.info('invites', `Invitation créée : ${invite.code.slice(0, 8)}… (maxUses: ${invite.maxUses ?? '∞'}, expire: ${invite.expiresAt ?? 'jamais'})`)
+    logger.info('invites', `Invitation créée : ${invite.code.slice(0, 8)}… (utilisations max : ${invite.maxUses ?? '∞'}, expiration : ${invite.expiresAt ?? 'jamais'})`)
     return invite
 }
 
@@ -68,10 +65,9 @@ export function findInvite(code: string): Invite | undefined {
     return readInvites().find(i => i.code === code)
 }
 
-/** Vérifie si un code est valide (non expiré, non épuisé) */
 export function validateInvite(code: string): { valid: true; invite: Invite } | { valid: false; reason: string } {
     const invite = findInvite(code)
-    if (!invite) return { valid: false, reason: 'Code d\'invitation invalide' }
+    if (!invite) return { valid: false, reason: 'Ce lien d\'invitation n\'est pas valide' }
     if (invite.expiresAt && new Date(invite.expiresAt) < new Date()) {
         return { valid: false, reason: 'Ce lien d\'invitation a expiré' }
     }
@@ -81,7 +77,6 @@ export function validateInvite(code: string): { valid: true; invite: Invite } | 
     return { valid: true, invite }
 }
 
-/** Incrémente le compteur d'utilisations */
 export function consumeInvite(code: string): void {
     const invites = readInvites()
     const invite  = invites.find(i => i.code === code)

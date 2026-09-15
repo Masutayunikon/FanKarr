@@ -5,23 +5,23 @@
       <SettingsToggle
           v-model="form.autoImport"
           label="Import automatique"
-          description="Importe dès qu'un téléchargement est terminé, puis vérifie toutes les 5 minutes. Sinon, l'import se lance à la main depuis Activité."
+          description="Importe les téléchargements terminés (vérification toutes les 5 minutes). Désactivé, vous lancez l'import depuis la page Activité."
       />
       <SettingsToggle
           v-model="form.englishDirectory"
-          label="Dossiers « Season » au lieu de « Saison »"
-          description="Nomme les dossiers de saison « Season 01 » plutôt que « Saison 1 »."
+          label="Dossiers de saison en anglais"
+          description="« Season 01 » au lieu de « Saison 1 »."
       />
       <SettingsToggle
           v-model="form.autoUnimportMissing"
-          label="Désimporter si le fichier disparaît"
-          description="Un épisode supprimé du disque est retiré de la médiathèque FanKarr au scan suivant."
+          label="Retirer les épisodes supprimés du disque"
+          description="À la prochaine analyse, un épisode dont le fichier a disparu est retiré de la médiathèque."
       />
       <SettingsToggle
           v-if="settings.organizeMode === 'move'"
           v-model="form.deleteTorrentOnMove"
           label="Supprimer le torrent après déplacement"
-          description="Retire automatiquement le torrent du client une fois le fichier déplacé."
+          description="Le torrent ne peut plus être partagé une fois le fichier déplacé : autant le retirer du client."
       />
     </div>
 
@@ -29,7 +29,7 @@
       <SettingsToggle
           v-model="form.nfoSupport"
           label="Fichiers NFO et images"
-          description="Télécharge NFO et visuels à côté de chaque épisode lors de l'import."
+          description="Enregistre à côté de chaque épisode un fichier .nfo (titre, résumé…) et ses images."
       />
       <div class="flex items-start gap-2.5 px-3 py-2.5 rounded-field border border-border bg-main/50 text-meta text-muted leading-relaxed">
         <Info :size="13" class="shrink-0 mt-0.5" />
@@ -67,7 +67,7 @@ const error = ref<string | null>(null)
 async function submit(): Promise<boolean> {
   error.value = null
   if (await postSettings(form)) return true
-  error.value = "Erreur lors de l'enregistrement."
+  error.value = "Impossible d'enregistrer les réglages d'import."
   return false
 }
 

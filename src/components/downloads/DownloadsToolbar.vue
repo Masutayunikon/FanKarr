@@ -1,6 +1,5 @@
 <template>
   <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-x-4 gap-y-2.5 md:flex-wrap">
-    <!-- Onglets à compteurs -->
     <div class="chip-row">
       <button
           v-for="t in tabs" :key="t.value"
@@ -32,7 +31,7 @@
             type="text" placeholder="Filtrer" aria-label="Filtrer les torrents"
             class="flex-1 min-w-0 bg-transparent outline-none text-[13px] text-primary placeholder:text-muted"
         />
-        <button v-if="search" @click="emit('update:search', '')" aria-label="Effacer" class="w-6 h-6 rounded-full flex items-center justify-center text-muted hover:text-primary">
+        <button v-if="search" @click="emit('update:search', '')" aria-label="Effacer le filtre" class="w-6 h-6 rounded-full flex items-center justify-center text-muted hover:text-primary">
           <X :size="13" />
         </button>
       </label>
@@ -46,7 +45,6 @@
         ><span class="switch-knob w-3.5 h-3.5" :class="{ 'translate-x-4!': hideImported }" /></button>
       </label>
 
-      <!-- Tri, colonnes, seeds -->
       <div ref="optionsRef" class="relative">
         <button
             @click="optionsOpen = !optionsOpen"
@@ -79,7 +77,7 @@
 
           <div class="h-px bg-hover my-1" />
           <label class="menu-item cursor-pointer justify-between">
-            Seeds uniquement
+            Masquer les états inconnus
             <button
                 type="button" role="switch" :aria-checked="seedingOnly"
                 @click="emit('update:seedingOnly', !seedingOnly)"

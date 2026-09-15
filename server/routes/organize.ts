@@ -19,8 +19,8 @@ router.post('/organize/migrate-ids', requireAuth, async (_req, res) => {
         const result        = await migrateOrganizedEpisodeIds(organizedPath, seriesData)
         res.json({ ok: true, ...result })
     } catch (err) {
-        logger.error('api', `Migration IDs échouée : ${err instanceof Error ? err.message : err}`)
-        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
+        logger.error('api', `Échec de la migration des IDs : ${err instanceof Error ? err.message : err}`)
+        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux' })
     }
 })
 
@@ -40,13 +40,11 @@ router.post('/organize/recent/clear', requireAuth, (_req, res) => {
 
 router.post('/organize', requireAuth, async (req, res) => {
     const { hash, name, save_path } = req.body
-    if (!hash || !name || !save_path) { res.status(400).json({ error: 'hash, name et save_path requis' }); return }
+    if (!hash || !name || !save_path) { res.status(400).json({ error: 'Hash, nom et dossier du torrent requis' }); return }
     try {
         const seriesData = await loadCatalog()
 
-        // Récupère la progression par fichier depuis le client torrent.
-        // Permet au worker de sauter les fichiers encore en téléchargement (EBUSY sur Windows).
-        // En cas d'échec (client injoignable, hash non trouvé), on continue sans filtre.
+        // Progression par fichier, facultative (client injoignable toléré)
         const files = await dispatchGetFiles(hash).catch(() => [])
 
         const result = await organizeTorrent(hash, name, save_path, seriesData, files)
@@ -55,8 +53,8 @@ router.post('/organize', requireAuth, async (req, res) => {
         }
         res.json(result)
     } catch (err) {
-        logger.error('api', `Import manuel de "${name}" échoué : ${err instanceof Error ? err.message : err}`)
-        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
+        logger.error('api', `Échec de l'import manuel de « ${name} » : ${err instanceof Error ? err.message : err}`)
+        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux' })
     }
 })
 

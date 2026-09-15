@@ -8,7 +8,7 @@
         </div>
         <div class="flex flex-col gap-[7px]">
           <label for="reject-message" class="field-label">Motif (facultatif)</label>
-          <input id="reject-message" ref="inputRef" v-model="message" type="text" class="field" placeholder="Raison du refus…" @keyup.enter="emit('confirm', message)" />
+          <input id="reject-message" ref="inputRef" v-model="message" type="text" class="field" placeholder="Visible par l'invité" @keyup.enter="emit('confirm', message)" />
         </div>
         <div class="flex gap-2.5 justify-end">
           <button @click="emit('close')" class="btn-ghost">Annuler</button>

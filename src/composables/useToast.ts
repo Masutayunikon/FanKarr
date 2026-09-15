@@ -11,31 +11,23 @@ interface Toast {
 const toasts = ref<Toast[]>([])
 let nextId = 0
 const DURATION = 3500
+const MAX_VISIBLE = 4
 
 function add(message: string, type: Toast['type'] = 'info') {
-    // Cherche un toast récent du même type à grouper
-    const existing = toasts.value.find(t => t.type === type)
+    const existing = toasts.value.find(t => t.type === type && t.message === message)
 
     if (existing) {
-        // Grouper — incrémenter le count et mettre à jour le message
         clearTimeout(existing.timer)
         existing.count++
-        existing.message = buildGroupMessage(type, existing.count)
         existing.timer = setTimeout(() => remove(existing.id), DURATION)
         return
     }
 
-    // Nouveau toast
     const id = nextId++
     const timer = setTimeout(() => remove(id), DURATION)
 
     toasts.value.push({ id, message, type, count: 1, timer })
-}
-
-function buildGroupMessage(type: Toast['type'], count: number): string {
-    if (type === 'success') return `${count} opérations réussies`
-    if (type === 'error')   return `${count} erreurs`
-    return                         `${count} notifications`
+    if (toasts.value.length > MAX_VISIBLE) remove(toasts.value[0]!.id)
 }
 
 function remove(id: number) {

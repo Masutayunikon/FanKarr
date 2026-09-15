@@ -1,7 +1,3 @@
-/**
- * Gestion des utilisateurs multi-user
- * Migration automatique depuis l'ancien auth.json mono-user
- */
 
 import fs     from 'fs'
 import path   from 'path'
@@ -27,11 +23,11 @@ const USERS_PATH  = path.join(DATA_DIR, 'users.json')
 const LEGACY_PATH = path.join(DATA_DIR, 'auth.json')
 const SALT_ROUNDS = 10
 
-// ── Migration mono → multi-user ───────────────────────────────
+// ── Migration depuis auth.json ────────────────────────────────
 
 export function migrateIfNeeded(): void {
-    if (fs.existsSync(USERS_PATH)) return   // déjà en format multi-user
-    if (!fs.existsSync(LEGACY_PATH)) return // pas encore configuré
+    if (fs.existsSync(USERS_PATH)) return
+    if (!fs.existsSync(LEGACY_PATH)) return
 
     try {
         const legacy = JSON.parse(fs.readFileSync(LEGACY_PATH, 'utf-8')) as {
@@ -47,13 +43,13 @@ export function migrateIfNeeded(): void {
             createdAt   : new Date().toISOString(),
         }
         writeUsers([admin])
-        logger.info('users', `Migration auth.json → users.json réussie pour "${legacy.username}"`)
+        logger.info('users', `Migration de auth.json vers users.json réussie pour « ${legacy.username} »`)
     } catch (err) {
-        logger.error('users', `Échec migration auth.json : ${err instanceof Error ? err.message : err}`)
+        logger.error('users', `Échec de la migration de auth.json : ${err instanceof Error ? err.message : err}`)
     }
 }
 
-// ── Helpers fichier ───────────────────────────────────────────
+// ── Fichier des utilisateurs ──────────────────────────────────
 
 export function readUsers(): User[] {
     try {
@@ -74,18 +70,17 @@ export function findById(id: string):             User | undefined { return read
 export function findByUsername(username: string): User | undefined { return readUsers().find(u => u.username.toLowerCase() === username.toLowerCase()) }
 export function findByApiToken(token: string):    User | undefined { return readUsers().find(u => u.apiToken === token) }
 
-/** Sérialise sans passwordHash pour les réponses API */
 export function safeUser(user: User) {
     const { passwordHash: _, ...safe } = user
     return safe
 }
 
-// ── CRUD ──────────────────────────────────────────────────────
+// ── Gestion des comptes ───────────────────────────────────────
 
 export function createUser(username: string, password: string, role: UserRole = 'user'): User {
     const users = readUsers()
     if (users.some(u => u.username.toLowerCase() === username.toLowerCase())) {
-        throw new Error(`Nom d'utilisateur "${username}" déjà utilisé`)
+        throw new Error(`Nom d'utilisateur « ${username} » déjà utilisé`)
     }
     const user: User = {
         id          : crypto.randomUUID(),
@@ -97,7 +92,7 @@ export function createUser(username: string, password: string, role: UserRole = 
         tourSeenAt  : null,
     }
     writeUsers([...users, user])
-    logger.info('users', `Utilisateur "${username}" créé (rôle: ${role})`)
+    logger.info('users', `Utilisateur « ${username} » créé (rôle : ${role})`)
     return user
 }
 
@@ -113,7 +108,7 @@ export function updateUser(
 
     if (changes.username !== undefined && changes.username !== user.username) {
         if (users.some((u, i) => i !== idx && u.username.toLowerCase() === changes.username!.toLowerCase())) {
-            throw new Error(`Nom d'utilisateur "${changes.username}" déjà utilisé`)
+            throw new Error(`Nom d'utilisateur « ${changes.username} » déjà utilisé`)
         }
         user.username = changes.username
     }
@@ -121,7 +116,7 @@ export function updateUser(
     if (changes.password !== undefined) user.passwordHash = bcrypt.hashSync(changes.password, SALT_ROUNDS)
 
     writeUsers(users)
-    logger.info('users', `Utilisateur "${user.username}" mis à jour`)
+    logger.info('users', `Utilisateur « ${user.username} » mis à jour`)
     return user
 }
 
@@ -130,7 +125,7 @@ export function deleteUser(id: string): void {
     const user  = users.find(u => u.id === id)
     if (!user) throw new Error('Utilisateur introuvable')
     writeUsers(users.filter(u => u.id !== id))
-    logger.info('users', `Utilisateur "${user.username}" supprimé`)
+    logger.info('users', `Utilisateur « ${user.username} » supprimé`)
 }
 
 export function changePassword(id: string, currentPassword: string, newPassword: string): void {
@@ -142,7 +137,7 @@ export function changePassword(id: string, currentPassword: string, newPassword:
     }
     user.passwordHash = bcrypt.hashSync(newPassword, SALT_ROUNDS)
     writeUsers(users)
-    logger.info('users', `Mot de passe changé pour "${user.username}"`)
+    logger.info('users', `Mot de passe changé pour « ${user.username} »`)
 }
 
 export function markLogin(id: string): string | null {

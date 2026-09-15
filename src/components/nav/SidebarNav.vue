@@ -40,7 +40,6 @@
       </template>
     </nav>
 
-    <!-- Nouvelle version disponible -->
     <a
         v-if="auth.isAdmin && updateAvailable"
         :href="latestReleaseUrl"
@@ -51,12 +50,11 @@
       <span class="w-1.5 h-1.5 rounded-full bg-accent animate-pulse shrink-0" />
       <span class="flex-1 min-w-0">
         <span class="block text-meta font-bold text-accent">Mise à jour disponible</span>
-        <span class="block text-[11.5px] text-muted truncate">{{ latestVersion }} est disponible</span>
+        <span class="block text-[11.5px] text-muted truncate">Version {{ latestVersion }}</span>
       </span>
       <ExternalLink :size="13" class="shrink-0 text-muted group-hover:text-accent transition-colors" />
     </a>
 
-    <!-- Utilisateur et déconnexion -->
     <div class="flex items-center gap-2 pl-2 pt-3.5 border-t border-card">
       <span class="w-[34px] h-[34px] rounded-full bg-hover text-accent flex items-center justify-center font-display text-base font-bold shrink-0">
         {{ initial }}

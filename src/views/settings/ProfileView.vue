@@ -1,8 +1,7 @@
 <template>
   <div class="flex flex-col gap-4">
 
-    <!-- ── Compte ─────────────────────────────────────────────── -->
-    <SettingsSection title="Compte" description="Le nom d’utilisateur sert à la connexion et apparaît sur vos demandes.">
+    <SettingsSection title="Compte" description="Le nom d'utilisateur sert à la connexion et apparaît sur vos demandes.">
       <div class="flex items-center gap-[18px]">
         <span class="w-16 h-16 rounded-full bg-hover text-accent flex items-center justify-center font-display text-[28px] font-bold shrink-0">
           {{ auth.username?.charAt(0).toUpperCase() }}
@@ -21,7 +20,6 @@
       </div>
     </SettingsSection>
 
-    <!-- ── Mot de passe ──────────────────────────────────────── -->
     <SettingsSection title="Mot de passe" description="Au moins 6 caractères.">
       <div class="grid sm:grid-cols-3 gap-4">
         <div class="flex flex-col gap-[7px]">
@@ -48,14 +46,12 @@
     </SettingsSection>
 
     <div class="grid lg:grid-cols-[1fr_1.1fr] gap-4 items-start">
-      <!-- ── Apparence ───────────────────────────────────────── -->
-      <SettingsSection title="Apparence" description="Trois accents sur le même fond sombre. Le réglage est propre à ce navigateur.">
+      <SettingsSection title="Apparence" description="Couleur d'accent de l'interface. Ce choix ne s'applique qu'à ce navigateur.">
         <ThemePicker />
       </SettingsSection>
 
-      <!-- ── Jeton d'API ─────────────────────────────────────── -->
       <div data-tour="profile-token">
-        <SettingsSection title="Jeton d’API" description="Pour les applications tierces qui lisent la médiathèque ou envoient des demandes, comme le plugin Jellyfin.">
+        <SettingsSection title="Jeton d'API" description="Pour les applications tierces qui lisent la médiathèque ou envoient des demandes, comme le plugin Jellyfin.">
           <div class="flex items-center gap-2.5 flex-wrap">
             <code class="flex-1 min-w-[180px] field font-sans truncate" :title="showToken ? myToken : undefined">
               {{ showToken ? myToken : maskedToken }}
@@ -74,8 +70,8 @@
             </button>
           </div>
           <p class="text-xs text-muted">
-            Régénérer le jeton déconnecte immédiatement les applications qui utilisent l’ancien.
-            Authentification par l’en-tête <code class="px-1.5 py-0.5 rounded bg-main text-secondary">Authorization: Bearer &lt;jeton&gt;</code>.
+            Régénérer le jeton déconnecte immédiatement les applications qui utilisent l'ancien.
+            Authentification par l'en-tête <code class="px-1.5 py-0.5 rounded bg-main text-secondary">Authorization: Bearer &lt;jeton&gt;</code>.
           </p>
         </SettingsSection>
       </div>
@@ -101,7 +97,7 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
-// ── Mot de passe ──────────────────────────────────────────────
+// ── Mot de passe ──
 const currentPassword = ref('')
 const newPassword     = ref('')
 const confirmPassword = ref('')
@@ -120,7 +116,7 @@ async function changePassword() {
     pwdError.value = 'Les mots de passe ne correspondent pas.'; return
   }
   if (newPassword.value.length < 6) {
-    pwdError.value = 'Le mot de passe doit faire au moins 6 caractères.'; return
+    pwdError.value = 'Le mot de passe doit contenir au moins 6 caractères.'; return
   }
 
   changingPwd.value = true
@@ -138,12 +134,12 @@ async function changePassword() {
     confirmPassword.value = ''
     setTimeout(() => { pwdSuccess.value = false }, 3000)
   } else {
-    pwdError.value = data.error ?? 'Erreur lors du changement de mot de passe'
+    pwdError.value = data.error ?? 'Impossible de changer le mot de passe.'
   }
   changingPwd.value = false
 }
 
-// ── Jeton d'API 2───────────────────────────────────────────────
+// ── Jeton d'API ──
 const myToken     = ref('')
 const showToken   = ref(false)
 const tokenCopied = ref(false)

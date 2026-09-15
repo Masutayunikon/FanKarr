@@ -14,7 +14,6 @@ import { logger }           from '../logger.js'
 
 const router = Router()
 
-// GET /api/requests — admin voit tout, user voit les siennes
 router.get('/requests', async (req, res) => {
     const list = req.user!.role === 'admin'
         ? readRequests()
@@ -37,7 +36,6 @@ async function withScope(list: SerieRequest[]) {
     }))
 }
 
-// GET /api/requests/pending-count — pour le widget dashboard
 router.get('/requests/pending-count', (req, res) => {
     const count = req.user!.role === 'admin'
         ? getPendingCount()
@@ -45,11 +43,10 @@ router.get('/requests/pending-count', (req, res) => {
     res.json({ count })
 })
 
-// POST /api/requests — créer ou mettre à jour une demande
 router.post('/requests', (req, res) => {
     const { serieId, serieName, seasons, episodes, torrentOverride } = req.body
     if (!serieId || !serieName) {
-        res.status(400).json({ error: 'serieId et serieName requis' }); return
+        res.status(400).json({ error: 'Série manquante dans la demande' }); return
     }
     try {
         const submittedSeasons  = Array.isArray(seasons)  ? seasons.map(Number)  : []
@@ -63,7 +60,6 @@ router.post('/requests', (req, res) => {
             submittedEpisodes,
         )
 
-        // Auto-approbation + téléchargement si l'utilisateur est autorisé
         const { requestAutoDownloadUsers } = readSettings()
         const userId = req.user!.id
         const allowed = requestAutoDownloadUsers === 'all'
@@ -74,7 +70,6 @@ router.post('/requests', (req, res) => {
             if (isNew) request = approveRequest(request.id)
 
             if (torrentOverride?.torrent_url || torrentOverride?.magnet) {
-                // L'utilisateur a sélectionné un torrent spécifique → l'envoyer directement
                 const url = torrentOverride.torrent_url ?? torrentOverride.magnet
                 dispatchDownload(url, {
                     infohash  : torrentOverride.infohash   ?? null,
@@ -82,24 +77,22 @@ router.post('/requests', (req, res) => {
                     file_index: torrentOverride.file_index ?? null,
                     file_path : torrentOverride.file_path  ?? null,
                 }).catch(err =>
-                    logger.warn('requests', `Auto-dl (override) échoué pour "${request.serieName}" : ${err instanceof Error ? err.message : err}`)
+                    logger.warn('requests', `Échec du téléchargement automatique du torrent choisi pour « ${request.serieName} » : ${err instanceof Error ? err.message : err}`)
                 )
             } else {
-                // Pas de torrent sélectionné → résolution automatique
                 const dlOverride = isNew ? undefined : { seasons: submittedSeasons, episodes: submittedEpisodes }
                 autoDownloadRequest(request, dlOverride).catch(err =>
-                    logger.warn('requests', `Auto-dl échoué pour "${request.serieName}" : ${err instanceof Error ? err.message : err}`)
+                    logger.warn('requests', `Échec du téléchargement automatique de « ${request.serieName} » : ${err instanceof Error ? err.message : err}`)
                 )
             }
         }
 
         res.json(request)
     } catch (err) {
-        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur' })
+        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux' })
     }
 })
 
-// PATCH /api/requests/:id — admin : approve / reject / complete
 router.patch('/requests/:id', requireAdmin, async (req, res) => {
     const { action, rejectionMessage } = req.body
     try {
@@ -107,28 +100,23 @@ router.patch('/requests/:id', requireAdmin, async (req, res) => {
         const id = String(req.params.id)
         if (action === 'approve') {
             request = approveRequest(id)
-            // Approbation manuelle par l'admin → toujours lancer le téléchargement
             autoDownloadRequest(request).catch(err =>
-                logger.warn('requests', `Auto-dl échoué pour "${request.serieName}" : ${err instanceof Error ? err.message : err}`)
+                logger.warn('requests', `Échec du téléchargement automatique de « ${request.serieName} » : ${err instanceof Error ? err.message : err}`)
             )
         } else if (action === 'reject')   request = rejectRequest(id, rejectionMessage)
         else if (action === 'complete')   request = completeRequest(id)
-        else { res.status(400).json({ error: 'Action invalide (approve | reject | complete)' }); return }
+        else { res.status(400).json({ error: 'Action inconnue (approve, reject ou complete)' }); return }
         res.json(request)
     } catch (err) {
-        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur' })
+        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux' })
     }
 })
 
-/**
- * Trouve et envoie au client torrent les fichiers correspondant à la demande.
- * @param override - si fourni, utilise ces saisons/épisodes au lieu du merged de la demande
- *                   (utile pour ne télécharger que ce qui vient d'être ajouté)
- */
+/** Envoie les torrents de la demande ; override limite aux saisons et épisodes qui viennent d'être ajoutés. */
 export async function autoDownloadRequest(req: SerieRequest, override?: { seasons: number[]; episodes: number[] }): Promise<void> {
     const serieData = await readSerieData(req.serieId)
     if (!serieData) {
-        logger.warn('requests', `Auto-dl : aucune donnée torrent pour série ${req.serieId}`)
+        logger.warn('requests', `Téléchargement automatique : aucune donnée de torrent pour la série ${req.serieId}`)
         return
     }
 
@@ -138,7 +126,7 @@ export async function autoDownloadRequest(req: SerieRequest, override?: { season
     const toDownload = resolveRequestTorrents(serieData, seasons, episodes)
 
     if (toDownload.length === 0) {
-        logger.warn('requests', `Auto-dl : aucun torrent trouvé pour "${req.serieName}"`)
+        logger.warn('requests', `Téléchargement automatique : aucun torrent trouvé pour « ${req.serieName} »`)
         return
     }
 
@@ -147,16 +135,15 @@ export async function autoDownloadRequest(req: SerieRequest, override?: { season
         const url = t.url ?? t.magnet
         if (!url) continue
         try {
-            await dispatchDownload(url, { infohash: t.infohash ?? undefined, magnet: t.magnet ?? undefined, file_index: t.file_index ?? null, file_path: t.file_path ?? null })
-            sent++
+            const results = await dispatchDownload(url, { infohash: t.infohash ?? undefined, magnet: t.magnet ?? undefined, file_index: t.file_index ?? null, file_path: t.file_path ?? null })
+            if (results.some(r => r.ok)) sent++
         } catch (err) {
-            logger.warn('requests', `Auto-dl erreur torrent : ${err instanceof Error ? err.message : err}`)
+            logger.warn('requests', `Téléchargement automatique : erreur à l'envoi d'un torrent : ${err instanceof Error ? err.message : err}`)
         }
     }
-    logger.info('requests', `Auto-dl "${req.serieName}" — ${sent}/${toDownload.length} torrent(s) envoyé(s)`)
+    logger.info('requests', `Téléchargement automatique de « ${req.serieName} » : ${sent}/${toDownload.length} torrent(s) envoyé(s)`)
 }
 
-// DELETE /api/requests — admin : supprimer toutes les demandes
 router.delete('/requests', requireAdmin, (_req, res) => {
     const all = readRequests()
     for (const r of all) {
@@ -166,22 +153,20 @@ router.delete('/requests', requireAdmin, (_req, res) => {
     res.json({ deleted: all.length })
 })
 
-// DELETE /api/requests/:id/mine — retire l'utilisateur d'une demande en attente
 router.delete('/requests/:id/mine', (req, res) => {
     try {
         res.json(withdrawRequest(String(req.params.id), req.user!.id))
     } catch (err) {
-        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur' })
+        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux' })
     }
 })
 
-// DELETE /api/requests/:id — admin seulement
 router.delete('/requests/:id', requireAdmin, (req, res) => {
     try {
         deleteRequest(String(req.params.id))
         res.json({ success: true })
     } catch (err) {
-        res.status(404).json({ error: err instanceof Error ? err.message : 'Erreur' })
+        res.status(404).json({ error: err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux' })
     }
 })
 

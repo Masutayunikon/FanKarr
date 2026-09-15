@@ -7,7 +7,6 @@
       </button>
     </Teleport>
 
-    <!-- ── Comptes ────────────────────────────────────────────── -->
     <section class="bg-card rounded-card">
       <div class="flex items-center justify-between gap-4 flex-wrap px-5 pt-4 pb-3.5 border-b border-hover">
         <h3 class="card-title">Comptes <span class="font-normal text-muted">· {{ users.length }}</span></h3>
@@ -18,7 +17,7 @@
       </div>
 
       <div class="hidden md:grid grid-cols-[minmax(0,1fr)_150px_150px_210px_40px] items-center h-[34px] px-5 border-b border-hover tag-label tracking-[0.12em]">
-        <span>Utilisateur</span><span>Rôle</span><span>Dernier accès</span><span>Jeton API</span><span />
+        <span>Utilisateur</span><span>Rôle</span><span>Dernière connexion</span><span>Jeton d'API</span><span />
       </div>
 
       <p v-if="users.length === 0" class="text-body text-muted px-5 py-5">Aucun utilisateur.</p>
@@ -41,7 +40,7 @@
           {{ u.role === 'admin' ? 'Administrateur' : 'Invité' }}
         </span>
         <span class="text-[13px] text-secondary order-4 md:order-none">
-          <span class="md:hidden text-muted">Dernier accès : </span>{{ u.lastLoginAt ? formatRelative(u.lastLoginAt) : 'jamais' }}
+          <span class="md:hidden text-muted">Dernière connexion : </span>{{ u.lastLoginAt ? formatRelative(u.lastLoginAt) : 'jamais' }}
         </span>
         <div class="flex items-center gap-2.5 min-w-0 order-5 md:order-none col-span-2 md:col-span-1">
           <span class="text-meta text-muted truncate">{{ maskToken(u.apiToken) }}</span>
@@ -72,10 +71,9 @@
       </div>
     </section>
 
-    <!-- ── Invitations ────────────────────────────────────────── -->
     <section class="bg-card rounded-card">
       <div class="flex items-center justify-between gap-4 flex-wrap px-5 pt-4 pb-3.5 border-b border-hover">
-        <h3 class="card-title">Invitations <span class="font-normal text-muted">· {{ activeInvites }} lien{{ activeInvites > 1 ? 's' : '' }} actif{{ activeInvites > 1 ? 's' : '' }}</span></h3>
+        <h3 class="card-title">Invitations <span class="font-normal text-muted">· {{ plural(activeInvites, 'lien actif', 'liens actifs') }}</span></h3>
         <span class="text-meta text-muted">Un lien crée un compte à chaque utilisation, dans la limite fixée.</span>
       </div>
 
@@ -116,10 +114,9 @@
       </div>
     </section>
 
-    <!-- ── Téléchargement auto ────────────── -->
     <SettingsSection
-        title="Téléchargement automatique"
-        description="Quand une demande est approuvée, lancer automatiquement le téléchargement pour les utilisateurs sélectionnés."
+        title="Approbation automatique"
+        description="Les demandes de ces utilisateurs sont approuvées et téléchargées sans attendre votre validation."
     >
       <template #actions>
         <span v-if="autoDownloadSaved" class="text-meta text-ok flex items-center gap-1.5"><Check :size="14" /> Enregistré</span>
@@ -129,7 +126,7 @@
           :model-value="autoDownloadAll"
           @update:model-value="setAutoDownloadAll"
           label="Tous les utilisateurs"
-          description="Chaque approbation déclenche un téléchargement, quel que soit le demandeur."
+          description="Toutes les demandes sont approuvées et téléchargées automatiquement."
       />
 
       <template v-if="!autoDownloadAll">
@@ -143,7 +140,7 @@
           <button
               type="button" role="switch"
               :aria-checked="autoDownloadUserIds.includes(u.id)"
-              :aria-label="`Téléchargement automatique pour ${u.username}`"
+              :aria-label="`Approbation automatique pour ${u.username}`"
               @click="toggleAutoDownloadUser(u.id)"
               class="switch"
           ><span class="switch-knob" /></button>
@@ -152,7 +149,6 @@
       </template>
     </SettingsSection>
 
-    <!-- ── Modal créer/modifier utilisateur ───────────────────── -->
     <Teleport to="body">
       <div v-if="userModal" class="modal-backdrop" @click.self="userModal = null">
         <div class="modal max-w-sm" role="dialog" aria-modal="true" aria-labelledby="user-modal-title">
@@ -162,13 +158,13 @@
 
           <div class="flex flex-col gap-4">
             <div class="flex flex-col gap-[7px]">
-              <label for="user-name" class="field-label">Identifiant</label>
-              <input id="user-name" v-model="userModal.username" type="text" class="field" placeholder="nom d'utilisateur" autocomplete="off" />
+              <label for="user-name" class="field-label">Nom d'utilisateur</label>
+              <input id="user-name" v-model="userModal.username" type="text" class="field" autocomplete="off" />
             </div>
             <div class="flex flex-col gap-[7px]">
               <label for="user-pwd" class="field-label">{{ userModal.mode === 'create' ? 'Mot de passe' : 'Nouveau mot de passe' }}</label>
               <input id="user-pwd" v-model="userModal.password" type="password" class="field" autocomplete="new-password"
-                :placeholder="userModal.mode === 'edit' ? 'Laisser vide pour ne pas changer' : '••••••••'" />
+                :placeholder="userModal.mode === 'edit' ? 'Laissez vide pour le conserver' : '••••••••'" />
             </div>
             <div class="flex flex-col gap-[7px]">
               <span class="field-label">Rôle</span>
@@ -184,14 +180,13 @@
           <div class="flex gap-2.5 justify-end">
             <button @click="userModal = null" class="btn-ghost">Annuler</button>
             <button @click="submitUserModal" :disabled="userModal.loading" class="btn-primary">
-              {{ userModal.loading ? '…' : userModal.mode === 'create' ? 'Créer' : 'Enregistrer' }}
+              {{ userModal.loading ? (userModal.mode === 'create' ? 'Création…' : 'Enregistrement…') : userModal.mode === 'create' ? 'Créer' : 'Enregistrer' }}
             </button>
           </div>
         </div>
       </div>
     </Teleport>
 
-    <!-- ── Modal créer invitation ─────────────────────────────── -->
     <Teleport to="body">
       <div v-if="inviteModal" class="modal-backdrop" @click.self="inviteModal = null">
         <div class="modal max-w-sm" role="dialog" aria-modal="true" aria-labelledby="invite-modal-title">
@@ -199,12 +194,12 @@
 
           <div class="flex flex-col gap-4">
             <div class="flex flex-col gap-[7px]">
-              <label for="invite-note" class="field-label">Note (facultative)</label>
-              <input id="invite-note" v-model="inviteModal.note" type="text" class="field" placeholder="Pour qui est ce lien ?" />
+              <label for="invite-note" class="field-label">Message pour la personne invitée (facultatif)</label>
+              <input id="invite-note" v-model="inviteModal.note" type="text" class="field" />
             </div>
             <div class="grid grid-cols-2 gap-3">
               <div class="flex flex-col gap-[7px]">
-                <label for="invite-uses" class="field-label">Utilisations max</label>
+                <label for="invite-uses" class="field-label">Nombre d'utilisations</label>
                 <input id="invite-uses" v-model.number="inviteModal.maxUses" type="number" min="1" class="field" placeholder="∞" />
               </div>
               <div class="flex flex-col gap-[7px]">
@@ -212,7 +207,7 @@
                 <input id="invite-hours" v-model.number="inviteModal.expiresInHours" type="number" min="1" class="field" placeholder="∞" />
               </div>
             </div>
-            <p class="text-xs text-muted">Laisser un champ vide pour ne pas fixer de limite.</p>
+            <p class="text-xs text-muted">Laissez un champ vide pour ne pas fixer de limite.</p>
           </div>
 
           <p v-if="inviteModal.error" class="text-meta text-err">{{ inviteModal.error }}</p>
@@ -220,7 +215,7 @@
           <div class="flex gap-2.5 justify-end">
             <button @click="inviteModal = null" class="btn-ghost">Annuler</button>
             <button @click="submitInviteModal" :disabled="inviteModal.loading" class="btn-primary">
-              {{ inviteModal.loading ? '…' : 'Créer le lien' }}
+              {{ inviteModal.loading ? 'Création…' : 'Créer le lien' }}
             </button>
           </div>
         </div>
@@ -267,13 +262,13 @@ const copied  = ref<string | null>(null)
 const pendingByUser = ref<Map<string, number>>(new Map())
 const userMenu = ref<string | null>(null)
 
-// ── Téléchargement auto des demandes ──────────────────────────
+// ── Approbation automatique ──
 const autoDownloadAll     = ref(false)
 const autoDownloadUserIds = ref<string[]>([])
 const autoDownloadSaved   = ref(false)
 let   autoDownloadTimer: ReturnType<typeof setTimeout> | null = null
 
-// ── Modals ────────────────────────────────────────────────────
+// ── Modales ──
 const userModal = ref<{
   mode    : 'create' | 'edit'
   id?     : string
@@ -292,7 +287,7 @@ const inviteModal = ref<{
   loading       : boolean
 } | null>(null)
 
-// ── Chargement ────────────────────────────────────────────────
+// ── Chargement ──
 async function loadUsers() {
   const res = await fetch('/api/users', { credentials: 'include' })
   if (res.ok) users.value = await res.json()
@@ -361,7 +356,7 @@ onMounted(() => {
 })
 onUnmounted(() => document.removeEventListener('click', closeUserMenu))
 
-// ── Users ─────────────────────────────────────────────────────
+// ── Utilisateurs ──
 function openCreateUser() {
   userModal.value = { mode: 'create', username: '', password: '', role: 'user', error: null, loading: false }
 }
@@ -376,8 +371,8 @@ async function submitUserModal() {
   m.error   = null
   m.loading = true
 
-  if (!m.username) { m.error = 'Identifiant requis'; m.loading = false; return }
-  if (m.mode === 'create' && !m.password) { m.error = 'Mot de passe requis'; m.loading = false; return }
+  if (!m.username) { m.error = "Nom d'utilisateur requis."; m.loading = false; return }
+  if (m.mode === 'create' && !m.password) { m.error = 'Mot de passe requis.'; m.loading = false; return }
 
   const url    = m.mode === 'create' ? '/api/users' : `/api/users/${m.id}`
   const method = m.mode === 'create' ? 'POST' : 'PATCH'
@@ -385,15 +380,15 @@ async function submitUserModal() {
   if (m.password) body.password = m.password
 
   const res  = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) })
-  const data = await res.json()
+  const data = await res.json().catch(() => ({}))
 
-  if (!res.ok) { m.error = data.error; m.loading = false; return }
+  if (!res.ok) { m.error = data.error ?? 'Impossible d\'enregistrer le compte.'; m.loading = false; return }
   userModal.value = null
   loadUsers()
 }
 
 async function confirmDelete(u: User) {
-  if (!confirm(`Supprimer l'utilisateur "${u.username}" ?`)) return
+  if (!confirm(`Supprimer le compte « ${u.username} » ?`)) return
   await fetch(`/api/users/${u.id}`, { method: 'DELETE', credentials: 'include' })
   loadUsers()
 }
@@ -408,7 +403,7 @@ function userSubtitle(u: User) {
 }
 
 function maskToken(token: string) {
-  return token ? `${token.slice(0, 4)}••••••••••${token.slice(-4)}` : '—'
+  return token ? `${token.slice(0, 4)}••••••••••${token.slice(-4)}` : 'Aucun jeton'
 }
 
 async function copyToken(u: User) {
@@ -419,7 +414,7 @@ async function copyToken(u: User) {
   } catch {}
 }
 
-// ── Invites ───────────────────────────────────────────────────
+// ── Invitations ──
 const activeInvites = computed(() => invites.value.filter(inv => !isInvalid(inv)).length)
 
 function openCreateInvite() {
@@ -436,9 +431,9 @@ async function submitInviteModal() {
   if (m.expiresInHours) body.expiresInHours = m.expiresInHours
 
   const res  = await fetch('/api/invites', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) })
-  const data = await res.json()
+  const data = await res.json().catch(() => ({}))
 
-  if (!res.ok) { m.error = data.error; m.loading = false; return }
+  if (!res.ok) { m.error = data.error ?? 'Impossible de créer l\'invitation.'; m.loading = false; return }
   inviteModal.value = null
   loadInvites()
 }
@@ -461,7 +456,7 @@ async function copyInvite(code: string) {
   } catch {}
 }
 
-// ── Helpers ───────────────────────────────────────────────────
+// ── Utilitaires ──
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
 }

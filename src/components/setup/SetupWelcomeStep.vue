@@ -1,7 +1,6 @@
 <template>
   <div class="flex flex-col gap-6">
 
-    <!-- Fonctionnement -->
     <ol class="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <li v-for="(item, i) in flow" :key="item.title" class="card flex gap-3">
         <span class="w-8 h-8 rounded-full bg-accent-muted text-accent flex items-center justify-center shrink-0">
@@ -14,7 +13,6 @@
       </li>
     </ol>
 
-    <!-- Ce qu'on va configurer -->
     <div class="card flex flex-col gap-3">
       <p class="field-label">Au programme</p>
       <ul class="flex flex-col gap-2">
@@ -22,14 +20,13 @@
           <Check :size="14" class="text-accent mt-0.5 shrink-0" />
           <span class="text-secondary">
             {{ item.label }}
-            <span v-if="item.optional" class="text-muted text-meta">(optionnel)</span>
+            <span v-if="item.optional" class="text-muted text-meta">(facultatif)</span>
           </span>
         </li>
       </ul>
       <p class="text-meta text-muted">Comptez environ 5 minutes.</p>
     </div>
 
-    <!-- Docker -->
     <div v-if="isDocker" class="flex items-start gap-3 px-4 py-3 rounded-field border border-accent/30 bg-accent-muted">
       <HardDrive :size="16" class="text-accent mt-0.5 shrink-0" />
       <div class="flex flex-col gap-1">
@@ -54,16 +51,16 @@ defineProps<{ settings: SetupSettings; isDocker: boolean; defaultPath: string }>
 
 const flow = [
   { icon: Library,    title: 'Catalogue',       text: 'Toutes les séries Fankai, avec leurs torrents par épisode, saison ou intégrale.' },
-  { icon: Download,   title: 'Téléchargement',  text: 'Un clic envoie le torrent à votre client (qBittorrent, Transmission…).' },
-  { icon: FolderOpen, title: 'Import',          text: 'Une fois terminé, le fichier est renommé et rangé par série et saison.' },
+  { icon: Download,   title: 'Téléchargement',  text: 'Le torrent est envoyé à votre client (qBittorrent, Transmission…).' },
+  { icon: FolderOpen, title: 'Import',          text: 'Une fois le téléchargement terminé, le fichier est renommé et rangé par série et par saison.' },
   { icon: Tv,         title: 'Lecture',         text: 'Jellyfin ou Plex retrouvent vos séries avec les métadonnées Fankai.' },
 ]
 
 const checklist = [
-  { label: 'Dossier de téléchargements et médiathèque' },
+  { label: 'Dossier des téléchargements et médiathèque' },
   { label: 'Client torrent' },
   { label: 'Import automatique et nommage' },
   { label: 'Jellyfin ou Plex', optional: true },
-  { label: 'Téléchargement du catalogue' },
+  { label: 'Synchronisation du catalogue' },
 ]
 </script>

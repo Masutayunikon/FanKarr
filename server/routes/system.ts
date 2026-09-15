@@ -15,7 +15,17 @@ import { workerRunning, lastScan } from '../organize.js'
 
 const router = Router()
 
-// ── Logs ───────────────────────────────────────────────────────
+const UNEXPECTED_ERROR = 'Erreur inattendue, consultez les journaux'
+
+function readDirError(dirPath: string, err: unknown): string {
+    const code = (err as NodeJS.ErrnoException)?.code
+    if (code === 'ENOENT')                     return `Dossier introuvable : ${dirPath}`
+    if (code === 'EACCES' || code === 'EPERM') return `Accès refusé au dossier : ${dirPath}`
+    if (code === 'ENOTDIR')                    return `Ce chemin n'est pas un dossier : ${dirPath}`
+    return `Dossier inaccessible : ${dirPath}`
+}
+
+// ── Journaux ───────────────────────────────────────────────────
 router.get('/logs', requireAuth, (req, res) => {
     const limit  = Number(req.query.limit)  || 100
     const level  = (req.query.level  as string) || 'all'
@@ -25,7 +35,7 @@ router.get('/logs', requireAuth, (req, res) => {
 
 router.post('/logs/clear', requireAuth, (_req, res) => {
     clearLogs()
-    logger.info('api', 'Logs effacés')
+    logger.info('api', 'Journaux effacés')
     res.json({ ok: true })
 })
 
@@ -39,7 +49,7 @@ router.get('/system', requireAuth, (_req, res) => {
 router.post('/system/check-paths', requireAuth, (req, res) => {
     const { mediaPath, completePath } = req.body ?? {}
     if (typeof mediaPath !== 'string' || (completePath !== undefined && typeof completePath !== 'string')) {
-        res.status(400).json({ error: 'mediaPath requis' }); return
+        res.status(400).json({ error: 'Chemin de la médiathèque requis' }); return
     }
     res.json(checkPaths(mediaPath, completePath))
 })
@@ -54,7 +64,7 @@ router.get('/version', (_req, res) => {
     }
 })
 
-// ── Parcours fichiers ──────────────────────────────────────────
+// ── Parcours des dossiers ──────────────────────────────────────
 router.get('/browse', requireAuth, (req, res) => {
     const isWindows = process.platform === 'win32'
     const dirPath   = (req.query.path as string) || '/'
@@ -74,7 +84,7 @@ router.get('/browse', requireAuth, (req, res) => {
         const entries = fs.readdirSync(dirPath, { withFileTypes: true })
         const dirs    = entries.filter(e => e.isDirectory()).map(e => e.name).filter(n => !n.startsWith('.')).sort((a, b) => a.localeCompare(b))
 
-        // Sur Windows, remonter à '/' quand on est à la racine d'un lecteur (ex: C:\)
+        // Sous Windows, remonter à '/' depuis la racine d'un lecteur (ex. C:\)
         let parent: string | null
         if (dirPath === '/') {
             parent = null
@@ -82,13 +92,13 @@ router.get('/browse', requireAuth, (req, res) => {
             parent = '/'
         } else {
             const up = path.dirname(dirPath)
-            parent   = up === dirPath ? null : up   // dirname de C:\ retourne C:\ → null
+            parent   = up === dirPath ? null : up   // dirname de C:\ renvoie C:\ : pas de parent
         }
 
         res.json({ path: dirPath, parent, dirs })
     } catch (err) {
-        logger.warn('api', `Lecture dossier "${dirPath}" impossible : ${err instanceof Error ? err.message : err}`)
-        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur lecture dossier' })
+        logger.warn('api', `Lecture du dossier « ${dirPath} » impossible : ${err instanceof Error ? err.message : err}`)
+        res.status(400).json({ error: readDirError(dirPath, err) })
     }
 })
 
@@ -120,8 +130,8 @@ router.get('/browse-files', requireAuth, (req, res) => {
         files.sort((a, b) => a.name.localeCompare(b.name, 'fr'))
         res.json({ path: dirPath, files, exists: true })
     } catch (err) {
-        logger.warn('api', `browse-files "${dirPath}" : ${err instanceof Error ? err.message : err}`)
-        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur lecture dossier' })
+        logger.warn('api', `Lecture du dossier « ${dirPath} » impossible : ${err instanceof Error ? err.message : err}`)
+        res.status(400).json({ error: readDirError(dirPath, err) })
     }
 })
 
@@ -139,19 +149,19 @@ router.post('/update', requireAuth, async (req, res) => {
     try {
         cacheClear()
         logger.info('api', force
-            ? 'Forçage des correspondances de renommage — cache mémoire et CDN contournés'
-            : 'Cache GitHub vidé — rechargement forcé')
+            ? 'Resynchronisation complète du catalogue (caches ignorés), noms de fichiers recalculés'
+            : 'Cache GitHub vidé : rechargement du catalogue')
 
         const availableIds = await readAvailable(force)
-        if (!Array.isArray(availableIds)) throw new Error('available.json invalide')
-        logger.info('api', `Catalogue rechargé — ${availableIds.length} séries disponibles`)
+        if (!Array.isArray(availableIds)) throw new Error('Catalogue GitHub invalide (available.json)')
+        logger.info('api', `Catalogue rechargé : ${availableIds.length} séries disponibles`)
 
         if (force) {
             const seriesData      = await loadCatalog(true)
             const { updated }     = await migrateOrganizedEpisodeIds(organizedPath, seriesData)
             const { removed }     = dedupeOrganizedEpisodes(organizedPath)
             const { renamed, errors } = await syncFilenameChanges(seriesData, organizedPath)
-            logger.info('api', `Forçage terminé — ${updated} ID(s) migré(s), ${removed} doublon(s) retiré(s), ${renamed} fichier(s) renommé(s)${errors > 0 ? `, ${errors} erreur(s)` : ''}`)
+            logger.info('api', `Resynchronisation terminée : ${updated} ID(s) migré(s), ${removed} doublon(s) retiré(s), ${renamed} fichier(s) renommé(s)${errors > 0 ? `, ${errors} erreur(s)` : ''}`)
             res.json({ ok: true, count: availableIds.length, migrated: updated, deduped: removed, renamed, errors })
             return
         }
@@ -162,14 +172,14 @@ router.post('/update', requireAuth, async (req, res) => {
                 const seriesData = await loadCatalog()
                 const { renamed } = await syncFilenameChanges(seriesData, organizedPath)
                 if (renamed > 0)
-                    logger.info('api', `Sync noms scraper après mise à jour — ${renamed} fichier(s) renommé(s)`)
+                    logger.info('api', `Renommage après synchronisation : ${renamed} fichier(s) renommé(s)`)
             } catch (err) {
-                logger.warn('api', `Sync noms après mise à jour échoué : ${err instanceof Error ? err.message : err}`)
+                logger.warn('api', `Échec du renommage après synchronisation : ${err instanceof Error ? err.message : err}`)
             }
         })()
     } catch (err) {
-        logger.error('api', `Mise à jour catalogue échouée : ${err instanceof Error ? err.message : err}`)
-        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
+        logger.error('api', `Échec de la synchronisation du catalogue : ${err instanceof Error ? err.message : err}`)
+        res.status(500).json({ error: err instanceof Error ? err.message : UNEXPECTED_ERROR })
     }
 })
 
@@ -180,17 +190,17 @@ router.get('/scan', requireAuth, (_req, res) => {
 router.post('/scan', requireAuth, async (_req, res) => {
     try {
         const { mediaPath } = readSettings()
-        logger.info('api', 'Scan médiathèque manuel lancé')
+        logger.info('api', 'Analyse manuelle de la médiathèque lancée')
         const seriesData = await loadCatalog()
         const result     = await scanMediaPath(mediaPath, path.join(DATA_DIR, 'organized.json'), seriesData)
         res.json({ ok: true, ...result })
     } catch (err) {
-        logger.error('api', `Scan médiathèque échoué : ${err instanceof Error ? err.message : err}`)
-        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
+        logger.error('api', `Échec de l'analyse de la médiathèque : ${err instanceof Error ? err.message : err}`)
+        res.status(500).json({ error: err instanceof Error ? err.message : UNEXPECTED_ERROR })
     }
 })
 
-// ── Debug ──────────────────────────────────────────────────────
+// ── Diagnostic ─────────────────────────────────────────────────
 router.get('/debug/stats', requireAuth, (req, res) => {
     const mem     = process.memoryUsage()
     const uptimeS = Math.floor(process.uptime())

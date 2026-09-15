@@ -1,7 +1,6 @@
 <template>
   <div class="min-h-screen bg-main flex flex-col md:flex-row">
 
-    <!-- Rail des étapes -->
     <aside class="md:w-[280px] md:h-screen md:sticky md:top-0 bg-sidebar border-b md:border-b-0 md:border-r border-card flex flex-col shrink-0">
       <div class="flex items-center gap-[11px] pl-5 pr-3 pt-[22px] pb-5">
         <FankarrLogo class="w-[30px] h-[31px] shrink-0" />
@@ -29,7 +28,6 @@
         </button>
       </div>
 
-      <!-- Progression mobile -->
       <div class="md:hidden px-5 pb-4">
         <div class="progress" role="progressbar" :aria-valuenow="index + 1" aria-valuemin="1" :aria-valuemax="steps.length">
           <div class="progress-bar" :style="{ width: `${((index + 1) / steps.length) * 100}%` }" />
@@ -70,7 +68,6 @@
       </p>
     </aside>
 
-    <!-- Contenu -->
     <main class="flex-1 min-w-0">
       <div v-if="!loaded" class="flex items-center justify-center py-32">
         <div class="w-4 h-4 border border-border border-t-accent rounded-full animate-spin" />
@@ -103,7 +100,7 @@
             Passer
           </button>
           <button @click="next(true)" :disabled="busy" class="btn-primary">
-            {{ busy ? '…' : index === 0 ? 'Commencer' : 'Suivant' }}
+            {{ busy ? 'Enregistrement…' : index === 0 ? 'Commencer' : 'Suivant' }}
             <ArrowRight v-if="!busy" :size="15" />
           </button>
         </footer>
@@ -142,9 +139,9 @@ interface StepDef {
 
 const steps: StepDef[] = [
   {
-    id: 'welcome', label: 'Bienvenue', hint: 'Ce qui vous attend', component: SetupWelcomeStep,
+    id: 'welcome', label: 'Bienvenue', hint: 'Présentation', component: SetupWelcomeStep,
     title: 'Bienvenue dans FanKarr',
-    description: 'Quelques minutes pour préparer FanKarr : où ranger vos séries, quel client torrent utiliser et comment les retrouver dans votre lecteur.',
+    description: 'Cet assistant règle les dossiers, le client torrent, le serveur multimédia et le catalogue.',
   },
   {
     id: 'paths', label: 'Dossiers', hint: 'Téléchargements et médiathèque', component: SetupPathsStep,
@@ -153,28 +150,28 @@ const steps: StepDef[] = [
   },
   {
     id: 'client', label: 'Client torrent', hint: 'qBittorrent, Transmission…', component: SetupClientStep,
-    title: 'Client de téléchargement',
+    title: 'Client torrent',
     description: 'FanKarr envoie les torrents à votre client puis surveille leur progression pour les importer.',
   },
   {
-    id: 'import', label: 'Import', hint: 'Automatisme et nommage', component: SetupImportStep,
+    id: 'import', label: 'Import', hint: 'Import automatique et nommage', component: SetupImportStep,
     title: 'Options d\'import',
     description: 'Réglez ce qui se passe quand un téléchargement se termine.',
   },
   {
     id: 'media-server', label: 'Serveur multimédia', hint: 'Jellyfin, Plex', component: SetupMediaServerStep, optional: true,
     title: 'Jellyfin et Plex',
-    description: 'Connectez votre serveur multimédia pour y retrouver vos séries. Vous pouvez passer cette étape.',
+    description: 'Connectez votre serveur multimédia pour y retrouver vos séries.',
   },
   {
     id: 'catalog', label: 'Catalogue', hint: 'Séries Fankai', component: SetupCatalogStep,
     title: 'Catalogue Fankai',
-    description: 'Le catalogue liste toutes les séries Fankai et leurs torrents. Il se met à jour tout seul ensuite.',
+    description: 'Le catalogue liste toutes les séries Fankai et leurs torrents. Il se met ensuite à jour automatiquement.',
   },
   {
     id: 'recap', label: 'Récapitulatif', hint: 'Vérifier et terminer', component: SetupRecapStep,
-    title: 'Tout est prêt ?',
-    description: 'Vérifiez la configuration avant de commencer. Chaque point reste modifiable.',
+    title: 'Récapitulatif',
+    description: 'Vérifiez la configuration avant de commencer.',
   },
 ]
 

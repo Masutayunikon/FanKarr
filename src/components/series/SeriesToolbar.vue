@@ -4,7 +4,7 @@
     <header class="flex items-center justify-between gap-x-4 gap-y-3 flex-wrap min-h-11">
       <div class="flex items-baseline gap-3.5">
         <h1 class="page-title tracking-[0.01em]">Médiathèque</h1>
-        <span class="text-[13px] text-muted">{{ count }} série{{ count > 1 ? 's' : '' }}</span>
+        <span class="text-[13px] text-muted">{{ plural(count, 'série') }}</span>
       </div>
 
       <div class="flex items-center gap-2.5 w-full md:w-auto">
@@ -16,7 +16,7 @@
               @input="emit('update:search', ($event.target as HTMLInputElement).value)"
               @keydown.esc="emit('update:search', '')"
               type="text"
-              :placeholder="selectable ? 'Rechercher dans la médiathèque' : 'Rechercher une série'"
+              placeholder="Rechercher une série"
               aria-label="Rechercher une série"
               class="flex-1 min-w-0 bg-transparent outline-none text-sm text-primary placeholder:text-muted"
           />
@@ -39,7 +39,6 @@
       </div>
     </header>
 
-    <!-- Filtres, tri et taille  -->
     <div ref="rowRef" class="relative">
       <div class="chip-row md:justify-between md:gap-x-4 md:gap-y-2.5" @scroll="moreOpen = false; sortOpen = false">
         <div class="flex items-center gap-1.5 md:flex-wrap md:shrink md:min-w-0">
@@ -81,7 +80,7 @@
                 class="segmented-item w-[34px] justify-center px-0 text-[11.5px] font-bold"
                 :class="posterSize === size ? 'bg-hover text-primary' : 'text-muted'"
                 :aria-pressed="posterSize === size"
-                :title="`Affiches ${size}`"
+                :title="`Taille des affiches : ${size}`"
             >
               {{ size }}
             </button>
@@ -120,6 +119,7 @@
 import { ref, computed } from 'vue'
 import { Check, ChevronDown, Search, SquareCheck, X } from 'lucide-vue-next'
 import { onClickOutside } from '@vueuse/core'
+import { plural } from '@/utils/format'
 
 export interface LibraryFilter { value: string; label: string; count: number; attention?: boolean }
 

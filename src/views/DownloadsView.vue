@@ -2,25 +2,24 @@
   <div class="px-4 md:px-10 pt-[26px] pb-12">
     <div class="max-w-[1400px] flex flex-col gap-4">
 
-      <!-- En-tête -->
       <header data-tour="activity-header" class="flex items-center justify-between gap-x-4 gap-y-3 flex-wrap min-h-11">
         <div class="flex items-baseline gap-3.5 flex-wrap">
           <h1 class="page-title tracking-[0.01em]">Activité</h1>
           <span class="flex items-center gap-[7px] text-meta text-secondary">
             <span class="w-1.5 h-1.5 rounded-full" :class="polling ? 'bg-ok animate-pulse' : 'bg-muted'" />
-            {{ polling ? 'En direct' : 'En pause' }}<template v-if="lastUpdate"> · mise à jour {{ sinceUpdate }}</template>
+            {{ polling ? 'Actualisation auto' : 'Actualisation en pause' }}<template v-if="lastUpdate"> · mise à jour {{ sinceUpdate }}</template>
           </span>
         </div>
         <div class="flex items-center gap-2.5">
           <button @click="importAll" :disabled="importingAll || toImportCount === 0" class="btn-primary pointer-fine:h-[38px]">
             <Loader v-if="importingAll" :size="15" class="animate-spin" />
             <Upload v-else :size="15" :stroke-width="2.25" />
-            Importer tout<template v-if="toImportCount > 0"> · {{ toImportCount }}</template>
+            Tout importer<template v-if="toImportCount > 0"> · {{ toImportCount }}</template>
           </button>
-          <button @click="fetchTorrents" :disabled="loading" class="btn-icon pointer-fine:h-[38px] pointer-fine:w-[38px]" title="Rafraîchir" aria-label="Rafraîchir">
+          <button @click="fetchTorrents" :disabled="loading" class="btn-icon pointer-fine:h-[38px] pointer-fine:w-[38px]" title="Actualiser" aria-label="Actualiser">
             <RefreshCw :size="16" :class="{ 'animate-spin': loading }" />
           </button>
-          <button @click="togglePolling" class="btn-icon pointer-fine:h-[38px] pointer-fine:w-[38px]" :title="polling ? 'Mettre en pause' : 'Reprendre'" :aria-label="polling ? 'Mettre en pause' : 'Reprendre'">
+          <button @click="togglePolling" class="btn-icon pointer-fine:h-[38px] pointer-fine:w-[38px]" :title="polling ? 'Suspendre l\'actualisation' : 'Reprendre l\'actualisation'" :aria-label="polling ? 'Suspendre l\'actualisation' : 'Reprendre l\'actualisation'">
             <Pause v-if="polling" :size="16" />
             <Play v-else :size="16" />
           </button>
@@ -42,26 +41,22 @@
           @toggle-col="(key) => (columns as any)[key] = !(columns as any)[key]"
       />
 
-      <!-- Pas de clients -->
       <div v-if="noClients" class="card flex flex-col items-center gap-3 py-16 text-center">
         <p class="font-display text-xl font-bold text-primary">Aucun client torrent configuré</p>
         <p class="text-body text-muted">Ajoutez un client pour suivre les téléchargements FanKarr.</p>
         <RouterLink to="/settings/download-client" class="btn-secondary btn-sm mt-1">Configurer un client</RouterLink>
       </div>
 
-      <!-- Chargement -->
       <div v-else-if="loading && torrents.length === 0" class="flex items-center justify-center gap-2 py-16 text-muted text-body">
         <div class="w-4 h-4 border border-border border-t-accent rounded-full animate-spin" />
         Chargement…
       </div>
 
-      <!-- Vide -->
       <div v-else-if="visibleTorrents.length === 0" class="card flex flex-col items-center gap-2 py-16 text-center">
         <p class="font-display text-xl font-bold text-primary">{{ emptyState.title }}</p>
         <p class="text-body text-muted">{{ emptyState.hint }}</p>
       </div>
 
-      <!-- Une ligne par torrent -->
       <div v-else class="flex flex-col gap-2.5">
         <TorrentCard
             v-for="t in visibleTorrents"
@@ -90,6 +85,7 @@ import { RouterLink } from 'vue-router'
 import { Loader, Pause, Play, RefreshCw, Upload } from 'lucide-vue-next'
 import { useToast } from '@/composables/useToast'
 import { useSeriesStore } from '@/stores/series'
+import { plural } from '@/utils/format'
 import TorrentCard from '@/components/downloads/TorrentCard.vue'
 import DownloadsToolbar, { type ActivityTab } from '@/components/downloads/DownloadsToolbar.vue'
 
@@ -120,7 +116,7 @@ const columnOptions = [
   { key: 'size',     label: 'Taille / téléchargé' },
   { key: 'ratio',    label: 'Ratio' },
   { key: 'uploaded', label: 'Envoyé (total)' },
-  { key: 'upspeed',  label: 'Vitesse d’envoi' },
+  { key: 'upspeed',  label: "Vitesse d'envoi" },
 ]
 const sortOptions = [
   { label: 'Nom',         value: 'name'     },
@@ -133,7 +129,7 @@ const sortOptions = [
 let pollInterval: ReturnType<typeof setInterval> | null = null
 let clockInterval: ReturnType<typeof setInterval> | null = null
 
-// ── Onglets ───────────────────────────────────────────────────
+// ── Onglets ──
 const isActive   = (t: any) => ['downloading', 'paused', 'checking', 'error'].includes(t.state)
 const isDone     = (t: any) => t.state === 'seeding' || t.state === 'unknown'
 const isToImport = (t: any) => isDone(t) && t.organizeState !== 'done'
@@ -185,13 +181,13 @@ const visibleTorrents = computed(() => {
 })
 
 const emptyState = computed(() => ({
-  'active'   : { title: 'Aucun téléchargement en cours', hint: 'Les torrents de la catégorie « fankai » apparaîtront ici.' },
+  'active'   : { title: 'Aucun téléchargement en cours', hint: 'Les torrents envoyés par FanKarr apparaîtront ici.' },
   'done'     : { title: 'Aucun torrent terminé', hint: hideImported.value ? 'Tous les torrents terminés sont importés.' : '' },
   'to-import': { title: 'Rien à importer', hint: 'Tous les torrents terminés sont dans la médiathèque.' },
-  'errors'   : { title: 'Aucune erreur', hint: 'Ni le client ni l’import ne signalent de problème.' },
-} as Record<string, { title: string; hint: string }>)[activeTab.value] ?? { title: 'Aucun torrent', hint: search.value ? 'Aucun torrent ne correspond au filtre.' : 'Les torrents de la catégorie « fankai » apparaîtront ici.' })
+  'errors'   : { title: 'Aucune erreur', hint: "Ni le client ni l'import ne signalent de problème." },
+} as Record<string, { title: string; hint: string }>)[activeTab.value] ?? { title: 'Aucun torrent', hint: search.value ? 'Aucun torrent ne correspond au filtre.' : 'Les torrents envoyés par FanKarr apparaîtront ici.' })
 
-// ── Présentation ──────────────────────────────────────────────
+// ── Présentation ──
 const seriesById = computed(() => new Map(seriesStore.series.map(s => [s.id, s])))
 const posterOf   = (id: number | undefined) => (id != null ? seriesById.value.get(id)?.poster_image : null) ?? null
 
@@ -211,7 +207,7 @@ function setSort(val: string) {
   else { activeSort.value = val as typeof activeSort.value; sortDir.value = 'asc' }
 }
 
-// ── Chargement ────────────────────────────────────────────────
+// ── Chargement ──
 async function fetchTorrents() {
   loading.value = true
   try {
@@ -236,7 +232,7 @@ function startPolling() { fetchTorrents(); pollInterval = setInterval(fetchTorre
 function stopPolling()  { if (pollInterval) { clearInterval(pollInterval); pollInterval = null } }
 function togglePolling() { polling.value = !polling.value; polling.value ? startPolling() : stopPolling() }
 
-// ── Actions ───────────────────────────────────────────────────
+// ── Actions ──
 async function importTorrent(torrent: any) {
   importing.value[torrent.hash] = true
   try {
@@ -244,8 +240,8 @@ async function importTorrent(torrent: any) {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ hash: torrent.hash, save_path: torrent.save_path, name: torrent.name }),
     })
-    if (res.ok) { toast(`${torrent.name} importé ✓`, 'success'); await fetchTorrents() }
-    else { const { error } = await res.json(); toast(error ?? "Erreur lors de l'import", 'error') }
+    if (res.ok) { toast(`« ${torrent.name} » importé`, 'success'); await fetchTorrents() }
+    else { const { error } = await res.json(); toast(error ?? `Impossible d'importer « ${torrent.name} »`, 'error') }
   } catch { toast('Impossible de contacter le serveur', 'error') }
   finally { importing.value[torrent.hash] = false }
 }
@@ -266,15 +262,17 @@ async function importAll() {
   }
   importingAll.value = false
   await fetchTorrents()
-  errors === 0 ? toast(`${done} torrent(s) importé(s) ✓`, 'success') : toast(`${done} OK, ${errors} erreur(s)`, 'error')
+  errors === 0
+    ? toast(plural(done, 'torrent importé', 'torrents importés'), 'success')
+    : toast(`${plural(done, 'torrent importé', 'torrents importés')}, ${plural(errors, 'erreur')}`, 'error')
 }
 
 async function deleteTorrent(torrent: any, withFiles: boolean) {
   deleting.value[torrent.hash] = true
   try {
     const res = await fetch(`/api/torrent/${torrent.hash}?deleteFiles=${withFiles}`, { method: 'DELETE', credentials: 'include' })
-    if (res.ok) { toast(`"${torrent.name}" supprimé ✓`, 'success'); confirmDelete.value = null; await fetchTorrents() }
-    else toast('Erreur lors de la suppression', 'error')
+    if (res.ok) { toast(`« ${torrent.name} » supprimé`, 'success'); confirmDelete.value = null; await fetchTorrents() }
+    else toast('Impossible de supprimer le torrent', 'error')
   } catch { toast('Impossible de contacter le serveur', 'error') }
   finally { deleting.value[torrent.hash] = false }
 }

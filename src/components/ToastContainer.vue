@@ -28,7 +28,6 @@
 
           <span class="flex-1 text-meta text-primary leading-snug">{{ t.message }}</span>
 
-          <!-- Nbre de messages regroupés -->
           <span
               v-if="t.count && t.count > 1"
               class="shrink-0 pill h-5 px-2 text-[10.5px]"

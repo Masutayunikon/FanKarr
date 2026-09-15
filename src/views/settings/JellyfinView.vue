@@ -2,41 +2,38 @@
   <div class="flex flex-col gap-4">
 
     <Teleport defer to="#settings-actions">
-      <button @click="syncUsers" :disabled="syncing || !hasToken" class="btn-secondary pointer-fine:h-[38px]" :title="hasToken ? undefined : 'Configurez d’abord la clé API'">
+      <button @click="syncUsers" :disabled="syncing || !hasToken" class="btn-secondary pointer-fine:h-[38px]" :title="hasToken ? undefined : 'Renseignez d\'abord la clé API Jellyfin.'">
         <RefreshCw :size="15" :class="{ 'animate-spin': syncing }" />
-        {{ syncing ? 'Synchronisation…' : 'Synchroniser Jellyfin' }}
+        {{ syncing ? 'Synchronisation…' : 'Synchroniser les utilisateurs' }}
       </button>
     </Teleport>
 
-    <!-- ── Connexion Jellyfin ─────────────────────────────────── -->
     <SettingsSection title="Jellyfin" description="La connexion au serveur Jellyfin sert à synchroniser les comptes et à authentifier les utilisateurs du plugin FanKarr Search.">
       <JellyfinConnectionForm @change="hasToken = $event.hasToken" />
     </SettingsSection>
 
-    <!-- ── Synchronisation des utilisateurs ──────────────────── -->
     <SettingsSection
         title="Synchronisation des utilisateurs"
-        description="Importe les utilisateurs Jellyfin comme comptes FanKarr. Les comptes existants sont ignorés ; les utilisateurs se connectent ensuite depuis le plugin sans autre réglage. Synchronisation automatique toutes les heures."
+        description="Crée un compte FanKarr pour chaque utilisateur Jellyfin actif (les comptes existants ne sont pas modifiés). Synchronisation automatique toutes les heures."
     >
       <div class="flex items-center gap-3 flex-wrap">
         <button @click="syncUsers" :disabled="syncing || !hasToken" class="btn-secondary pointer-fine:h-[38px]">
-          {{ syncing ? 'Synchronisation…' : 'Synchroniser maintenant' }}
+          {{ syncing ? 'Synchronisation…' : 'Synchroniser les utilisateurs' }}
         </button>
-        <span v-if="!hasToken" class="text-meta text-muted">Configurez d'abord la clé API.</span>
+        <span v-if="!hasToken" class="text-meta text-muted">Renseignez d'abord la clé API Jellyfin.</span>
         <span v-else-if="syncError" class="text-meta text-err">{{ syncError }}</span>
         <span v-else-if="syncResult" class="text-meta text-secondary">
-          <span class="text-ok">{{ syncResult.created }} compte{{ syncResult.created > 1 ? 's' : '' }} créé{{ syncResult.created > 1 ? 's' : '' }}</span>
-          · {{ syncResult.skipped }} ignoré{{ syncResult.skipped > 1 ? 's' : '' }}<template v-if="syncResult.users.length > 0"> · nouveaux : {{ syncResult.users.join(', ') }}</template>
+          <span class="text-ok">{{ plural(syncResult.created, 'compte créé', 'comptes créés') }}</span>
+          · {{ plural(syncResult.skipped, 'déjà existant ou désactivé', 'déjà existants ou désactivés') }}<template v-if="syncResult.users.length > 0"> · nouveaux : {{ syncResult.users.join(', ') }}</template>
         </span>
       </div>
     </SettingsSection>
 
-    <!-- ── API publique ───────────────────────────────────────── -->
     <section class="bg-card rounded-card">
       <div class="flex flex-col gap-0.5 px-5 pt-4 pb-3.5">
         <h3 class="card-title">API publique</h3>
         <p class="text-meta text-muted">
-          Base : <span class="text-secondary">{{ apiBase }}</span> — authentification par jeton FanKarr (en-tête <span class="text-secondary">Authorization: Bearer</span>) ou compte Jellyfin.
+          Adresse : <span class="text-secondary">{{ apiBase }}</span> · Authentification : jeton FanKarr (en-tête <span class="text-secondary">Authorization: Bearer</span>) ou compte Jellyfin.
         </p>
       </div>
       <div
@@ -57,6 +54,7 @@ import { ref } from 'vue'
 import { RefreshCw } from 'lucide-vue-next'
 import JellyfinConnectionForm from '@/components/settings/JellyfinConnectionForm.vue'
 import SettingsSection from '@/components/settings/SettingsSection.vue'
+import { plural } from '@/utils/format'
 
 const hasToken           = ref(false)
 const syncing            = ref(false)
@@ -66,12 +64,12 @@ const syncError          = ref<string | null>(null)
 const apiBase = `${window.location.origin}/api/v1`
 
 const apiEndpoints = [
-  { method: 'GET',  path: '/v1/series/search?q=', desc: 'Chercher une série dans le catalogue' },
-  { method: 'GET',  path: '/v1/series/:id',       desc: 'Fiche complète, saisons et épisodes' },
-  { method: 'POST', path: '/v1/requests',         desc: 'Créer ou compléter une demande au nom de l’utilisateur' },
-  { method: 'GET',  path: '/v1/requests',         desc: 'Lister ses demandes et leur statut' },
-  { method: 'POST', path: '/v1/auth/jellyfin',    desc: 'Échanger un jeton Jellyfin contre un jeton FanKarr' },
-  { method: 'GET',  path: '/v1/auth/me',          desc: 'Vérifier le jeton courant' },
+  { method: 'GET',  path: '/series/search?q=', desc: 'Chercher une série dans le catalogue' },
+  { method: 'GET',  path: '/series/:id',       desc: 'Obtenir la fiche complète (saisons et épisodes)' },
+  { method: 'POST', path: '/requests',         desc: 'Créer ou compléter une demande au nom de l\'utilisateur' },
+  { method: 'GET',  path: '/requests',         desc: 'Lister ses demandes et leur statut' },
+  { method: 'POST', path: '/auth/jellyfin',    desc: 'Échanger un jeton Jellyfin contre un jeton FanKarr' },
+  { method: 'GET',  path: '/auth/me',          desc: 'Vérifier le jeton utilisé' },
 ]
 
 async function syncUsers() {
@@ -81,7 +79,7 @@ async function syncUsers() {
   const res = await fetch('/api/jellyfin/sync', { method: 'POST', credentials: 'include' })
   const data = await res.json()
   if (res.ok) syncResult.value = data
-  else syncError.value = data.error ?? 'Erreur lors de la synchronisation'
+  else syncError.value = data.error ?? 'Impossible de synchroniser les utilisateurs Jellyfin.'
   syncing.value = false
 }
 </script>

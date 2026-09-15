@@ -1,17 +1,4 @@
-/**
- * Real-Debrid Driver
- *
- * Real-Debrid est un service debrid cloud : les torrents téléchargent sur leurs serveurs,
- * puis les fichiers sont accessibles via des liens directs (HTTPS).
- *
- * Workflow FanKarr :
- *   1. add()  → POST /torrents/addMagnet puis selectFiles si file_index fourni
- *   2. list() → GET  /torrents  (filtre par status=downloaded pour state='seeding')
- *   3. remove() → DELETE /torrents/delete/{id}
- *
- * Le save_path de chaque torrent est construit à partir du localPath configuré
- * (dossier où l'utilisateur télécharge ses fichiers RD via FUSE, WebDAV ou autre).
- */
+/** Real-Debrid : torrents téléchargés côté RD, fichiers lus depuis le dossier local monté (rclone, WebDAV…). */
 
 import type { TorrentClientDriver, TorrentInfo, TorrentFileProgress, DownloadOptions, ClientConfig } from './index.js'
 import { logger } from '../logger.js'
@@ -37,9 +24,10 @@ async function rdFetch(
         body   : body,
     })
     if (res.status === 204) return null
+    if (res.status === 401 || res.status === 403) throw new Error('Clé API Real-Debrid invalide ou compte non premium')
     if (!res.ok) {
-        const text = await res.text().catch(() => '')
-        throw new Error(`Real-Debrid HTTP ${res.status} : ${text}`)
+        const data = await res.json().catch(() => null)
+        throw new Error(`Real-Debrid a répondu HTTP ${res.status}${data?.error ? ` : ${data.error}` : ''}`)
     }
     return res.json()
 }
@@ -67,18 +55,18 @@ const rdDriver: TorrentClientDriver = {
         label : 'Real-Debrid',
         fields: [
             { key: 'apiKey',    label: 'Clé API',              type: 'password', required: true },
-            { key: 'localPath', label: 'Dossier local (FUSE/WebDAV/…)', type: 'text', placeholder: '/mnt/real-debrid', required: false },
+            { key: 'localPath', label: 'Dossier où Real-Debrid est monté (rclone, WebDAV…)', type: 'text', placeholder: '/mnt/real-debrid', required: false },
         ],
     },
 
     async test(config) {
         try {
             const user = await rdFetch(config, 'GET', '/user')
-            logger.info('real-debrid', `Connexion réussie — utilisateur : ${user.username}`)
+            logger.info('real-debrid', `Connexion réussie (utilisateur ${user.username})`)
             return { ok: true, message: `Connecté en tant que ${user.username}` }
         } catch (err) {
-            const msg = err instanceof Error ? err.message : 'Erreur inconnue'
-            logger.warn('real-debrid', `Test de connexion échoué : ${msg}`)
+            const msg = err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux'
+            logger.warn('real-debrid', `Échec du test de connexion : ${msg}`)
             return { ok: false, message: msg }
         }
     },
@@ -86,7 +74,7 @@ const rdDriver: TorrentClientDriver = {
     async healthcheck(config) {
         try {
             const user = await rdFetch(config, 'GET', '/user')
-            return { online: true, version: `RD — ${user.username}` }
+            return { online: true, version: `Compte ${user.username}` }
         } catch {
             return { online: false }
         }
@@ -98,13 +86,12 @@ const rdDriver: TorrentClientDriver = {
                        || url.match(/xt=urn:btih:([a-fA-F0-9]{40,})/i)?.[1]?.toLowerCase()
                        || null
 
-        // Vérifier si le torrent est déjà présent sur RD
         if (hash) {
             try {
                 const list: any[] = await rdFetch(config, 'GET', '/torrents')
                 const existing = list.find((t: any) => t.hash?.toLowerCase() === hash)
                 if (existing) {
-                    logger.info('real-debrid', `Torrent ${hash.slice(0, 8)}… déjà présent sur RD`)
+                    logger.info('real-debrid', `Torrent ${hash.slice(0, 8)}… déjà présent sur Real-Debrid`)
                     if (options?.file_index != null && existing.status === 'waiting_files_selection') {
                         const files: any[] = await rdFetch(config, 'GET', `/torrents/info/${existing.id}`)
                             .then((info: any) => info.files ?? [])
@@ -125,11 +112,10 @@ const rdDriver: TorrentClientDriver = {
             const data = await rdFetch(config, 'POST', '/torrents/addMagnet',
                 new URLSearchParams({ magnet: url }))
             torrentId = data.id
-            logger.info('real-debrid', `Magnet ajouté → ID ${torrentId}`)
+            logger.info('real-debrid', `Magnet ajouté (ID ${torrentId})`)
         } else {
-            // URL de fichier .torrent : télécharger puis uploader
             const torrentRes = await fetch(url)
-            if (!torrentRes.ok) throw new Error(`Impossible de télécharger le fichier .torrent : ${torrentRes.status}`)
+            if (!torrentRes.ok) throw new Error(`Impossible de télécharger le fichier .torrent (HTTP ${torrentRes.status})`)
             const torrentBuf = await torrentRes.arrayBuffer()
             const formData   = new FormData()
             formData.append('torrent', new Blob([torrentBuf], { type: 'application/x-bittorrent' }), 'torrent.torrent')
@@ -138,15 +124,13 @@ const rdDriver: TorrentClientDriver = {
                 headers: { Authorization: `Bearer ${config.apiKey}` },
                 body   : formData,
             })
-            if (!uploadRes.ok) throw new Error(`Ajout .torrent échoué : ${uploadRes.status}`)
+            if (!uploadRes.ok) throw new Error(`Échec de l'envoi du fichier .torrent (HTTP ${uploadRes.status})`)
             const data = await uploadRes.json()
             torrentId  = data.id
-            logger.info('real-debrid', `.torrent uploadé → ID ${torrentId}`)
+            logger.info('real-debrid', `Fichier .torrent envoyé (ID ${torrentId})`)
         }
 
-        // Sélection des fichiers
         if (options?.file_index != null) {
-            // Attendre que la liste des fichiers soit disponible (état waiting_files_selection)
             let files: any[] = []
             for (let attempt = 0; attempt < 20; attempt++) {
                 await new Promise(r => setTimeout(r, 500))
@@ -164,16 +148,13 @@ const rdDriver: TorrentClientDriver = {
                 if (fileId) {
                     await rdFetch(config, 'POST', `/torrents/selectFiles/${torrentId}`,
                         new URLSearchParams({ files: String(fileId) }))
-                    logger.info('real-debrid', `Fichier ${options.file_index} sélectionné sur torrent RD ${torrentId}`)
+                    logger.info('real-debrid', `Fichier n° ${options.file_index} sélectionné pour le torrent Real-Debrid ${torrentId}`)
                 }
             } else if (files.length > 0) {
-                // Sélectionner tous les fichiers si index hors limites
                 await rdFetch(config, 'POST', `/torrents/selectFiles/${torrentId}`,
                     new URLSearchParams({ files: 'all' }))
             }
         } else {
-            // Pas de sélection spécifique : tous les fichiers
-            // Attendre waiting_files_selection pour envoyer "all"
             for (let attempt = 0; attempt < 10; attempt++) {
                 await new Promise(r => setTimeout(r, 500))
                 try {
@@ -195,10 +176,9 @@ const rdDriver: TorrentClientDriver = {
 
         return torrents.map((t: any): TorrentInfo => {
             const progress = typeof t.progress === 'number' ? t.progress / 100 : 0
-            // Construire un save_path "virtuel" à partir du localPath configuré + nom du torrent
+            // save_path virtuel : dossier monté et nom du torrent
             const save_path = localBase ? `${localBase}/${t.filename ?? t.id}` : ''
 
-            // Les liens sont les fichiers téléchargés (disponibles si status=downloaded)
             const files: TorrentFileProgress[] | undefined =
                 Array.isArray(t.files) && t.files.length > 0
                     ? t.files.map((f: any, i: number) => ({
@@ -228,7 +208,6 @@ const rdDriver: TorrentClientDriver = {
     },
 
     async remove(config, hash, _deleteFiles?) {
-        // Retrouver l'ID RD depuis le hash
         const list: any[] = await rdFetch(config, 'GET', '/torrents')
         const target = list.find((t: any) => String(t.hash ?? t.id ?? '').toLowerCase() === hash.toLowerCase())
         if (!target) throw new Error(`Torrent ${hash.slice(0, 8)}… introuvable sur Real-Debrid`)

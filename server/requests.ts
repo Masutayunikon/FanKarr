@@ -1,6 +1,3 @@
-/**
- * Système de demandes utilisateurs
- */
 
 import fs     from 'fs'
 import path   from 'path'
@@ -14,8 +11,8 @@ export type RequestStatus = 'pending' | 'approved' | 'rejected' | 'completed'
 export interface Requester {
     userId     : string
     username   : string
-    seasons    : number[]  // numéros de saison ; [] = toutes les saisons dispo
-    episodes   : number[]  // IDs d'épisodes spécifiques ; [] = pas d'épisode ciblé
+    seasons    : number[]  // numéros de saison ; [] = toutes les saisons disponibles
+    episodes   : number[]  // IDs d'épisodes ciblés ; [] = aucun
     requestedAt: string
 }
 
@@ -32,7 +29,7 @@ export interface SerieRequest {
 
 const REQUESTS_PATH = path.join(DATA_DIR, 'requests.json')
 
-// ── Helpers fichier ───────────────────────────────────────────
+// ── Fichier des demandes ──────────────────────────────────────
 
 export function readRequests(): SerieRequest[] {
     try {
@@ -46,7 +43,7 @@ function writeRequests(requests: SerieRequest[]): void {
     fs.writeFileSync(REQUESTS_PATH, JSON.stringify(requests, null, 2))
 }
 
-/** Union des saisons demandées sur tous les requesters ([] = toutes) */
+/** Saisons demandées par l'ensemble des demandeurs ([] = toutes). */
 export function mergedSeasons(req: SerieRequest): number[] {
     if (req.requesters.some(r => r.seasons.length === 0 && r.episodes.length === 0)) return []
     const all = new Set<number>()
@@ -54,33 +51,26 @@ export function mergedSeasons(req: SerieRequest): number[] {
     return [...all].sort((a, b) => a - b)
 }
 
-/** Union des IDs d'épisodes spécifiques sur tous les requesters */
 export function mergedEpisodes(req: SerieRequest): number[] {
     const all = new Set<number>()
     req.requesters.forEach(r => (r.episodes ?? []).forEach(e => all.add(e)))
     return [...all].sort((a, b) => a - b)
 }
 
-// ── CRUD ──────────────────────────────────────────────────────
+// ── Création et suivi ─────────────────────────────────────────
 
-/**
- * Créer ou fusionner une demande.
- * - Si une demande active (non rejected/completed) existe pour la série → fusionne les saisons de cet user
- * - Sinon → crée une nouvelle demande
- */
 export function upsertRequest(
     userId   : string,
     serieId  : number,
     serieName: string,
     seasons  : number[],  // [] = toutes les saisons
-    episodes : number[] = [],  // IDs d'épisodes spécifiques
+    episodes : number[] = [],
 ): SerieRequest {
     const user = findById(userId)
     if (!user) throw new Error('Utilisateur introuvable')
 
     const requests = readRequests()
 
-    // Chercher une demande active (pas rejected ni completed) pour cette série
     const existing = requests.find(r =>
         r.serieId === serieId &&
         r.status !== 'rejected' &&
@@ -90,15 +80,13 @@ export function upsertRequest(
     const now = new Date().toISOString()
 
     if (existing) {
-        // Mettre à jour ou ajouter ce requester dans la demande existante
         const idx = existing.requesters.findIndex(r => r.userId === userId)
         if (idx >= 0) {
             const r = existing.requesters[idx]
-            // "Tout" = seasons=[] ET episodes=[] (aucune granularité)
             const newIsAll = seasons.length === 0 && episodes.length === 0
             const curIsAll = r.seasons.length === 0 && (r.episodes ?? []).length === 0
             if (newIsAll || curIsAll) {
-                // Dès que l'une des deux est "toutes les saisons" → effacer la granularité
+                // Si l'une couvre toute la série : plus de filtre saison ni épisode
                 r.seasons  = []
                 r.episodes = []
             } else {
@@ -111,11 +99,10 @@ export function upsertRequest(
         }
         existing.updatedAt = now
         writeRequests(requests)
-        logger.info('requests', `Demande mise à jour pour "${serieName}" par "${user.username}"`)
+        logger.info('requests', `Demande de « ${serieName} » complétée par « ${user.username} »`)
         return existing
     }
 
-    // Nouvelle demande
     const request: SerieRequest = {
         id        : crypto.randomUUID(),
         serieId,
@@ -126,7 +113,7 @@ export function upsertRequest(
         updatedAt : now,
     }
     writeRequests([...requests, request])
-    logger.info('requests', `Nouvelle demande pour "${serieName}" par "${user.username}"`)
+    logger.info('requests', `Nouvelle demande de « ${serieName} » par « ${user.username} »`)
     return request
 }
 
@@ -138,7 +125,7 @@ export function approveRequest(id: string): SerieRequest {
     req.rejectionMessage  = undefined
     req.updatedAt         = new Date().toISOString()
     writeRequests(requests)
-    logger.info('requests', `Demande "${req.serieName}" approuvée`)
+    logger.info('requests', `Demande « ${req.serieName} » approuvée`)
     return req
 }
 
@@ -150,7 +137,7 @@ export function rejectRequest(id: string, message?: string): SerieRequest {
     req.rejectionMessage = message
     req.updatedAt        = new Date().toISOString()
     writeRequests(requests)
-    logger.info('requests', `Demande "${req.serieName}" refusée`)
+    logger.info('requests', `Demande « ${req.serieName} » refusée`)
     return req
 }
 
@@ -170,7 +157,7 @@ export function deleteRequest(id: string): void {
     writeRequests(requests.filter(r => r.id !== id))
 }
 
-/** Retire un utilisateur surune demande en attente et la demande disparaît s'il était seul demandeur */
+/** Retire l'utilisateur d'une demande en attente ; supprime la demande s'il était seul. */
 export function withdrawRequest(id: string, userId: string): { deleted: boolean; request: SerieRequest | null } {
     const requests = readRequests()
     const req = requests.find(r => r.id === id)
@@ -181,12 +168,12 @@ export function withdrawRequest(id: string, userId: string): { deleted: boolean;
     req.requesters = req.requesters.filter(r => r.userId !== userId)
     if (req.requesters.length === 0) {
         writeRequests(requests.filter(r => r.id !== id))
-        logger.info('requests', `Demande "${req.serieName}" annulée par "${username}"`)
+        logger.info('requests', `Demande « ${req.serieName} » annulée par « ${username} »`)
         return { deleted: true, request: null }
     }
     req.updatedAt = new Date().toISOString()
     writeRequests(requests)
-    logger.info('requests', `"${username}" retiré de la demande "${req.serieName}"`)
+    logger.info('requests', `« ${username} » retiré de la demande « ${req.serieName} »`)
     return { deleted: false, request: req }
 }
 

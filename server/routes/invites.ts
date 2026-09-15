@@ -25,7 +25,7 @@ router.post('/invites', requireAdmin, (req, res) => {
         })
         res.json(invite)
     } catch (err) {
-        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur' })
+        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux' })
     }
 })
 
@@ -35,11 +35,11 @@ router.delete('/invites/:code', requireAdmin, (req, res) => {
         deleteInvite(String(req.params.code))
         res.json({ success: true })
     } catch (err) {
-        res.status(404).json({ error: err instanceof Error ? err.message : 'Erreur' })
+        res.status(404).json({ error: err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux' })
     }
 })
 
-// GET /api/invites/:code/info  (public — pour afficher la page d'inscription)
+// GET /api/invites/:code/info  (public : page d'inscription)
 router.get('/invites/:code/info', (req, res) => {
     const result = validateInvite(req.params.code)
     if (!result.valid) {
@@ -48,7 +48,7 @@ router.get('/invites/:code/info', (req, res) => {
     res.json({ valid: true, note: result.invite.note ?? null })
 })
 
-// POST /api/invites/:code/register  (public — inscription via invitation)
+// POST /api/invites/:code/register  (public : inscription par invitation)
 router.post('/invites/:code/register', (req, res) => {
     const result = validateInvite(req.params.code)
     if (!result.valid) {
@@ -57,10 +57,10 @@ router.post('/invites/:code/register', (req, res) => {
 
     const { username, password } = req.body
     if (!username || !password) {
-        res.status(400).json({ error: 'username et password requis' }); return
+        res.status(400).json({ error: 'Nom d\'utilisateur et mot de passe requis' }); return
     }
     if (password.length < 6) {
-        res.status(400).json({ error: 'Le mot de passe doit faire au moins 6 caractères' }); return
+        res.status(400).json({ error: 'Le mot de passe doit contenir au moins 6 caractères' }); return
     }
 
     try {
@@ -68,7 +68,7 @@ router.post('/invites/:code/register', (req, res) => {
         consumeInvite(req.params.code)
         res.json({ success: true, user: safeUser(user) })
     } catch (err) {
-        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur' })
+        res.status(400).json({ error: err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux' })
     }
 })
 

@@ -1,11 +1,12 @@
 <template>
-  <div class="flex flex-col md:flex-row min-h-full">
+  <!-- h-auto! annule le h-full du layout, sinon le menu sticky défile avec la page -->
+  <div class="flex flex-col md:flex-row min-h-full h-auto!">
 
     <nav
         v-if="groups.length > 1"
         ref="navRef"
         data-tour="settings-menu"
-        class="md:w-[236px] shrink-0 md:sticky md:top-0 md:self-start md:h-screen md:overflow-y-auto border-b md:border-b-0 md:border-r border-card
+        class="md:w-[236px] shrink-0 md:sticky md:top-0 md:self-start md:h-dvh md:overflow-y-auto border-b md:border-b-0 md:border-r border-card
                px-4 md:px-3.5 py-4 md:py-[26px] flex md:flex-col gap-1 md:gap-[18px] overflow-x-auto"
     >
       <h1 class="hidden md:block font-display text-2xl font-bold text-primary ml-2.5">Paramètres</h1>
@@ -56,15 +57,15 @@ watch(() => route.path, async () => {
 }, { immediate: true })
 
 const pages: Record<string, { title: string; description: string }> = {
-  '/settings/profile'          : { title: 'Mon profil',                  description: 'Votre compte, votre mot de passe et l’apparence de l’application.' },
-  '/settings/users'            : { title: 'Utilisateurs et invitations', description: 'Les invités parcourent la médiathèque et demandent des séries. Ils ne voient ni l’activité ni les paramètres.' },
-  '/settings/media-management' : { title: 'Gestion des médias',          description: 'Où FanKarr prend les fichiers, où il les range, et comment il les importe.' },
-  '/settings/import-management': { title: 'Gestion des séries',          description: 'Les opérations d’entretien sur les fichiers déjà importés.' },
-  '/settings/catalogue'        : { title: 'Catalogue Fankai',            description: 'D’où viennent les séries, les épisodes et les torrents.' },
-  '/settings/download-client'  : { title: 'Clients de téléchargement',   description: 'Les clients qui reçoivent les torrents envoyés par FanKarr.' },
-  '/settings/jellyfin'         : { title: 'Jellyfin et API',             description: 'Le serveur média qui lit la bibliothèque, et l’API ouverte aux applications tierces.' },
-  '/settings/logs'             : { title: 'Journaux',                    description: 'Ce que le serveur a fait, du plus récent au plus ancien.' },
-  '/settings/advanced'         : { title: 'Avancé',                      description: 'Mises à jour, diagnostic et opérations à ne sortir qu’en cas de besoin.' },
+  '/settings/profile'          : { title: 'Mon profil',                  description: "Votre compte, votre mot de passe et l'apparence de l'application." },
+  '/settings/users'            : { title: 'Utilisateurs et invitations', description: "Les invités parcourent la médiathèque et demandent des séries. Ils ne voient ni l'activité ni les paramètres." },
+  '/settings/media-management' : { title: 'Gestion des médias',          description: "Dossiers, mode d'import et serveurs multimédias." },
+  '/settings/import-management': { title: 'Gestion des séries',          description: 'Renommage, métadonnées NFO et vérification des fichiers déjà importés.' },
+  '/settings/catalogue'        : { title: 'Catalogue Fankai',            description: 'Sources du catalogue et surveillance des nouveaux épisodes.' },
+  '/settings/download-client'  : { title: 'Clients torrent',             description: 'Les clients qui reçoivent les torrents envoyés par FanKarr.' },
+  '/settings/jellyfin'         : { title: 'Jellyfin et API',             description: 'Connexion Jellyfin, synchronisation des comptes et API pour les applications tierces.' },
+  '/settings/logs'             : { title: 'Journaux',                    description: 'Événements du serveur, du plus récent au plus ancien.' },
+  '/settings/advanced'         : { title: 'Avancé',                      description: 'Mises à jour, diagnostic, mode développeur, assistant et visite guidée.' },
 }
 
 const page = computed(() => pages[route.path] ?? { title: 'Paramètres', description: '' })

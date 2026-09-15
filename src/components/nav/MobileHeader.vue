@@ -13,7 +13,6 @@
       <Search :size="19" :stroke-width="1.75" />
     </button>
 
-    <!-- Menu du compte -->
     <div ref="menuRef" class="relative">
       <button
           data-tour="help"

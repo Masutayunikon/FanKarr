@@ -1,10 +1,3 @@
-/**
- * logger.ts
- * =========
- * Logger centralisé — écrit dans data/logs.jsonl (une ligne JSON par event)
- * Niveaux : debug | info | warn | error
- * En prod (NODE_ENV=production) les lignes debug ne sont pas écrites sur disque.
- */
 
 import fs   from 'fs'
 import path from 'path'
@@ -13,15 +6,15 @@ import { DATA_DIR } from './config.js'
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
 export interface LogEntry {
-    at      : string    // ISO timestamp
+    at      : string    // date ISO
     level   : LogLevel
-    source  : string    // 'organize' | 'api' | 'scraper' | ...
+    source  : string    // 'api', 'organize', 'torrent-clients', 'rss-sync'…
     msg     : string
     meta?   : Record<string, any>
 }
 
 const LOGS_PATH    = path.join(DATA_DIR, 'logs.jsonl')
-const MAX_LINES    = 2000   // rotation auto au-delà
+const MAX_LINES    = 2000   // rotation automatique au-delà
 const ROTATE_SLACK = 200    // marge avant rotation, pour ne pas réécrire le fichier à chaque ligne
 const IS_PROD      = process.env.NODE_ENV === 'production'
 
@@ -51,14 +44,12 @@ function writeLine(entry: LogEntry) {
 export function log(level: LogLevel, source: string, msg: string, meta?: Record<string, any>) {
     const entry: LogEntry = { at: new Date().toISOString(), level, source, msg, meta }
 
-    // Console
     const prefix = `[${source}]`
     if (level === 'error') console.error(prefix, msg, meta ?? '')
     else if (level === 'warn')  console.warn(prefix, msg, meta ?? '')
     else if (level === 'debug' && !IS_PROD) console.log(prefix, msg, meta ?? '')
     else if (level === 'info')  console.log(prefix, msg, meta ?? '')
 
-    // Disque — pas les debug en prod
     if (level === 'debug' && IS_PROD) return
     writeLine(entry)
 }
@@ -73,9 +64,9 @@ export const logger = {
 // ── Lecture pour l'API ────────────────────────────────────────
 
 export interface LogsReadOptions {
-    limit?  : number           // nb de lignes (défaut 100)
-    level?  : LogLevel | 'all' // filtre niveau
-    source? : string           // filtre source
+    limit?  : number           // nombre de lignes (100 par défaut)
+    level?  : LogLevel | 'all'
+    source? : string
 }
 
 export function readLogs(opts: LogsReadOptions = {}): LogEntry[] {
@@ -84,22 +75,18 @@ export function readLogs(opts: LogsReadOptions = {}): LogEntry[] {
         const content = fs.readFileSync(LOGS_PATH, 'utf-8')
         let lines = content.split('\n').filter(Boolean)
 
-        // Parse
         let entries: LogEntry[] = []
         for (const line of lines) {
             try { entries.push(JSON.parse(line)) } catch {}
         }
 
-        // Filtres
         if (opts.level && opts.level !== 'all')
             entries = entries.filter(e => e.level === opts.level)
         if (opts.source)
             entries = entries.filter(e => e.source === opts.source)
 
-        // Plus récents en premier
         entries.reverse()
 
-        // Limite
         const limit = opts.limit ?? 100
         return entries.slice(0, limit)
     } catch { return [] }

@@ -16,12 +16,11 @@
           :selectable="auth.isAdmin"
       />
 
-      <!-- Grille -->
       <div data-tour="series-grid" class="pt-1.5">
 
         <div v-if="store.loadingSeries && store.series.length === 0" class="flex flex-col items-center justify-center gap-3 h-64 text-muted">
           <div class="w-6 h-6 border border-border border-t-accent rounded-full animate-spin" />
-          <p class="text-body">Chargement du catalogue…</p>
+          <p class="text-body">Chargement de la médiathèque…</p>
         </div>
 
         <div v-else-if="store.error && store.series.length === 0" class="flex flex-col items-center justify-center gap-3 h-64">
@@ -42,17 +41,16 @@
         >
           <template v-for="item in gridItems" :key="item.key">
 
-            <!-- Tuile  -->
+            <!-- Tuile lettre (tri alphabétique) -->
             <div
                 v-if="item.type === 'letter'"
                 class="@container aspect-[2/3] rounded-poster border border-border-light bg-linear-to-b from-card to-main max-sm:hidden flex flex-col justify-between px-[11%] pt-[11%] pb-[10%] overflow-hidden select-none"
                 aria-hidden="true"
             >
               <span class="font-display text-[80cqw] leading-[0.9] font-extrabold text-accent">{{ item.letter }}</span>
-              <span class="text-[clamp(11px,9cqw,12.5px)] text-secondary">{{ item.count }} série{{ item.count > 1 ? 's' : '' }}</span>
+              <span class="text-[clamp(11px,9cqw,12.5px)] text-secondary">{{ plural(item.count, 'série') }}</span>
             </div>
 
-            <!-- Affiche -->
             <component
                 v-else
                 :is="selecting ? 'button' : RouterLink"
@@ -90,7 +88,7 @@
                   <Check :size="13" :stroke-width="3" />
                 </span>
 
-                <span v-if="item.state.watched" title="Surveillée" class="absolute right-2 top-2 w-6 h-6 rounded-full bg-sidebar/80 text-accent flex items-center justify-center">
+                <span v-if="item.state.watched" title="Surveillée : nouveaux épisodes téléchargés automatiquement" class="absolute right-2 top-2 w-6 h-6 rounded-full bg-sidebar/80 text-accent flex items-center justify-center">
                   <Rss :size="12" :stroke-width="2.5" />
                 </span>
                 <span v-else-if="item.state.requested" class="absolute right-2 top-2 h-6 px-[9px] rounded-full bg-sidebar/84 text-accent text-[11.5px] font-bold flex items-center gap-1.5">
@@ -141,14 +139,13 @@
       </div>
     </div>
 
-    <!-- Actions de masse -->
     <div v-if="selecting" class="sticky bottom-4 z-10 mt-8 mx-auto w-fit max-w-full bg-card border border-border rounded-card px-4 py-3 flex items-center gap-x-3 gap-y-2 flex-wrap shadow-[0_16px_40px_rgb(0_0_0/0.5)]">
-      <span class="text-body font-bold text-primary">{{ selected.size }} sélectionnée{{ selected.size > 1 ? 's' : '' }}</span>
+      <span class="text-body font-bold text-primary">{{ plural(selected.size, 'sélectionnée') }}</span>
       <button @click="selectAllFiltered" class="text-meta text-accent hover:underline">Tout sélectionner ({{ filtered.length }})</button>
-      <button v-if="selected.size > 0" @click="clearSelection" class="text-meta text-secondary hover:text-primary">Désélectionner</button>
+      <button v-if="selected.size > 0" @click="clearSelection" class="text-meta text-secondary hover:text-primary">Tout désélectionner</button>
       <span class="hidden sm:block w-px h-6 bg-hover" />
       <div class="flex items-center gap-2 flex-wrap">
-        <button @click="bulkRename" :disabled="bulkBusy || selected.size === 0" class="btn-secondary btn-sm">Renommer</button>
+        <button @click="bulkRename" :disabled="bulkBusy || selected.size === 0" class="btn-secondary btn-sm">Renommer les fichiers</button>
         <button @click="bulkSync(true)" :disabled="bulkBusy || selected.size === 0" class="btn-secondary btn-sm">Surveiller</button>
         <button @click="bulkSync(false)" :disabled="bulkBusy || selected.size === 0" class="btn-secondary btn-sm">Ne plus surveiller</button>
         <button @click="selecting = false" class="btn-icon btn-sm" title="Quitter la sélection" aria-label="Quitter la sélection"><X :size="14" /></button>
@@ -169,6 +166,7 @@ import { useToast } from '@/composables/useToast'
 import { usePosterSize } from '@/composables/usePosterSize'
 import { useLibrarySearch } from '@/composables/useLibrarySearch'
 import { isNew, statusLabel } from '@/utils/series'
+import { plural } from '@/utils/format'
 import SeriesToolbar, { type LibraryFilter } from '@/components/series/SeriesToolbar.vue'
 
 defineOptions({ name: 'SeriesView' })
@@ -185,13 +183,13 @@ const activeFilter = ref('all')
 const activeSort   = ref('alpha')
 
 const sortOptions = [
-  { label: 'A → Z',    value: 'alpha' },
-  { label: 'Z → A',    value: 'alpha-desc' },
-  { label: 'Récentes', value: 'recent' },
-  { label: 'Importées d’abord', value: 'imported' },
+  { label: 'De A à Z', value: 'alpha' },
+  { label: 'De Z à A', value: 'alpha-desc' },
+  { label: 'Année de sortie', value: 'recent' },
+  { label: "Importées d'abord", value: 'imported' },
 ]
 
-// ── Filtres à compteurs ──────────────────────────────────────
+// ── Filtres à compteur ──
 const myRequested = ref<Set<number>>(new Set())
 
 const predicates: Record<string, (s: Serie) => boolean> = {
@@ -223,7 +221,7 @@ const filters = computed<LibraryFilter[]>(() => (auth.isAdmin
       { value: 'all',         label: 'Toutes' },
       { value: 'complete',    label: 'Prêtes à regarder' },
       { value: 'partial',     label: 'Partielles' },
-      { value: 'downloading', label: 'Bientôt', attention: true },
+      { value: 'downloading', label: 'Bientôt là', attention: true },
       { value: 'not-here',    label: 'Pas encore là' },
       { value: 'mine',        label: 'Mes demandes', attention: true },
     ]
@@ -263,7 +261,7 @@ function normalize(text: string) {
   return text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
 }
 
-// ── État des séries ─────────────────────────────────────
+// ── État des séries ──
 const errorsBySerie = ref<Map<number, number>>(new Map())
 const staleFolders  = ref<Set<number>>(new Set())
 
@@ -307,7 +305,7 @@ function posterState(s: Serie): PosterState {
       dim      : notHere,
       isNew    : s.download_state !== 'none' && isNew(s.last_imported_at),
       progress : null,
-      chip     : s.download_state === 'downloading' ? { label: 'Bientôt', tone: 'accent', icon: 'soon' }
+      chip     : s.download_state === 'downloading' ? { label: 'Bientôt là', tone: 'accent', icon: 'soon' }
                : partial ?? (notHere ? { label: 'Pas encore là', tone: 'muted' } : null),
     }
   }
@@ -320,13 +318,13 @@ function posterState(s: Serie): PosterState {
     dim      : s.download_state === 'none' && !s.has_torrents,
     isNew    : isNew(s.last_imported_at),
     progress : errors ? null : downloadProgress(s),
-    chip     : errors ? { label: `${errors} erreur${errors > 1 ? 's' : ''}`, tone: 'err', icon: 'error', title: 'Import en erreur' }
-             : staleFolders.value.has(s.id) ? { label: 'À renommer', tone: 'accent', icon: 'folder', title: 'Dossier différent du titre de la série' }
+    chip     : errors ? { label: plural(errors, 'erreur'), tone: 'err', icon: 'error', title: 'Import en erreur' }
+             : staleFolders.value.has(s.id) ? { label: 'À renommer', tone: 'accent', icon: 'folder', title: 'Nom de dossier différent du titre' }
              : partial ?? (s.download_state === 'none' && !s.has_torrents ? { label: 'Sans torrent', tone: 'muted' } : null),
   }
 }
 
-//  Grille──
+// ── Grille ──
 function letterOf(title: string) {
   const c = normalize(title).charAt(0).toUpperCase()
   return /[A-Z]/.test(c) ? c : '#'
@@ -353,7 +351,7 @@ const gridItems = computed<GridItem[]>(() => {
   return items
 })
 
-// ── Sélection multiple ───────────────────────────────────────
+// ── Sélection multiple ──
 const selecting = ref(false)
 const selected  = ref<Set<number>>(new Set())
 const bulkBusy  = ref(false)
@@ -377,9 +375,9 @@ async function bulkRename() {
       body: JSON.stringify({ serie_ids: [...selected.value] }),
     })
     const data = await res.json()
-    if (!res.ok) { toast(data.error ?? 'Erreur lors du renommage', 'error'); return }
+    if (!res.ok) { toast(data.error ?? 'Impossible de renommer les fichiers', 'error'); return }
     const errs = data.errors?.length ?? 0
-    toast(`${data.done} fichier${data.done > 1 ? 's' : ''} renommé${data.done > 1 ? 's' : ''}${errs ? ` · ${errs} erreur${errs > 1 ? 's' : ''}` : ''}`, errs ? 'error' : 'success')
+    toast(`${plural(data.done, 'fichier renommé', 'fichiers renommés')}${errs ? ` · ${plural(errs, 'erreur')}` : ''}`, errs ? 'error' : 'success')
   } catch {
     toast('Impossible de contacter le serveur', 'error')
   } finally {
@@ -396,12 +394,12 @@ async function bulkSync(enabled: boolean) {
       body: JSON.stringify({ enabled, series: targets.map((s: Serie) => ({ id: s.id, name: s.title })) }),
     })
     const data = await res.json()
-    if (!res.ok) { toast(data.error ?? 'Erreur lors de la mise à jour de la surveillance', 'error'); return }
+    if (!res.ok) { toast(data.error ?? 'Impossible de mettre à jour la surveillance', 'error'); return }
     for (const s of targets) s.rss_synced = enabled
     const n = data.changed
     toast(enabled
-      ? `${n} série${n > 1 ? 's' : ''} ajoutée${n > 1 ? 's' : ''} à la surveillance`
-      : `${n} série${n > 1 ? 's' : ''} retirée${n > 1 ? 's' : ''} de la surveillance`, 'success')
+      ? `${plural(n, 'série ajoutée', 'séries ajoutées')} à la surveillance`
+      : `${plural(n, 'série retirée', 'séries retirées')} de la surveillance`, 'success')
   } catch {
     toast('Impossible de contacter le serveur', 'error')
   } finally {
@@ -409,7 +407,7 @@ async function bulkSync(enabled: boolean) {
   }
 }
 
-// ── Polling downloads + notifs import ────────────────────────
+// ── Suivi des téléchargements et des imports ──
 let dlInterval: ReturnType<typeof setInterval> | null = null
 const seenNotifs = new Set<string>()
 let notifsPrimed = false
@@ -441,8 +439,8 @@ async function fetchOrganizeNotifs() {
       hasNew = true
       if (n.done > 0) {
         const msg = n.errors > 0
-            ? `${n.name} — ${n.done} fichier(s) importé(s), ${n.errors} erreur(s)`
-            : `${n.name} — ${n.done} fichier(s) importé(s) ✓`
+            ? `${n.name} : ${plural(n.done, 'fichier importé', 'fichiers importés')}, ${plural(n.errors, 'erreur')}`
+            : `${n.name} : ${plural(n.done, 'fichier importé', 'fichiers importés')}`
         toast(msg, n.errors > 0 ? 'error' : 'success')
       }
     }

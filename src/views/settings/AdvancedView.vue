@@ -8,7 +8,6 @@
       </button>
     </Teleport>
 
-    <!-- ── Version ────────────────────────────────────────────── -->
     <SettingsSection title="Version">
       <div class="flex items-center gap-5 flex-wrap sm:flex-nowrap">
         <div class="flex-1 min-w-0 flex flex-col gap-[3px]">
@@ -18,7 +17,7 @@
             <span v-else-if="latestVersion" class="pill pill-ok h-5 px-[9px] text-[11px]">À jour</span>
           </span>
           <span class="text-meta text-muted">
-            <template v-if="debug">Démarré il y a {{ uptime }} · </template>vérification automatique toutes les 6 h
+            <template v-if="debug">Serveur démarré il y a {{ uptime }} · </template>mises à jour vérifiées toutes les 6 h
           </span>
         </div>
         <a :href="releaseUrl" target="_blank" rel="noopener" class="btn-secondary btn-sm pointer-fine:h-[34px] shrink-0">
@@ -27,8 +26,7 @@
       </div>
     </SettingsSection>
 
-    <!-- ── Diag ─────────────────────────────────────────── -->
-    <SettingsSection title="Diagnostic" description="Chiffres du processus en cours, utiles pour un rapport de bug.">
+    <SettingsSection title="Diagnostic" description="État du serveur, utile pour signaler un bug.">
       <template #actions>
         <button @click="fetchDebug" class="btn-ghost btn-sm"><RefreshCw :size="13" /> Actualiser</button>
       </template>
@@ -41,7 +39,6 @@
       <p v-else class="text-meta text-muted">Chargement…</p>
     </SettingsSection>
 
-    <!-- ── Dev ──────────────────────────────────────── -->
     <SettingsSection title="Développement">
       <template #actions>
         <span v-if="saved" class="text-meta text-ok flex items-center gap-1.5"><Check :size="14" /> Enregistré</span>
@@ -49,11 +46,10 @@
       <SettingsToggle
           v-model="devMode"
           label="Mode développeur"
-          description="Affiche le panneau de diagnostic en bas de l'accueil : mémoire, cache, uptime, worker d'import."
+          description="Affiche aussi ce diagnostic en bas de l'accueil."
       />
     </SettingsSection>
 
-    <!-- ── Assistant et visite ────────────────────────────────── -->
     <SettingsSection title="Assistant et visite guidée">
       <div class="flex items-center gap-5 flex-wrap sm:flex-nowrap">
         <div class="flex-1 min-w-0 flex flex-col gap-[3px]">
@@ -85,7 +81,7 @@ const saved   = ref(false)
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 let loaded    = false
 
-// ── Version ───────────────────────────────────────────────────
+// ── Version ──
 const GITHUB_REPO     = 'masutayunikon/FanKarr'
 const currentVersion  = ref('')
 const latestVersion   = ref('')
@@ -120,7 +116,7 @@ async function checkForUpdates() {
   }
 }
 
-// ── Diag ────────────────────────────────────────────────
+// ── Diagnostic ──
 const debug = ref<any>(null)
 
 async function fetchDebug() {
@@ -139,8 +135,8 @@ const diagnostics = computed(() => debug.value ? [
   { label: `mémoire utilisée sur ${debug.value.memory.heapTotal} Mo`, value: `${debug.value.memory.heapUsed} Mo` },
   { label: 'mémoire système (RSS)', value: `${debug.value.memory.rss} Mo` },
   { label: 'fichiers suivis',       value: debug.value.organized.trackedFiles.toLocaleString('fr-FR') },
-  { label: `entrées en cache (${debug.value.cache.ttlHours} h)`, value: debug.value.cache.entries },
-  { label: 'worker d’import',       value: debug.value.worker.running ? 'Actif' : 'Inactif', accent: debug.value.worker.running },
+  { label: `entrées en cache (gardées ${debug.value.cache.ttlHours} h)`, value: debug.value.cache.entries },
+  { label: "tâche d'import",        value: debug.value.worker.running ? 'Active' : 'Inactive', accent: debug.value.worker.running },
 ] : [])
 
 onMounted(async () => {

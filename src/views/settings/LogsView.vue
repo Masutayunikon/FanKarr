@@ -8,7 +8,6 @@
       <button @click="showConfirm = true" class="btn-danger pointer-fine:h-[38px]">Vider les journaux</button>
     </Teleport>
 
-    <!-- Filtres -->
     <div class="flex items-center justify-between gap-x-4 gap-y-2.5 flex-wrap">
       <div class="flex items-center gap-1.5 flex-wrap">
         <button
@@ -43,26 +42,23 @@
               class="segmented-item"
               :class="{ 'is-active': limit === n }"
               :aria-pressed="limit === n"
-          >{{ n === 2000 ? 'Tout' : n }}</button>
+          >{{ n.toLocaleString('fr-FR') }}</button>
         </div>
-        <button @click="load" :disabled="loading" class="btn-icon pointer-fine:w-[34px] pointer-fine:h-[34px]" title="Rafraîchir" aria-label="Rafraîchir">
+        <button @click="load" :disabled="loading" class="btn-icon pointer-fine:w-[34px] pointer-fine:h-[34px]" title="Actualiser" aria-label="Actualiser">
           <RefreshCw :size="15" :class="{ 'animate-spin': loading }" />
         </button>
       </div>
     </div>
 
-    <!-- Chargement -->
     <div v-if="loading && entries.length === 0" class="flex items-center justify-center gap-2 py-16 text-muted text-body">
       <div class="w-4 h-4 border border-border border-t-accent rounded-full animate-spin" />
       Chargement…
     </div>
 
-    <!-- Vide -->
     <div v-else-if="entries.length === 0" class="card flex items-center justify-center py-16 text-muted text-body">
       Aucune entrée{{ filterLevel !== 'all' || filterSource ? ' pour ce filtre' : '' }}.
     </div>
 
-    <!-- Table -->
     <section v-else class="bg-card rounded-card overflow-hidden">
       <div class="overflow-x-auto">
         <div class="min-w-[640px]">
@@ -90,9 +86,8 @@
       </div>
     </section>
 
-    <p class="text-meta text-muted">{{ entries.length }} entrée{{ entries.length > 1 ? 's' : '' }} affichée{{ entries.length > 1 ? 's' : '' }} · fichier de {{ formatSize(fileSize) }}</p>
+    <p class="text-meta text-muted">{{ plural(entries.length, 'entrée affichée', 'entrées affichées') }} · fichier de {{ formatSize(fileSize) }}</p>
 
-    <!-- Confirmation -->
     <Teleport to="body">
       <div v-if="showConfirm" class="modal-backdrop" @click.self="showConfirm = false">
         <div class="modal max-w-sm" role="dialog" aria-modal="true" aria-labelledby="logs-clear-title">
@@ -115,7 +110,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { Download, RefreshCw, TriangleAlert } from 'lucide-vue-next'
 import { useToast } from '@/composables/useToast'
-import { formatSize } from '@/utils/format'
+import { formatSize, plural } from '@/utils/format'
 
 const { add: toast } = useToast()
 
@@ -130,13 +125,12 @@ const limit        = ref(100)
 
 const levels = [
   { label: 'Tout',          value: 'all'   },
-  { label: 'Info',          value: 'info'  },
+  { label: 'Informations',  value: 'info'  },
   { label: 'Avertissements', value: 'warn' },
   { label: 'Erreurs',       value: 'error' },
-  { label: 'Debug',         value: 'debug' },
+  { label: 'Débogage',      value: 'debug' },
 ]
 
-// Compteurs et sources
 const counts = computed(() => {
   const c: Record<string, number> = {}
   for (const e of allEntries.value) c[e.level] = (c[e.level] ?? 0) + 1
@@ -172,7 +166,6 @@ async function doClear() {
   await load()
 }
 
-// Fichier texte
 function exportLogs() {
   const lines = entries.value.map(e => `${e.at}\t${e.level.toUpperCase()}\t${e.source}\t${e.msg}${e.meta ? `\t${JSON.stringify(e.meta)}` : ''}`)
   const blob  = new Blob([lines.join('\n') + '\n'], { type: 'text/plain;charset=utf-8' })
@@ -196,8 +189,8 @@ function fullDate(iso: string): string {
 
 function levelInfo(level: string): { label: string; class: string } {
   return ({
-    debug: { label: 'Debug',         class: 'pill-muted' },
-    info : { label: 'Info',          class: 'border-transparent px-0 text-muted' },
+    debug: { label: 'Débogage',      class: 'pill-muted' },
+    info : { label: 'Information',   class: 'border-transparent px-0 text-muted' },
     warn : { label: 'Avertissement', class: 'pill-wait' },
     error: { label: 'Erreur',        class: 'pill-err' },
   } as Record<string, { label: string; class: string }>)[level] ?? { label: level, class: 'pill-muted' }

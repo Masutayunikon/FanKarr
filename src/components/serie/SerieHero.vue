@@ -1,13 +1,16 @@
 <template>
-  <section class="relative overflow-hidden">
-    <img
-        v-if="serie.poster_image"
-        :src="serie.poster_image"
-        alt=""
-        class="absolute inset-0 w-full h-full object-cover blur-[40px] saturate-[1.25] scale-[1.4] opacity-50 pointer-events-none"
-    />
-    <div class="absolute inset-0 bg-linear-100 from-main/97 via-main/86 via-52% to-main/40" />
-    <div class="dot-grid [--dot-grid-angle:100deg] [--dot-grid-fade:60%]" />
+  <section class="relative">
+    <!-- overflow-hidden ici et pas sur la section, qui couperait les menus -->
+    <div class="absolute inset-0 overflow-hidden pointer-events-none">
+      <img
+          v-if="serie.poster_image"
+          :src="serie.poster_image"
+          alt=""
+          class="absolute inset-0 w-full h-full object-cover blur-[40px] saturate-[1.25] scale-[1.4] opacity-50"
+      />
+      <div class="absolute inset-0 bg-linear-100 from-main/97 via-main/86 via-52% to-main/40" />
+      <div class="dot-grid [--dot-grid-angle:100deg] [--dot-grid-fade:60%]" />
+    </div>
 
     <div class="relative grid grid-cols-[96px_minmax(0,1fr)] gap-x-4 gap-y-4 sm:flex sm:items-start sm:gap-7 px-4 md:px-10 pt-4 pb-5 sm:py-6">
       <div class="shrink-0 w-[96px] sm:w-[152px] sm:mt-[22px]">
@@ -39,7 +42,7 @@
                 :class="serie.status.toLowerCase() === 'continuing' ? 'pill-ok' : 'pill-neutral'"
             >{{ statusLabel(serie.status) }}</span>
             <span v-if="episodeCount" class="text-body text-secondary">
-              <template v-if="seasonCount">{{ seasonCount }} saison{{ seasonCount > 1 ? 's' : '' }} · </template>{{ episodeCount }} épisode{{ episodeCount > 1 ? 's' : '' }}
+              <template v-if="seasonCount">{{ plural(seasonCount, 'saison') }} · </template>{{ plural(episodeCount, 'épisode') }}
             </span>
             <span v-if="watched" class="pill pill-wait h-[22px] px-2.5">
               <Rss :size="11" :stroke-width="2.5" /> Surveillée
@@ -75,7 +78,7 @@
                   :style="{ width: `${Math.round(organizedCount / episodeCount * 100)}%` }"
               />
             </div>
-            <span class="text-meta text-secondary">{{ organizedCount }} épisode{{ organizedCount > 1 ? 's' : '' }} {{ organizedLabel }}{{ organizedCount > 1 ? 's' : '' }} sur {{ episodeCount }}</span>
+            <span class="text-meta text-secondary">{{ plural(organizedCount, `épisode ${organizedLabel}`, `épisodes ${organizedLabel}s`) }} sur {{ episodeCount }}</span>
           </div>
 
           <div v-if="$slots.actions" class="flex items-center gap-2.5 mt-1.5 max-sm:flex-nowrap flex-wrap">
@@ -92,6 +95,7 @@ import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { ChevronLeft, ExternalLink, Rss, Tv } from 'lucide-vue-next'
 import { statusLabel } from '@/utils/series'
+import { plural } from '@/utils/format'
 
 defineProps<{
   serie         : any
