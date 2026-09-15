@@ -7,7 +7,7 @@ import { readSettings } from '../settings.js'
 import { getGitlabTitle } from '../gitlab-map.js'
 import {
     resolveEpNaming, computeExpectedName, resolveSerieData, loadCatalog, loadCatalogStatus,
-    serieFolderName, seasonFolderName,
+    serieFolderName, seasonFolderName, fetchSerieFromApi,
 } from '../lib/serie-helpers.js'
 import { GITLAB_API_NFO, GITLAB_RAW_NFO } from '../lib/nfo.js'
 import { dispatchRemove } from '../torrent-clients/index.js'
@@ -39,6 +39,24 @@ function findOrphans(organized: Organized, catalog: any[]) {
             if (!known.has(episodeId))
                 orphans.push({ hash, episode_id: Number(episodeId), season: entry?.season ?? null, episode: entry?.episode ?? null, dest_path: entry?.dest_path ?? null })
     return orphans
+}
+
+// Épisodes publiés sur l'API mais écartés par le scraper : pas des orphelins. null si l'API ne répond pas
+async function apiOnlyEpisodes(orphans: ReturnType<typeof findOrphans>, catalog: any[], mediaPath: string): Promise<Set<string> | null> {
+    const idByFolder = new Map(catalog.map(sd => [serieFolderName(sd.title ?? sd.show_title ?? ''), sd.id]))
+    const serieIds   = new Set<number>()
+    for (const o of orphans) {
+        if (!o.dest_path || !mediaPath) continue
+        const id = idByFolder.get(path.relative(mediaPath, o.dest_path).split(path.sep)[0])
+        if (id != null) serieIds.add(id)
+    }
+    try {
+        const series = await Promise.all([...serieIds].map(fetchSerieFromApi))
+        return new Set(series.flatMap(sd => (sd.seasons ?? []).flatMap((s: any) => (s.episodes ?? []).map((ep: any) => String(ep.id)))))
+    } catch (err) {
+        logger.warn('api', `Épisodes disparus du catalogue : vérification sur l'API Fankai impossible (${err instanceof Error ? err.message : err})`)
+        return null
+    }
 }
 
 // Dossiers série (enfants directs de la médiathèque) contenant les fichiers suivis d'une série
@@ -105,11 +123,15 @@ router.post('/manual-import', requireAuth, async (req, res) => {
     }
     const done: number[] = []
     const errors: { file: string; error: string }[] = []
+    const fail = (file: string, error: string) => {
+        errors.push({ file, error })
+        logger.error('api', `Échec de l'import manuel de « ${file} » : ${error}`)
+    }
     for (const item of items) {
         const { file_path, episode_id, hash } = item
-        if (!file_path || !episode_id) { errors.push({ file: file_path ?? '?', error: 'Paramètres manquants' }); continue }
+        if (!file_path || !episode_id) { fail(file_path ? path.basename(file_path) : '?', 'Paramètres manquants'); continue }
         const found = episodeIndex.get(Number(episode_id))
-        if (!found) { errors.push({ file: file_path, error: `Épisode ${episode_id} introuvable` }); continue }
+        if (!found) { fail(path.basename(file_path), `Épisode ${episode_id} introuvable dans la série ${serie_id}`); continue }
         const { ep, season } = found
         const srcFilename   = path.basename(file_path)
         const srcExt        = path.extname(srcFilename)
@@ -188,9 +210,7 @@ router.post('/manual-import', requireAuth, async (req, res) => {
             apply(data => { (data[torrentHash] ??= {})[String(episode_id)] = entry })
             done.push(episode_id)
         } catch (err) {
-            const msg = err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux'
-            errors.push({ file: srcFilename, error: msg })
-            logger.error('api', `Échec de l'import manuel de « ${srcFilename} » : ${msg}`)
+            fail(srcFilename, err instanceof Error ? err.message : UNEXPECTED_ERROR)
         }
     }
     if (ops.length > 0) {
@@ -497,10 +517,12 @@ router.get('/organized-summary', requireAuth, async (_req, res) => {
                 result.push({ serie_id: sd.id, serie_title: rawTitle, serie_title_clean: serieTitle, total: episodes.length, needs_rename: episodes.filter(e => e.needs_rename).length, episodes })
             }
         }
-        const orphans = complete
-            ? findOrphans(organized, seriesData).map(o => ({ ...o, file_exists: !!o.dest_path && fs.existsSync(o.dest_path) }))
-            : []
-        res.json({ series: result, nfo_support: nfoSupport, orphans, orphans_checked: complete })
+        const candidates = complete ? findOrphans(organized, seriesData) : []
+        const apiOnly    = candidates.length > 0 ? await apiOnlyEpisodes(candidates, seriesData, readSettings().mediaPath) : new Set<string>()
+        const orphans    = (apiOnly ? candidates : [])
+            .filter(o => !apiOnly?.has(String(o.episode_id)))
+            .map(o => ({ ...o, file_exists: !!o.dest_path && fs.existsSync(o.dest_path) }))
+        res.json({ series: result, nfo_support: nfoSupport, orphans, orphans_checked: complete && !!apiOnly })
     } catch (err) {
         logger.error('api', `Échec du récapitulatif des imports : ${err instanceof Error ? err.message : err}`)
         res.status(500).json({ error: err instanceof Error ? err.message : UNEXPECTED_ERROR })
@@ -511,12 +533,18 @@ router.get('/organized-summary', requireAuth, async (_req, res) => {
 router.delete('/organized-summary/orphans', requireAdmin, async (req, res) => {
     const only = Array.isArray(req.body?.episode_ids) ? new Set(req.body.episode_ids.map(String)) : null
     const { series, complete } = await loadCatalogStatus()
-    if (!complete) { res.status(503).json({ error: 'Catalogue incomplet (scraper GitHub ou API Fankai injoignable), réessayez plus tard' }); return }
+    const catalogIncomplete = 'Catalogue incomplet (scraper GitHub ou API Fankai injoignable), réessayez plus tard'
+    if (!complete) { res.status(503).json({ error: catalogIncomplete }); return }
+    let apiOnly: Set<string> | null
+    try { apiOnly = await apiOnlyEpisodes(findOrphans(readOrganized(), series), series, readSettings().mediaPath) }
+    catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : ORGANIZED_UNREADABLE }); return }
+    if (!apiOnly) { res.status(503).json({ error: catalogIncomplete }); return }
     let removed = 0
     try {
         updateOrganized(data => {
             for (const o of findOrphans(data, series)) {
                 if (only && !only.has(String(o.episode_id))) continue
+                if (apiOnly.has(String(o.episode_id))) continue
                 delete data[o.hash][String(o.episode_id)]
                 removed++
             }

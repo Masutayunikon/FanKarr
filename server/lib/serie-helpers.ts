@@ -37,20 +37,45 @@ export function seasonFolderName(seasonNumber: number, englishDirectory: boolean
 
 const errorMessage = (err: unknown) => err instanceof Error ? err.message : String(err)
 
-// Données scraper avec le titre à jour de l'API, ou repli complet sur l'API quand le scraper n'a pas (encore) la série
+// Le scraper écarte les épisodes qu'il n'associe à aucun fichier de torrent : on les reprend de l'API, sans torrent
+function addApiEpisodes(sd: any, api: any): number {
+    const known = new Set<number>()
+    for (const season of sd.seasons ?? [])
+        for (const ep of season.episodes ?? []) {
+            known.add(ep.id)
+            for (const v of Object.values<any>(ep.codec_variants ?? {})) known.add(v.id)
+        }
+    let added = 0
+    for (const apiSeason of api.seasons ?? []) {
+        const eps = (apiSeason.episodes ?? []).filter((ep: any) => !known.has(ep.id))
+        if (eps.length === 0) continue
+        let season = sd.seasons.find((s: any) => s.id === apiSeason.id)
+        if (!season) sd.seasons.push(season = { ...apiSeason, torrents: [], episodes: [] })
+        season.episodes.push(...eps.map((ep: any) => ({ ...ep, torrents: [], paths: [] })))
+        season.episodes.sort((a: any, b: any) => a.episode_number - b.episode_number)
+        added += eps.length
+    }
+    sd.seasons.sort((a: any, b: any) => a.season_number - b.season_number)
+    return added
+}
+
+// Données scraper complétées par l'API (titre, épisodes manquants), ou repli complet sur l'API quand le scraper n'a pas (encore) la série
 export async function resolveSerieData(serieId: number, action?: string): Promise<any | null> {
-    const [scraper, api] = await Promise.allSettled([githubGet(`series/${serieId}.json`), fankaiGet(`/series/${serieId}`)])
-    if (scraper.status === 'fulfilled' && serieHasEpisodes(scraper.value))
-        return api.status === 'fulfilled' && api.value?.title ? { ...scraper.value, title: api.value.title } : scraper.value
-    const scraperError = scraper.status === 'rejected' ? errorMessage(scraper.reason) : 'aucun épisode'
-    try {
-        const sd = await fetchSerieFromApi(serieId)
-        if (action) logger.warn('api', `${action} : série ${serieId} absente du scraper (${scraperError}), données reprises de l'API Fankai`)
+    const [scraper, api] = await Promise.allSettled([githubGet(`series/${serieId}.json`), fetchSerieFromApi(serieId)])
+    if (scraper.status === 'fulfilled' && serieHasEpisodes(scraper.value)) {
+        if (api.status !== 'fulfilled') return scraper.value
+        const sd    = { ...structuredClone(scraper.value), title: api.value.title ?? scraper.value.title }
+        const added = addApiEpisodes(sd, api.value)
+        if (added > 0 && action) logger.warn('api', `${action} : ${added} épisode(s) de la série ${serieId} absent(s) du scraper, repris de l'API Fankai`)
         return sd
-    } catch (err) {
-        logger.error('api', `${action ?? 'Lecture de la série'} : série ${serieId} introuvable (scraper : ${scraperError}, API Fankai : ${errorMessage(err)})`)
+    }
+    const scraperError = scraper.status === 'rejected' ? errorMessage(scraper.reason) : 'aucun épisode'
+    if (api.status === 'rejected') {
+        logger.error('api', `${action ?? 'Lecture de la série'} : série ${serieId} introuvable (scraper : ${scraperError}, API Fankai : ${errorMessage(api.reason)})`)
         return null
     }
+    if (action) logger.warn('api', `${action} : série ${serieId} absente du scraper (${scraperError}), données reprises de l'API Fankai`)
+    return api.value
 }
 
 let lastCatalogWarn = 0
