@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.24.1](https://github.com/Masutayunikon/FanKarr/compare/v3.24.0...v3.24.1) (2026-09-16)
+
+
+### Bug Fixes
+
+* **jellyfin:** fix test route to take body ([9097e36](https://github.com/Masutayunikon/FanKarr/commit/9097e369c80096daa66ac1df454691b949267ef1))
+
 ## [3.24.0](https://github.com/Masutayunikon/FanKarr/compare/v3.23.1...v3.24.0) (2026-09-16)
 
 
