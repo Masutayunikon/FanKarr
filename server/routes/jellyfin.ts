@@ -24,12 +24,24 @@ router.post('/jellyfin/settings', (req, res) => {
     res.json({ jellyfinUrl: updated.jellyfinUrl, hasToken: !!updated.jellyfinAdminToken })
 })
 
-router.post('/jellyfin/test', async (_req, res) => {
-    const { jellyfinUrl, jellyfinAdminToken } = readSettings()
+router.post('/jellyfin/test', async (req, res) => {
+    const settings = readSettings()
+
+    const jellyfinUrl = req.body?.jellyfinUrl || settings.jellyfinUrl
+    const jellyfinAdminToken = req.body?.jellyfinAdminToken || settings.jellyfinAdminToken
+
     if (!jellyfinUrl || !jellyfinAdminToken) {
-        res.status(400).json({ ok: false, error: 'URL et clé API requises' }); return
+        return res.status(400).json({
+            ok: false,
+            error: 'URL et clé API requises'
+        })
     }
-    const result = await testJellyfinConnection(jellyfinUrl, jellyfinAdminToken)
+
+    const result = await testJellyfinConnection(
+      jellyfinUrl,
+      jellyfinAdminToken
+    )
+
     res.json(result)
 })
 

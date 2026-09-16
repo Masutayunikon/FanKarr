@@ -95,7 +95,14 @@ async function testConnection() {
   testing.value    = true
   testResult.value = null
   try {
-    const res = await fetch('/api/jellyfin/test', { method: 'POST', credentials: 'include' })
+    const res = await fetch('/api/jellyfin/test', {
+      method: 'POST',
+      credentials: 'include',
+      body: JSON.stringify({
+        jellyfinUrl,
+        jellyfinAdminToken
+      })
+    })
     testResult.value = await res.json()
   } catch {
     testResult.value = { ok: false, error: 'Impossible de contacter le serveur' }
