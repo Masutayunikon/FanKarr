@@ -1,5 +1,19 @@
 # Changelog
 
+## [3.24.0](https://github.com/Masutayunikon/FanKarr/compare/v3.23.1...v3.24.0) (2026-09-16)
+
+
+### Features
+
+* **onboarding:** assistant de configuration au premier lancement et visite guidée des écrans ([3ede3e8](https://github.com/Masutayunikon/FanKarr/commit/3ede3e808c1ad27f8534960a048dac8a3283096a))
+* **onboarding:** assistant de configuration au premier lancement et visite guidée des écrans ([4b3c629](https://github.com/Masutayunikon/FanKarr/commit/4b3c629ff918a907d04e6c54a1ef2046930523e0))
+* **ui:** refonte de l'interface ([09eb1fa](https://github.com/Masutayunikon/FanKarr/commit/09eb1fa3aa369d8961dd3a49cf74edd89ead3da7))
+
+
+### Bug Fixes
+
+* correction mineures ([6a3cb21](https://github.com/Masutayunikon/FanKarr/commit/6a3cb21adf004dc63ede7df4701c0fec49ad5d3c))
+
 ## [3.23.1](https://github.com/Masutayunikon/FanKarr/compare/v3.23.0...v3.23.1) (2026-09-12)
 
 
