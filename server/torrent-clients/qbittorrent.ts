@@ -1,14 +1,10 @@
-/**
- * qBittorrent Driver
- * Supports qBittorrent 4.x and 5.x (including 5.2.0+ API key authentication)
- */
+/** qBittorrent 4.x et 5.x (clé API à partir de 5.2.0). */
 
 import type { TorrentClientDriver, TorrentInfo, DownloadOptions, ClientConfig } from './index.js'
 import { clientFetch } from './index.js'
 import { logger } from '../logger.js'
 
-// qBittorrent répond normalement "Ok." mais certains setups (reverse proxy, etc.)
-// peuvent wrapper la réponse en JSON — on accepte les deux
+// Réponse « Ok. », ou JSON derrière certains reverse proxies
 function isQbAddSuccess(text: string): boolean {
     if (text.trim() === 'Ok.') return true
     try {
@@ -27,7 +23,6 @@ function mapState(state: string): TorrentInfo['state'] {
     return 'unknown'
 }
 
-// Retourne les headers d'authentification : Bearer (≥5.2.0) ou cookie SID
 async function qbAuth(config: ClientConfig): Promise<Record<string, string>> {
     if (config.apiKey) {
         return { Authorization: `Bearer ${config.apiKey}` }
@@ -48,7 +43,7 @@ async function qbLogin(config: ClientConfig): Promise<string> {
     })
 
     const text = await res.text()
-    if (!res.ok) throw new Error(`Login échoué : ${text.trim() || res.status}`)
+    if (!res.ok) throw new Error(`Échec de la connexion : ${text.trim() || `HTTP ${res.status}`}`)
     if (text.trim() === 'Fails.') throw new Error('Identifiants incorrects (vérifiez le nom d\'utilisateur et le mot de passe)')
 
     const cookie = (res.headers.get('set-cookie') ?? '').split(';')[0].trim()
@@ -69,16 +64,11 @@ async function qbTorrentExists(config: ClientConfig, authHeaders: Record<string,
     }
 }
 
-/**
- * Attend que les fichiers soient disponibles, résout l'index par chemin si possible,
- * puis applique les priorités (désactive tout sauf la cible).
- */
 async function qbApplyFilePriority(
     config   : ClientConfig,
     hash     : string,
     fileIndex: number,
 ): Promise<void> {
-    // Première tentative rapide (100 ms), puis 500 ms — 60 tentatives max ≈ 30 s
     for (let attempt = 0; attempt < 60; attempt++) {
         await new Promise(r => setTimeout(r, attempt === 0 ? 100 : 500))
         try {
@@ -91,13 +81,10 @@ async function qbApplyFilePriority(
             if (!Array.isArray(files) || files.length === 0) continue
 
             if (fileIndex >= files.length) {
-                throw new Error(`Index fichier ${fileIndex} hors limites (torrent a ${files.length} fichiers)`)
+                throw new Error(`Fichier n° ${fileIndex} hors limites : le torrent contient ${files.length} fichiers`)
             }
 
-            // Si tous les fichiers sont à priorité normale (état initial du torrent),
-            // on applique le filtrage complet : on désactive tout sauf la cible.
-            // Si certains sont déjà à 0 (filtrage déjà effectué pour un épisode précédent),
-            // on se contente d'activer la nouvelle cible sans toucher aux autres.
+            // Premier épisode choisi : tout désactiver sauf la cible ; sinon activer seulement la cible
             const isInitialState = files.every((f: any) => (f.priority ?? 1) > 0)
 
             const headers = { ...authH, 'Content-Type': 'application/x-www-form-urlencoded' }
@@ -107,37 +94,35 @@ async function qbApplyFilePriority(
                 if (unwanted.length > 0) {
                     const body = new URLSearchParams({ hash, id: unwanted.join('|'), priority: '0' })
                     const r = await clientFetch(config, `${config.url}/api/v2/torrents/filePrio`, { method: 'POST', body, headers })
-                    if (!r.ok) { logger.warn('qbittorrent', `filePrio désactivation échouée (${r.status}) — retry`); continue }
+                    if (!r.ok) { logger.warn('qbittorrent', `Priorités non appliquées (HTTP ${r.status}), nouvel essai`); continue }
                 }
             }
 
-            // Activer le fichier cible (dans tous les cas)
             const r2 = await clientFetch(config, `${config.url}/api/v2/torrents/filePrio`, {
                 method: 'POST',
                 body   : new URLSearchParams({ hash, id: String(fileIndex), priority: '1' }),
                 headers,
             })
-            if (!r2.ok) { logger.warn('qbittorrent', `filePrio activation échouée (${r2.status}) — retry`); continue }
+            if (!r2.ok) { logger.warn('qbittorrent', `Priorité du fichier cible non appliquée (HTTP ${r2.status}), nouvel essai`); continue }
 
-            // Vérification : le fichier cible est bien à priorité > 0
             const verif = await clientFetch(config, `${config.url}/api/v2/torrents/files?hash=${hash}`, { headers: authH })
             if (verif.ok) {
                 const verifiedFiles: any[] = await verif.json()
                 const target = verifiedFiles[fileIndex]
                 if (!target || (target.priority ?? 0) === 0) {
-                    logger.warn('qbittorrent', `Fichier ${fileIndex} toujours à priorité 0 après application — retry`)
+                    logger.warn('qbittorrent', `Fichier n° ${fileIndex} toujours à priorité 0 après application, nouvel essai`)
                     continue
                 }
             }
 
-            logger.info('qbittorrent', `Fichier ${fileIndex} sélectionné pour ${hash.slice(0, 8)}…`)
+            logger.info('qbittorrent', `Fichier n° ${fileIndex} sélectionné pour ${hash.slice(0, 8)}…`)
             return
         } catch (err) {
             if (err instanceof Error && err.message.includes('hors limites')) throw err
         }
     }
 
-    throw new Error(`Timeout : métadonnées non disponibles pour ${hash.slice(0, 8)}…`)
+    throw new Error(`Délai dépassé : métadonnées du torrent ${hash.slice(0, 8)}… toujours indisponibles`)
 }
 
 const QB: TorrentClientDriver = {
@@ -145,14 +130,14 @@ const QB: TorrentClientDriver = {
         id    : 'qbittorrent',
         label : 'qBittorrent',
         fields: [
-            { key: 'url',      label: 'URL WebUI',       type: 'url',      placeholder: 'http://localhost:8080', required: true },
-            { key: 'apiKey',   label: 'Clé API (≥5.2.0)', type: 'password', placeholder: 'qbt_xxxx…',           required: false },
-            { key: 'username', label: 'Identifiant',     type: 'text',     placeholder: 'admin',                required: false },
-            { key: 'password', label: 'Mot de passe',    type: 'password', placeholder: '••••••••',             required: false },
-            { key: 'category', label: 'Catégorie',       type: 'text',     placeholder: 'fankai',               required: false, default: 'fankai' },
-            { key: 'savePath',   label: 'Dossier cible',          type: 'text', placeholder: '/downloads/fankai',     required: false },
-            { key: 'remotePath', label: 'Chemin distant (client)', type: 'text', placeholder: '/downloads',           required: false },
-            { key: 'localPath',  label: 'Chemin local (FanKarr)',  type: 'text', placeholder: '/mnt/nas/downloads',   required: false },
+            { key: 'url',      label: 'URL de la WebUI',  type: 'url',      placeholder: 'http://localhost:8080', required: true },
+            { key: 'apiKey',   label: 'Clé API (qBittorrent 5.2 ou plus)', type: 'password', placeholder: 'qbt_xxxx…', required: false },
+            { key: 'username', label: 'Nom d\'utilisateur', type: 'text',   placeholder: 'admin',                required: false },
+            { key: 'password', label: 'Mot de passe',     type: 'password', placeholder: '••••••••',             required: false },
+            { key: 'category', label: 'Catégorie',        type: 'text',     placeholder: 'fankai',               required: false, default: 'fankai' },
+            { key: 'savePath',   label: 'Dossier de téléchargement', type: 'text', placeholder: '/downloads/fankai',  required: false },
+            { key: 'remotePath', label: 'Dossier vu par le client',  type: 'text', placeholder: '/downloads',         required: false },
+            { key: 'localPath',  label: 'Dossier vu par FanKarr',    type: 'text', placeholder: '/mnt/nas/downloads', required: false },
             { key: 'ignoreCertificateErrors', label: 'Ignorer les erreurs de certificat SSL', type: 'boolean', required: false },
         ],
     },
@@ -165,8 +150,8 @@ const QB: TorrentClientDriver = {
             logger.info('qbittorrent', `Test de connexion réussi sur ${config.url}`)
             return { ok: true, message: 'Connexion réussie' }
         } catch (err) {
-            const msg = err instanceof Error ? err.message : 'Erreur inconnue'
-            logger.warn('qbittorrent', `Test de connexion échoué sur ${config.url} : ${msg}`)
+            const msg = err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux'
+            logger.warn('qbittorrent', `Échec du test de connexion sur ${config.url} : ${msg}`)
             return { ok: false, message: msg }
         }
     },
@@ -179,11 +164,11 @@ const QB: TorrentClientDriver = {
             })
             if (!res.ok) return { online: false }
             const version = (await res.text()).trim()
-            if (version.startsWith('<')) throw new Error('Réponse HTML reçue — clé API invalide ou non supportée par cette version de qBittorrent')
-            logger.debug('qbittorrent', `Healthcheck OK — version ${version}`)
+            if (version.startsWith('<')) throw new Error('Réponse HTML reçue : clé API invalide ou non prise en charge par cette version de qBittorrent')
+            logger.debug('qbittorrent', `Client en ligne (version ${version})`)
             return { online: true, version }
         } catch (err) {
-            logger.debug('qbittorrent', `Healthcheck échoué : ${err instanceof Error ? err.message : err}`)
+            logger.debug('qbittorrent', `Client injoignable : ${err instanceof Error ? err.message : err}`)
             return { online: false }
         }
     },
@@ -195,10 +180,9 @@ const QB: TorrentClientDriver = {
         const res = await clientFetch(config, `${config.url}/api/v2/torrents/info?${params}`, {
             headers: authH,
         })
-        if (!res.ok) throw new Error(`qB list échoué : ${res.status}`)
+        if (!res.ok) throw new Error(`Liste des torrents inaccessible (HTTP ${res.status})`)
         const data: any[] = await res.json()
 
-        // Récupérer la progression par fichier pour chaque torrent (requêtes parallèles)
         const fileMap = new Map<string, any[]>()
         await Promise.all(data.map(async (t: any) => {
             try {
@@ -255,7 +239,6 @@ const QB: TorrentClientDriver = {
     async add(config, url, options?: DownloadOptions) {
         const authH = await qbAuth(config)
 
-        // Priorité : infohash direct (depuis les données API) > parsing du magnet/URL
         const hash = (options?.infohash?.toLowerCase() ?? null)
                   || url.match(/xt=urn:btih:([a-fA-F0-9]{40,})/i)?.[1]?.toLowerCase()
                   || options?.magnet?.match(/xt=urn:btih:([a-fA-F0-9]{40,})/i)?.[1]?.toLowerCase()
@@ -265,15 +248,15 @@ const QB: TorrentClientDriver = {
             if (hash) {
                 const exists = await qbTorrentExists(config, authH, hash)
                 if (exists) {
-                    logger.info('qbittorrent', `Torrent ${hash.slice(0, 8)}… déjà présent, mise à jour priorité fichier ${options.file_index}`)
+                    logger.info('qbittorrent', `Torrent ${hash.slice(0, 8)}… déjà présent, sélection du fichier n° ${options.file_index}`)
                     qbApplyFilePriority(config, hash, options.file_index).catch(err =>
-                        logger.warn('qbittorrent', `Priorité fichier non appliquée : ${err instanceof Error ? err.message : err}`)
+                        logger.warn('qbittorrent', `Priorité de fichier non appliquée : ${err instanceof Error ? err.message : err}`)
                     )
                     return
                 }
             }
 
-            // Snapshot des hashes avant ajout (pour retrouver le nouveau si hash inconnu)
+            // Hashes présents avant l'ajout, pour repérer le nouveau torrent si le hash est inconnu
             let knownHashes: Set<string> = new Set()
             if (!hash) {
                 try {
@@ -282,10 +265,7 @@ const QB: TorrentClientDriver = {
                 } catch {}
             }
 
-            // Stratégie d'ajout selon le type de lien :
-            //   magnet link  → URLSearchParams (application/x-www-form-urlencoded), pas de binaire
-            //   .torrent URL → FormData multipart obligatoire pour uploader le blob binaire
-            //                  (qBit n'a pas forcément accès à internet / nyaa.si depuis son réseau Docker)
+            // .torrent récupéré par FanKarr : le client n'a pas forcément accès à Internet
             const isMagnet = url.startsWith('magnet:')
             let res: Response
 
@@ -299,10 +279,9 @@ const QB: TorrentClientDriver = {
                     headers: { ...authH, 'Content-Type': 'application/x-www-form-urlencoded' },
                 })
             } else {
-                // FanKarr télécharge le .torrent et l'envoie directement à qBit
-                logger.debug('qbittorrent', `Téléchargement .torrent via FanKarr : ${url.slice(0, 120)}`)
+                logger.debug('qbittorrent', `Téléchargement du fichier .torrent par FanKarr : ${url.slice(0, 120)}`)
                 const torrentRes = await fetch(url, { headers: { 'User-Agent': 'FanKarr/1.0' } })
-                if (!torrentRes.ok) throw new Error(`Impossible de télécharger le .torrent (${torrentRes.status}) : ${url}`)
+                if (!torrentRes.ok) throw new Error(`Impossible de télécharger le fichier .torrent (HTTP ${torrentRes.status}) : ${url}`)
                 const torrentBytes = await torrentRes.arrayBuffer()
                 const form = new FormData()
                 if (config.category) form.append('category', String(config.category))
@@ -311,16 +290,15 @@ const QB: TorrentClientDriver = {
                 res = await clientFetch(config, `${config.url}/api/v2/torrents/add`, { method: 'POST', body: form, headers: authH })
             }
             const text = await res.text()
-            if (!isQbAddSuccess(text)) throw new Error(`Ajout échoué : ${text}`)
+            if (!isQbAddSuccess(text)) throw new Error(`qBittorrent a refusé le torrent : ${text}`)
 
             if (hash) {
-                logger.info('qbittorrent', `Torrent ajouté — sélection fichier ${options.file_index} en attente des métadonnées`)
+                logger.info('qbittorrent', `Torrent ajouté, fichier n° ${options.file_index} sélectionné dès réception des métadonnées`)
                 qbApplyFilePriority(config, hash, options.file_index).catch(err =>
-                    logger.warn('qbittorrent', `Priorité fichier non appliquée : ${err instanceof Error ? err.message : err}`)
+                    logger.warn('qbittorrent', `Priorité de fichier non appliquée : ${err instanceof Error ? err.message : err}`)
                 )
             } else {
-                // Hash inconnu (pas d'infohash, pas de magnet) → retrouve le nouveau torrent par diff de liste
-                logger.info('qbittorrent', `Torrent ajouté sans hash connu — recherche dans la liste (sélection fichier ${options.file_index})`)
+                logger.info('qbittorrent', `Torrent ajouté sans hash connu : recherche dans la liste (fichier n° ${options.file_index})`)
                 const fileIndex = options.file_index
                 ;(async () => {
                     for (let attempt = 0; attempt < 20; attempt++) {
@@ -332,18 +310,17 @@ const QB: TorrentClientDriver = {
                             const newT = (await lr.json()).find((t: any) => !knownHashes.has(String(t.hash).toLowerCase()))
                             if (!newT) continue
                             const resolvedHash = String(newT.hash).toLowerCase()
-                            logger.info('qbittorrent', `Hash résolu : ${resolvedHash.slice(0, 8)}… — application priorité fichier ${fileIndex}`)
+                            logger.info('qbittorrent', `Hash résolu : ${resolvedHash.slice(0, 8)}…, sélection du fichier n° ${fileIndex}`)
                             await qbApplyFilePriority(config, resolvedHash, fileIndex)
                             return
                         } catch {}
                     }
-                    logger.warn('qbittorrent', `Impossible de résoudre le hash pour appliquer la priorité fichier ${fileIndex}`)
+                    logger.warn('qbittorrent', `Hash introuvable : impossible de sélectionner le fichier n° ${fileIndex}`)
                 })().catch(() => {})
             }
             return
         }
 
-        // Pas de sélection de fichier → ajout normal (URLSearchParams, pas de binaire)
         const params = new URLSearchParams()
         params.set('urls', url)
         if (config.category) params.set('category', String(config.category))
@@ -354,8 +331,8 @@ const QB: TorrentClientDriver = {
             headers: { ...authH, 'Content-Type': 'application/x-www-form-urlencoded' },
         })
         const text = await res.text()
-        if (!isQbAddSuccess(text)) throw new Error(`Ajout échoué : ${text}`)
-        logger.info('qbittorrent', `Torrent ajouté (catégorie: ${config.category ?? 'aucune'}${config.savePath ? `, dossier: ${config.savePath}` : ''})`)
+        if (!isQbAddSuccess(text)) throw new Error(`qBittorrent a refusé le torrent : ${text}`)
+        logger.info('qbittorrent', `Torrent ajouté (catégorie : ${config.category ?? 'aucune'}${config.savePath ? `, dossier : ${config.savePath}` : ''})`)
     },
 
     async remove(config, hash, deleteFiles = false) {
@@ -366,7 +343,7 @@ const QB: TorrentClientDriver = {
             body   : params,
             headers: { ...authH, 'Content-Type': 'application/x-www-form-urlencoded' },
         })
-        if (!res.ok) throw new Error(`Suppression échouée : ${res.status}`)
+        if (!res.ok) throw new Error(`Échec de la suppression (HTTP ${res.status})`)
         logger.info('qbittorrent', `Torrent ${hash.slice(0, 8)}… supprimé${deleteFiles ? ' (avec fichiers)' : ''}`)
     },
 }

@@ -18,8 +18,8 @@ export const useCatalogStore = defineStore('catalog', () => {
         error.value = null
         try {
             productions.value = await fetchProductions()
-        } catch (err) {
-            error.value = err instanceof Error ? err.message : 'Erreur inconnue'
+        } catch {
+            error.value = 'Impossible de charger le catalogue.'
         } finally {
             loading.value = false
         }

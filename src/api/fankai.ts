@@ -48,7 +48,7 @@ export interface Torrent {
     url: string
 }
 
-// Parse "Nom@url|Nom@url" → Torrent[]
+// "Nom@url|Nom@url" en liste de torrents
 export function parseTorrents(raw: string | null): Torrent[] {
     if (!raw) return []
     return raw.split('|').flatMap(item => {
@@ -58,7 +58,6 @@ export function parseTorrents(raw: string | null): Torrent[] {
     })
 }
 
-// Préfixe les images relatives
 export function imageUrl(path: string | null): string | null {
     if (!path) return null
     const encoded = encodeURIComponent(`https://api.fankai.fr${path}`)
@@ -67,14 +66,14 @@ export function imageUrl(path: string | null): string | null {
 
 export async function fetchProductions(): Promise<Production[]> {
     const res = await fetch(`${BASE}/productions`)
-    if (!res.ok) throw new Error('Erreur chargement catalogue')
+    if (!res.ok) throw new Error('Impossible de charger le catalogue.')
     const data = await res.json()
     return data.pageProps.data
 }
 
 export async function fetchProduction(id: number, name: string): Promise<ProductionDetail> {
     const res = await fetch(`${BASE}/productions/${id}?name=${encodeURIComponent(name)}`)
-    if (!res.ok) throw new Error('Erreur chargement production')
+    if (!res.ok) throw new Error('Impossible de charger la série.')
     const data = await res.json()
     return data.pageProps.data
 }

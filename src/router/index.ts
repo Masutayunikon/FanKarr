@@ -12,7 +12,7 @@ import AppLayout from '@/layouts/AppLayout.vue'
 const router = createRouter({
     history: createWebHistory(),
     routes: [
-        // ─── Pages publiques hors layout ─────────────────────────
+        // ── Pages hors layout (connexion, invitation, assistant) ──
         {
             path: '/auth',
             component: () => import('@/views/AuthView.vue'),
@@ -30,16 +30,14 @@ const router = createRouter({
             meta: { adminOnly: true },
         },
 
-        // ─── App principale avec layout sidebar ──────────────────
+        // ── Pages avec barre latérale ──
         {
             path: '/',
             component: AppLayout,
             children: [
-                // Redirections des anciennes URLs
-                { path: '',        redirect: '/series' },
+                { path: '',        redirect: '/dashboard' },
                 { path: 'downloads', redirect: '/activity' },
 
-                // Dashboard
                 {
                     path: 'dashboard',
                     name: 'dashboard',
@@ -58,14 +56,13 @@ const router = createRouter({
                     component: () => import('@/views/SerieView.vue'),
                 },
 
-                // Activité (ex-downloads)
+                // Activité
                 {
                     path: 'activity',
                     name: 'activity',
                     component: () => import('@/views/DownloadsView.vue'),
                 },
 
-                // Paramètres — layout imbriqué avec sous-routes
                 {
                     path: 'settings',
                     component: () => import('@/views/settings/SettingsLayout.vue'),
@@ -99,7 +96,7 @@ const router = createRouter({
                         {
                             path: 'logs',
                             name: 'settings-logs',
-                            component: () => import('@/views/settings/LogsView.vue'), // ← nouveau chemin
+                            component: () => import('@/views/settings/LogsView.vue'),
                         },
                         {
                             path: 'advanced',
@@ -121,7 +118,6 @@ const router = createRouter({
                     ],
                 },
 
-                // Demandes
                 {
                     path: 'requests',
                     name: 'requests',
@@ -134,26 +130,23 @@ const router = createRouter({
     scrollBehavior(to, from, savedPosition) {
         if (savedPosition) return savedPosition
         if (to.name === 'setup') return { top: 0 }
-        // Retour depuis le détail vers la liste — ne pas scroller en haut
+        // Retour à la liste : garder la position de défilement
         if (to.name === 'series' && from.name === 'serie-detail') return false
         return { el: '#main-scroll', top: 0 }
     },
 })
 
-// ─── Guard auth ───────────────────────────────────────────────
+// ── Contrôle d'accès ──
 router.beforeEach(async (to) => {
     const auth = useAuthStore()
 
     if (auth.loading) await auth.checkStatus()
 
-    // Redirige vers /auth si non connecté
     if (!to.meta.public && !auth.loggedIn) return '/auth'
 
-    // Redirige vers /series si déjà connecté et tente d'accéder à /auth
-    if (to.path === '/auth' && auth.loggedIn) return '/series'
+    if (to.path === '/auth' && auth.loggedIn) return '/dashboard'
 
-    // Redirige les non-admins hors des pages admin
-    if (to.meta.adminOnly && !auth.isAdmin) return '/series'
+    if (to.meta.adminOnly && !auth.isAdmin) return '/dashboard'
 
     // Premier lancement : l'assistant de configuration est obligatoire
     if (auth.loggedIn && auth.isAdmin && !auth.onboardingDone

@@ -13,8 +13,8 @@ export function readOrganized(file = ORGANIZED_PATH): Organized {
     const raw = fs.readFileSync(file, 'utf-8')
     let data: unknown
     try { data = JSON.parse(raw) }
-    catch (err) { throw new Error(`organized.json illisible (${raw.length} octets) : ${err instanceof Error ? err.message : err}`) }
-    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('organized.json : contenu inattendu')
+    catch (err) { throw new Error(`Fichier de suivi des imports (organized.json) corrompu : ${err instanceof Error ? err.message : err}`) }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('Fichier de suivi des imports (organized.json) corrompu : contenu inattendu')
     return data as Organized
 }
 

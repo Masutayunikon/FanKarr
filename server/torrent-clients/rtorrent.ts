@@ -1,15 +1,10 @@
-/**
- * rTorrent Driver
- * ===============
- * Communique via XML-RPC (HTTP POST).
- * Compatible ruTorrent (via /RPC2) et rTorrent standalone (via /RPC2 ou /XMLRPC).
- */
+/** rTorrent via XML-RPC (ruTorrent ou rTorrent seul, sur /RPC2 ou /XMLRPC). */
 
 import type { TorrentClientDriver, TorrentInfo, DownloadOptions, ClientConfig } from './index.js'
 import { clientFetch } from './index.js'
 import { logger } from '../logger.js'
 
-// ─── XML-RPC helpers ──────────────────────────────────────────
+// ─── XML-RPC ──────────────────────────────────────────────────
 
 function xmlValue(val: any): string {
     if (typeof val === 'string')  return `<value><string>${val}</string></value>`
@@ -71,21 +66,20 @@ async function rpcCall(
     const url     = `${String(config.url).replace(/\/+$/, '')}${rpcPath}`
 
     const res = await clientFetch(config, url, { method: 'POST', headers, body })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    if (!res.ok) throw new Error(`rTorrent a répondu HTTP ${res.status} : vérifiez l'URL et le chemin RPC`)
 
     const text = await res.text()
 
-    // Parse XML — Node.js n'a pas DOMParser natif, on fait un parse minimaliste
+    // Pas de DOMParser sous Node : analyse XML minimale
     const faultMatch = text.match(/<name>faultString<\/name>\s*<value><string>([^<]*)<\/string>/)
-    if (faultMatch) throw new Error(`rTorrent fault : ${faultMatch[1]}`)
+    if (faultMatch) throw new Error(`Erreur rTorrent : ${faultMatch[1]}`)
 
     const valueMatch = text.match(/<methodResponse>\s*<params>\s*<param>\s*<value>([\s\S]*?)<\/value>\s*<\/param>/)
     if (!valueMatch) return null
 
-    // Parse simplifié pour les types courants
+    // Types courants uniquement
     const inner = valueMatch[1].trim()
 
-    // Array
     if (inner.startsWith('<array>')) {
         const items = [...inner.matchAll(/<value>([\s\S]*?)<\/value>/g)]
         return items.map(m => parseInnerValue(m[1].trim()))
@@ -108,7 +102,6 @@ function parseInnerValue(inner: string): any {
     return inner
 }
 
-// multicall pour récupérer plusieurs champs en une requête
 async function d_multicall(
     config : ClientConfig,
     view   : string,
@@ -128,28 +121,20 @@ async function rtTorrentExists(config: ClientConfig, hash: string): Promise<bool
     }
 }
 
-/**
- * Attend les métadonnées via polling rapide (300 ms), applique les priorités.
- * Le torrent est ajouté avec load.start — il fetch les métadonnées activement via DHT/peers.
- * Pendant le fetch (état "métadonnées en cours"), aucun byte de fichier n'est téléchargé.
- * On set les priorités dès que les fichiers sont disponibles, avant que le download réel commence.
- */
+/** Attend les métadonnées puis applique les priorités, avant le début du téléchargement. */
 async function rtApplyFilePriority(
     config   : ClientConfig,
     hash     : string,
     fileIndex: number,
 ): Promise<void> {
-    // 100 tentatives × 300 ms = 30 s max
     for (let attempt = 0; attempt < 100; attempt++) {
         await new Promise(r => setTimeout(r, 300))
         try {
-            // Récupérer taille ET priorité courante de chaque fichier
             const files: any[] = await rpcCall(config, 'f.multicall', [hash, '', 'f.size_bytes=', 'f.priority='])
             const fileCount = Array.isArray(files) ? files.length : 0
             if (fileCount === 0) continue
 
-            // Si tous les fichiers sont à priorité normale (état initial),
-            // on filtre tout sauf la cible. Sinon on active juste la cible.
+            // Premier épisode choisi : tout désactiver sauf la cible ; sinon activer seulement la cible
             const isInitialState = files.every((f: any) => Number(f[1]) > 0)
 
             for (let i = 0; i < fileCount; i++) {
@@ -158,20 +143,17 @@ async function rtApplyFilePriority(
                 } else if (isInitialState) {
                     await rpcCall(config, 'f.priority.set', [hash, i, 0])
                 }
-                // Si pas initial state : on ne touche pas aux autres fichiers
             }
 
-            logger.info('rtorrent', `Fichier ${fileIndex} sélectionné pour ${hash.slice(0, 8)}…`)
+            logger.info('rtorrent', `Fichier n° ${fileIndex} sélectionné pour ${hash.slice(0, 8)}…`)
             return
         } catch {}
     }
 
-    throw new Error(`Timeout : métadonnées non disponibles pour ${hash.slice(0, 8)}…`)
+    throw new Error(`Délai dépassé : métadonnées du torrent ${hash.slice(0, 8)}… toujours indisponibles`)
 }
 
-// ─── State mapping ────────────────────────────────────────────
-// rTorrent state : is_active (0/1) + is_hash_checking (0/1) + get_complete (0/1)
-// + is_open (0/1)
+// ─── États ────────────────────────────────────────────────────
 function mapState(isOpen: number, isActive: number, isChecking: number, isComplete: number): TorrentInfo['state'] {
     if (isChecking)           return 'checking'
     if (!isOpen)              return 'paused'
@@ -187,12 +169,12 @@ const RT: TorrentClientDriver = {
         fields: [
             { key: 'url',      label: 'URL',                    type: 'url',      placeholder: 'http://localhost:8080',  required: true },
             { key: 'rpcPath',  label: 'Chemin RPC',             type: 'text',     placeholder: '/RPC2',                  required: false, default: '/RPC2' },
-            { key: 'username', label: 'Identifiant',            type: 'text',     placeholder: 'admin',                  required: false },
+            { key: 'username', label: 'Nom d\'utilisateur',     type: 'text',     placeholder: 'admin',                  required: false },
             { key: 'password', label: 'Mot de passe',           type: 'password', placeholder: '••••••••',              required: false },
             { key: 'category', label: 'Catégorie (label)',      type: 'text',     placeholder: 'fankai',                 required: false, default: 'fankai' },
-            { key: 'savePath', label: 'Dossier cible',          type: 'text',     placeholder: '/downloads/fankai',      required: false },
-            { key: 'remotePath', label: 'Chemin distant (client)', type: 'text',  placeholder: '/downloads',             required: false },
-            { key: 'localPath',  label: 'Chemin local (FanKarr)',  type: 'text',  placeholder: '/mnt/nas/downloads',     required: false },
+            { key: 'savePath', label: 'Dossier de téléchargement', type: 'text',  placeholder: '/downloads/fankai',      required: false },
+            { key: 'remotePath', label: 'Dossier vu par le client', type: 'text', placeholder: '/downloads',             required: false },
+            { key: 'localPath',  label: 'Dossier vu par FanKarr',   type: 'text', placeholder: '/mnt/nas/downloads',     required: false },
             { key: 'ignoreCertificateErrors', label: 'Ignorer les erreurs de certificat SSL', type: 'boolean', required: false },
         ],
     },
@@ -200,11 +182,11 @@ const RT: TorrentClientDriver = {
     async test(config) {
         try {
             const version = await rpcCall(config, 'system.client_version')
-            logger.info('rtorrent', `Test de connexion réussi sur ${config.url} — version ${version}`)
+            logger.info('rtorrent', `Test de connexion réussi sur ${config.url} (version ${version})`)
             return { ok: true, message: 'Connexion réussie' }
         } catch (err) {
-            const msg = err instanceof Error ? err.message : 'Erreur inconnue'
-            logger.warn('rtorrent', `Test de connexion échoué sur ${config.url} : ${msg}`)
+            const msg = err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux'
+            logger.warn('rtorrent', `Échec du test de connexion sur ${config.url} : ${msg}`)
             return { ok: false, message: msg }
         }
     },
@@ -212,10 +194,10 @@ const RT: TorrentClientDriver = {
     async healthcheck(config) {
         try {
             const version = await rpcCall(config, 'system.client_version')
-            logger.debug('rtorrent', `Healthcheck OK — version ${version}`)
+            logger.debug('rtorrent', `Client en ligne (version ${version})`)
             return { online: true, version: String(version) }
         } catch (err) {
-            logger.debug('rtorrent', `Healthcheck échoué : ${err instanceof Error ? err.message : err}`)
+            logger.debug('rtorrent', `Client injoignable : ${err instanceof Error ? err.message : err}`)
             return { online: false }
         }
     },
@@ -230,8 +212,8 @@ const RT: TorrentClientDriver = {
             'd.complete',
             'd.size_bytes',
             'd.bytes_done',
-            'd.up.total',    // total uploadé
-            'd.ratio',       // ratio x1000
+            'd.up.total',
+            'd.ratio',       // ratio × 1000
             'd.down.rate',
             'd.up.rate',
             'd.left_bytes',
@@ -241,7 +223,6 @@ const RT: TorrentClientDriver = {
 
         const rows = await d_multicall(config, 'main', methods)
 
-        // Récupérer la progression par fichier pour chaque torrent (requêtes parallèles)
         const fileMap = new Map<string, any[]>()
         await Promise.all(rows.map(async (r: any) => {
             const hash = String(r[0]).toUpperCase()
@@ -301,42 +282,37 @@ const RT: TorrentClientDriver = {
             const exists = await rtTorrentExists(config, hash)
 
             if (exists) {
-                // Torrent déjà présent → mettre à jour la priorité directement (async OK)
-                logger.info('rtorrent', `Torrent ${hash.slice(0, 8)}… déjà présent, mise à jour priorité fichier ${options.file_index}`)
+                logger.info('rtorrent', `Torrent ${hash.slice(0, 8)}… déjà présent, sélection du fichier n° ${options.file_index}`)
                 rtApplyFilePriority(config, hash, options.file_index).catch(err =>
-                    logger.warn('rtorrent', `Priorité fichier non appliquée : ${err instanceof Error ? err.message : err}`)
+                    logger.warn('rtorrent', `Priorité de fichier non appliquée : ${err instanceof Error ? err.message : err}`)
                 )
                 return
             }
 
-            // Nouveau torrent → load.start (fetch métadonnées via DHT/peers actif)
-            // Pendant le fetch des métadonnées, aucun byte de fichier n'est téléchargé.
-            // On poll à 300 ms et on set les priorités dès que les fichiers sont disponibles.
+            // Nouveau torrent : priorités appliquées dès que load.start a récupéré les métadonnées
             const args: any[] = ['', url]
             if (config.savePath) args.push(`d.directory.set="${config.savePath}"`)
             if (config.category) args.push(`d.custom1.set=${config.category}`)
             await rpcCall(config, 'load.start', args)
 
-            logger.info('rtorrent', `Torrent ajouté (sélection fichier ${options.file_index} en attente de métadonnées)`)
+            logger.info('rtorrent', `Torrent ajouté, fichier n° ${options.file_index} sélectionné dès réception des métadonnées`)
             rtApplyFilePriority(config, hash, options.file_index).catch(err =>
-                logger.warn('rtorrent', `Priorité fichier non appliquée : ${err instanceof Error ? err.message : err}`)
+                logger.warn('rtorrent', `Priorité de fichier non appliquée : ${err instanceof Error ? err.message : err}`)
             )
             return
         }
 
-        // Pas de sélection de fichier → ajout et démarrage normal
         const args: any[] = ['', url]
         if (config.savePath) args.push(`d.directory.set="${config.savePath}"`)
         if (config.category) args.push(`d.custom1.set=${config.category}`)
         await rpcCall(config, 'load.start', args)
 
-        logger.info('rtorrent', `Torrent ajouté avec succès${config.savePath ? ` (dossier: ${config.savePath})` : ''}`)
+        logger.info('rtorrent', `Torrent ajouté${config.savePath ? ` (dossier : ${config.savePath})` : ''}`)
     },
 
     async remove(config, hash, deleteFiles = false) {
         const h = hash.toUpperCase()
         if (deleteFiles) {
-            // Supprimer les fichiers puis effacer
             await rpcCall(config, 'd.delete_tied', [h])
             await rpcCall(config, 'd.erase', [h])
         } else {

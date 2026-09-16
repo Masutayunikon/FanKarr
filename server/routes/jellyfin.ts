@@ -6,17 +6,15 @@ import { logger } from '../logger.js'
 
 const router = Router()
 
-// GET /api/jellyfin/settings
 router.get('/jellyfin/settings', (_req, res) => {
     const { jellyfinUrl, jellyfinAdminToken } = readSettings()
     res.json({
         jellyfinUrl,
-        // Ne jamais retourner le token en clair — juste indiquer s'il est configuré
+        // Clé API jamais renvoyée : seulement sa présence
         hasToken: !!jellyfinAdminToken,
     })
 })
 
-// POST /api/jellyfin/settings
 router.post('/jellyfin/settings', (req, res) => {
     const { jellyfinUrl, jellyfinAdminToken } = req.body
     const update: Record<string, string> = {}
@@ -26,11 +24,10 @@ router.post('/jellyfin/settings', (req, res) => {
     res.json({ jellyfinUrl: updated.jellyfinUrl, hasToken: !!updated.jellyfinAdminToken })
 })
 
-// POST /api/jellyfin/test
 router.post('/jellyfin/test', async (_req, res) => {
     const { jellyfinUrl, jellyfinAdminToken } = readSettings()
     if (!jellyfinUrl || !jellyfinAdminToken) {
-        res.status(400).json({ ok: false, error: 'URL et token requis' }); return
+        res.status(400).json({ ok: false, error: 'URL et clé API requises' }); return
     }
     const result = await testJellyfinConnection(jellyfinUrl, jellyfinAdminToken)
     res.json(result)
@@ -57,20 +54,19 @@ export async function runJellyfinSync(): Promise<{ created: number; skipped: num
         createUser(jUser.Name, randomPass, 'user')
         results.created++
         results.users.push(jUser.Name)
-        logger.info('jellyfin', `Compte créé pour "${jUser.Name}" (sync Jellyfin)`)
+        logger.info('jellyfin', `Compte créé pour « ${jUser.Name} » (synchronisation Jellyfin)`)
     }
 
-    logger.info('jellyfin', `Sync terminée — ${results.created} créés, ${results.skipped} ignorés`)
+    logger.info('jellyfin', `Synchronisation Jellyfin : ${results.created} compte(s) créé(s), ${results.skipped} ignoré(s) (existant ou désactivé)`)
     return results
 }
 
-// POST /api/jellyfin/sync
 router.post('/jellyfin/sync', async (_req, res) => {
     try {
         const results = await runJellyfinSync()
         res.json(results)
     } catch (err) {
-        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur sync Jellyfin' })
+        res.status(500).json({ error: err instanceof Error ? err.message : 'Échec de la synchronisation Jellyfin' })
     }
 })
 

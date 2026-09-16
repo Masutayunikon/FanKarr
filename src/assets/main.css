@@ -1,18 +1,19 @@
 @import "tailwindcss";
 
-/* ─── Tokens custom consommables via Tailwind v4 ─── */
+/* ─── Des polices un peu stylées si vous voulez mon avis ─── */
 @theme {
+    --font-sans:    'Zen Kaku Gothic New', 'Yu Gothic', 'Hiragino Sans', system-ui, sans-serif;
+    --font-display: 'Shippori Mincho', 'Yu Mincho', Georgia, serif;
+
     --color-accent:        var(--accent);
     --color-accent-hover:  var(--accent-hover);
-    --color-accent-dim:    var(--accent-dim);
     --color-accent-muted:  var(--accent-muted);
+    --color-on-accent:     var(--on-accent);
 
-    --color-shell:         var(--bg-shell);
     --color-sidebar:       var(--bg-sidebar);
     --color-main:          var(--bg-main);
     --color-card:          var(--bg-card);
     --color-hover:         var(--bg-hover);
-    --color-active:        var(--bg-active);
 
     --color-border:        var(--border);
     --color-border-light:  var(--border-light);
@@ -21,84 +22,54 @@
     --color-secondary:     var(--text-secondary);
     --color-muted:         var(--text-muted);
 
-    --color-gold:          var(--gold);
+    --color-ok:            var(--ok);
+    --color-err:           var(--err);
+
+    --radius-card:   14px;
+    --radius-field:  10px;
+    --radius-poster: 6px;
+
+    --text-body: 13.5px;
+    --text-body--line-height: 1.5;
+    --text-meta: 12.5px;
+    --text-meta--line-height: 1.45;
 }
 
-/* ─── Thème Indigo Électrique (défaut) ─── */
-:root,
-[data-theme="indigo"] {
-    --accent:         #7B7EF8;
-    --accent-hover:   #9496fa;
-    --accent-dim:     #1c1c38;
-    --accent-muted:   rgba(123, 126, 248, 0.15);
+/* ─── Palette ─── */
+:root {
+    --bg-sidebar:     #0e0a08;
+    --bg-main:        #13100c;
+    --bg-card:        #1d1814;
+    --bg-hover:       #27221d;
 
-    --bg-shell:       #111116;
-    --bg-sidebar:     #0d0d14;
-    --bg-main:        #16161e;
-    --bg-card:        #111116;
-    --bg-hover:       #1c1c28;
-    --bg-active:      #22223a;
+    --border:         #352f2a;
+    --border-light:   #27221d;
 
-    --border:         #2a2a3a;
-    --border-light:   #1e1e2e;
+    --text-primary:   #efe9dd;
+    --text-secondary: #b8b0a3;
+    --text-muted:     #948b80;
 
-    --text-primary:   #e8e8f8;
-    --text-secondary: #9898b8;
-    --text-muted:     #55556a;
+    --gold:           #f2c44a;
+    --ok:             #89d298;
+    --err:            #ea8470;
+    --on-accent:      #0e0a08;
 
-    --gold:           #f5c842;
+    --accent:         #f2c44a;
+    --accent-hover:   color-mix(in srgb, var(--accent) 80%, white);
+    --accent-muted:   color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
-/* ─── Thème Crimson Night ─── */
-[data-theme="crimson"] {
-    --accent:         #E74C3C;
-    --accent-hover:   #f06050;
-    --accent-dim:     #2a0e0e;
-    --accent-muted:   rgba(231, 76, 60, 0.15);
-
-    --bg-shell:       #110e0e;
-    --bg-sidebar:     #0d0a0a;
-    --bg-main:        #161010;
-    --bg-card:        #110e0e;
-    --bg-hover:       #1e1414;
-    --bg-active:      #2a1616;
-
-    --border:         #2e2020;
-    --border-light:   #201616;
-
-    --text-primary:   #f0e8e8;
-    --text-secondary: #b89898;
-    --text-muted:     #6a5555;
-
-    --gold:           #f5c842;
-}
-
-/* ─── Thème Teal Froid ─── */
-[data-theme="teal"] {
-    --accent:         #00CDBF;
-    --accent-hover:   #1de8da;
-    --accent-dim:     #001e1c;
-    --accent-muted:   rgba(0, 205, 191, 0.15);
-
-    --bg-shell:       #0a0f0f;
-    --bg-sidebar:     #060c0c;
-    --bg-main:        #0e1616;
-    --bg-card:        #0a0f0f;
-    --bg-hover:       #101e1e;
-    --bg-active:      #142828;
-
-    --border:         #1a2e2e;
-    --border-light:   #121e1e;
-
-    --text-primary:   #e0f0f0;
-    --text-secondary: #88b0b0;
-    --text-muted:     #4a6868;
-
-    --gold:           #f5c842;
-}
+/* ─── Thèmes ─── */
+[data-theme="vermillon"] { --accent: #e8734f; }
+[data-theme="jade"]      { --accent: #6fc79a; }
 
 /* ─── Base globale ─── */
 *, *::before, *::after { box-sizing: border-box; }
+
+html {
+    color-scheme: dark;
+    accent-color: var(--accent);
+}
 
 html, body, #app {
     height: 100%;
@@ -109,41 +80,211 @@ html, body, #app {
 body {
     background: var(--bg-main);
     color: var(--text-primary);
+    font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
 }
 
-::-webkit-scrollbar { width: 6px; }
+:where(a, button, [role="switch"], summary):focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
 /* ─── Composants réutilisables ─── */
 @layer components {
+    /* Typo */
+    .page-title {
+        @apply font-display text-[28px] leading-tight font-bold text-primary;
+    }
+    .section-title {
+        @apply font-display text-[21px] leading-snug font-bold text-primary;
+    }
+    .card-title {
+        @apply text-[15px] font-bold text-primary;
+    }
+    .tag-label {
+        @apply text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted;
+    }
+
+    /* Boutons */
+    .btn-primary,
+    .btn-secondary,
+    .btn-ghost,
+    .btn-danger {
+        @apply inline-flex items-center justify-center gap-2 h-10 px-[18px] rounded-full text-body whitespace-nowrap
+        transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed;
+    }
     .btn-primary {
-        @apply bg-accent text-white px-4 py-2 text-sm rounded-lg
-        hover:bg-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer;
+        @apply px-5 bg-accent text-on-accent font-bold hover:bg-accent-hover;
     }
-
     .btn-secondary {
-        @apply border border-border text-secondary px-4 py-2 text-sm rounded-lg
-        hover:border-accent hover:text-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer;
+        @apply border border-border text-primary font-semibold hover:bg-hover;
     }
-
     .btn-ghost {
-        @apply text-muted px-2 py-1 text-sm rounded-md
-        hover:text-primary hover:bg-hover transition-colors cursor-pointer;
+        @apply border border-border-light text-secondary font-medium hover:bg-hover hover:text-primary;
+    }
+    .btn-danger {
+        @apply border border-err/30 text-err font-semibold hover:bg-err/10;
+    }
+    .btn-icon {
+        @apply inline-flex items-center justify-center shrink-0 w-10 h-10 rounded-full border border-border-light text-secondary
+        transition-colors cursor-pointer hover:bg-hover hover:text-primary disabled:opacity-50 disabled:cursor-not-allowed;
+    }
+    .btn-sm {
+        @apply h-8 px-3.5 text-meta;
+    }
+    .btn-icon.btn-sm {
+        @apply w-8 px-0;
     }
 
-    .settings-card {
-        @apply bg-card border border-border rounded-xl p-4;
+    /* Cartes et champs */
+    .card {
+        @apply bg-card rounded-card px-5 py-4;
     }
 
-    .settings-label {
-        @apply text-xs text-muted block;
+    .field-label {
+        @apply block text-meta text-secondary;
     }
 
-    .settings-input {
-        @apply w-full bg-shell border border-border text-primary text-sm px-3 py-2.5 rounded-lg
-        outline-none focus:border-accent transition-colors;
+    .field {
+        @apply w-full bg-main border border-border-light text-primary text-body px-3.5 py-2.5 rounded-field
+        placeholder:text-muted outline-none focus:border-accent transition-colors;
+    }
+
+    /* Pastilles d'état */
+    .pill {
+        @apply inline-flex items-center gap-[7px] h-6 px-[11px] rounded-full border border-transparent
+        text-[11.5px] font-bold whitespace-nowrap;
+    }
+    .pill-ok      { @apply border-ok/30 text-ok; }
+    .pill-active  { @apply bg-accent-muted text-accent; }
+    .pill-wait    { @apply border-accent/35 text-accent; }
+    .pill-neutral { @apply border-border text-secondary; }
+    .pill-err     { @apply border-err/35 text-err; }
+    .pill-muted   { @apply border-border-light text-muted; }
+
+    /* Filtres et onglets à compteur */
+    .chip {
+        @apply inline-flex items-center gap-2 h-[34px] px-3.5 rounded-full border border-border-light text-[13px] font-medium
+        text-secondary whitespace-nowrap transition-colors cursor-pointer hover:text-primary hover:bg-hover;
+    }
+    .chip-count {
+        @apply text-muted;
+    }
+    .chip.is-active {
+        @apply border-primary bg-primary text-on-accent font-bold hover:bg-primary;
+    }
+    .chip.is-active .chip-count {
+        @apply text-on-accent/55 font-medium;
+    }
+    .chip-row {
+        @apply flex items-center gap-1.5 flex-wrap;
+    }
+    .chip-row > * {
+        @apply shrink-0;
+    }
+    /* Sur mobile, les filtres défilent sur une ligne jusqu'aux bords de l'écran */
+    @media (width < 48rem) {
+        .chip-row {
+            @apply flex-nowrap overflow-x-auto -mx-4 px-4 -my-1 py-1;
+            scrollbar-width: none;
+        }
+    }
+
+    /* Bascule */
+    .switch {
+        @apply relative inline-flex shrink-0 w-[46px] h-[26px] p-[3px] rounded-full bg-hover transition-colors cursor-pointer
+        disabled:opacity-50 disabled:cursor-not-allowed;
+    }
+    .switch-knob {
+        @apply block w-5 h-5 rounded-full bg-muted transition-transform duration-200;
+    }
+    .switch[aria-checked="true"] {
+        @apply bg-accent;
+    }
+    .switch[aria-checked="true"] .switch-knob {
+        @apply translate-x-5 bg-on-accent;
+    }
+
+    /* Sélecteur segmenté */
+    .segmented {
+        @apply inline-flex items-center gap-0.5 h-[34px] p-[3px] rounded-full border border-border-light;
+    }
+    .segmented-item {
+        @apply inline-flex items-center h-[26px] px-3.5 rounded-full text-meta text-secondary whitespace-nowrap
+        transition-colors cursor-pointer hover:text-primary;
+    }
+    .segmented-item.is-active {
+        @apply bg-accent text-on-accent font-bold hover:text-on-accent;
+    }
+    .segmented-lg {
+        @apply h-[38px];
+    }
+    .segmented-lg .segmented-item {
+        @apply h-[30px] px-4 text-[13px];
+    }
+
+    /* Barres de progression */
+    .progress {
+        @apply h-[3px] rounded-[2px] bg-hover overflow-hidden;
+    }
+    .progress-bar {
+        @apply h-full rounded-[2px] bg-accent transition-[width] duration-500;
+    }
+
+    /* Menus déroulants et modales */
+    .menu {
+        @apply bg-card border border-border rounded-card p-1.5 shadow-[0_16px_40px_rgb(0_0_0/0.5)] flex flex-col gap-0.5;
+    }
+    .menu-item {
+        @apply flex items-center gap-2.5 w-full min-h-9 px-3 py-2 rounded-lg text-left text-body text-secondary
+        transition-colors cursor-pointer hover:bg-hover hover:text-primary disabled:opacity-40 disabled:cursor-not-allowed;
+    }
+    .modal-backdrop {
+        @apply fixed inset-0 z-50 flex items-center justify-center px-4 bg-sidebar/75;
+    }
+    .modal {
+        @apply w-full bg-card border border-border rounded-card p-6 flex flex-col gap-5 shadow-[0_24px_60px_rgb(0_0_0/0.55)];
+    }
+
+
+    .stamp-new {
+        @apply inline-block px-2 pt-[3px] pb-[2px] border-2 border-accent bg-sidebar/85 text-accent
+        font-display text-[11px] font-bold leading-none tracking-[0.12em] -rotate-6;
+    }
+
+    @media (pointer: coarse) {
+        .btn-primary,
+        .btn-secondary,
+        .btn-ghost,
+        .btn-danger {
+            @apply h-11;
+        }
+        .btn-icon {
+            @apply w-11 h-11;
+        }
+        .btn-sm {
+            @apply h-10;
+        }
+        .btn-icon.btn-sm {
+            @apply w-10;
+        }
+        .chip {
+            @apply h-10;
+        }
+        .menu-item {
+            @apply min-h-11;
+        }
+    }
+
+    .dot-grid {
+        @apply absolute inset-0 pointer-events-none;
+        background-image: radial-gradient(color-mix(in srgb, var(--accent) 12%, transparent) 1px, transparent 1.5px);
+        background-size: 7px 7px;
+        mask-image: linear-gradient(var(--dot-grid-angle, 90deg), #000 0%, transparent var(--dot-grid-fade, 55%));
     }
 }

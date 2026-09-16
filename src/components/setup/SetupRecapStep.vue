@@ -1,7 +1,7 @@
 <template>
   <div class="flex flex-col gap-6">
 
-    <ul class="settings-card p-0 divide-y divide-border">
+    <ul class="card p-0 divide-y divide-border">
       <li v-for="row in rows" :key="row.label" class="flex items-center gap-3 px-4 py-3">
         <span class="w-6 h-6 rounded-full flex items-center justify-center shrink-0" :class="stateClass[row.state]">
           <span v-if="row.state === 'loading'" class="w-3 h-3 border border-border border-t-accent rounded-full animate-spin" />
@@ -12,23 +12,23 @@
         </span>
         <div class="flex-1 min-w-0">
           <p class="text-sm text-primary">{{ row.label }}</p>
-          <p class="text-xs text-muted truncate" :title="row.value">{{ row.value }}</p>
+          <p class="text-meta text-muted truncate" :title="row.value">{{ row.value }}</p>
         </div>
-        <button @click="context.goto(row.step)" class="btn-ghost text-xs shrink-0">Modifier</button>
+        <button @click="context.goto(row.step)" class="btn-ghost btn-sm shrink-0">Modifier</button>
       </li>
     </ul>
 
     <div class="flex flex-col sm:flex-row gap-2">
-      <button @click="done(true)" :disabled="finishing || !settings.mediaPath" class="btn-primary flex items-center justify-center gap-1.5">
+      <button @click="done(true)" :disabled="finishing || !settings.mediaPath" class="btn-primary">
         <Compass :size="15" />
-        {{ context.relaunch ? 'Revoir la visite guidée' : "Terminer et découvrir l'interface" }}
+        {{ context.relaunch ? 'Revoir la visite guidée' : 'Terminer avec la visite guidée' }}
       </button>
       <button @click="done(false)" :disabled="finishing || !settings.mediaPath" class="btn-secondary">
         {{ context.relaunch ? 'Fermer' : 'Terminer sans la visite' }}
       </button>
     </div>
-    <p v-if="!context.relaunch" class="text-xs text-muted -mt-3">
-      La visite guidée présente chaque écran en une minute. Vous pourrez la relancer depuis le bouton « ? » de la barre latérale.
+    <p v-if="!context.relaunch" class="text-meta text-muted -mt-3">
+      La visite guidée présente les écrans principaux en une minute. Vous pourrez la relancer avec le bouton « ? ».
     </p>
 
   </div>
@@ -38,6 +38,7 @@
 import { ref, reactive, inject, onMounted } from 'vue'
 import { Check, Compass, Minus, TriangleAlert, X } from 'lucide-vue-next'
 import { checkPaths, setupContextKey, type SetupSettings, type SetupStepId } from './setup'
+import { plural } from '@/utils/format'
 
 type RowState = 'loading' | 'ok' | 'warn' | 'error' | 'neutral'
 interface Row { label: string; value: string; state: RowState; step: SetupStepId }
@@ -49,13 +50,13 @@ const finishing = ref(false)
 
 const stateClass: Record<RowState, string> = {
   loading: 'bg-hover',
-  ok     : 'bg-green-500/15 text-green-400',
-  warn   : 'bg-yellow-500/15 text-yellow-500',
-  error  : 'bg-red-500/15 text-red-400',
+  ok     : 'bg-ok/15 text-ok',
+  warn   : 'bg-accent-muted text-accent',
+  error  : 'bg-err/15 text-err',
   neutral: 'bg-hover text-muted',
 }
 
-const modeLabel = { hardlink: 'Hardlink', copy: 'Copie', move: 'Déplacement' }
+const modeLabel = { hardlink: 'Hardlink', copy: 'Copier', move: 'Déplacer' }
 
 const row = (label: string, step: SetupStepId, value = '…', state: RowState = 'loading'): Row => ({ label, step, value, state })
 
@@ -64,11 +65,11 @@ const rows = reactive({
   mode    : row("Mode d'import", 'paths'),
   client  : row('Client torrent', 'client'),
   import  : row('Import automatique', 'import',
-      props.settings.autoImport ? 'Activé' : 'Désactivé : import manuel depuis Activité',
+      props.settings.autoImport ? 'Activé' : 'Désactivé : import manuel depuis la page Activité',
       props.settings.autoImport ? 'ok' : 'neutral'),
-  nfo     : row('NFO et images', 'import', props.settings.nfoSupport ? 'Activés' : 'Désactivés', 'neutral'),
+  nfo     : row('Fichiers NFO et images', 'import', props.settings.nfoSupport ? 'Activés' : 'Désactivés', 'neutral'),
   jellyfin: row('Jellyfin', 'media-server'),
-  plex    : row('Plex', 'media-server', context.plexOpened ? 'Assistant Plex lancé' : 'Non configuré', 'neutral'),
+  plex    : row('Plex', 'media-server', context.plexOpened ? 'Assistant ouvert, non vérifié' : 'Non configuré', 'neutral'),
   catalog : row('Catalogue Fankai', 'catalog'),
 })
 
@@ -90,7 +91,7 @@ async function loadPaths() {
     set(rows.paths, 'Médiathèque non configurée', 'error')
   } else {
     set(rows.paths,
-        `${s.mediaPath}${s.completePath ? ` ← ${s.completePath}` : ' · téléchargements non renseignés'}`,
+        `Médiathèque : ${s.mediaPath} · ${s.completePath ? `Téléchargements : ${s.completePath}` : 'dossier des téléchargements non renseigné'}`,
         !res.ok ? 'error' : s.completePath ? 'ok' : 'warn')
   }
 
@@ -139,7 +140,7 @@ async function loadCatalog() {
   try {
     const { count, empty } = await getJson('/api/torrents/status')
     if (empty) set(rows.catalog, 'Catalogue vide', 'warn')
-    else       set(rows.catalog, `${count} séries disponibles`, 'ok')
+    else       set(rows.catalog, plural(count, 'série disponible', 'séries disponibles'), 'ok')
   } catch {
     set(rows.catalog, 'Impossible de vérifier', 'warn')
   }

@@ -57,7 +57,7 @@ export async function downloadNfoFolder(gitlabTitle: string, destRoot: string): 
             downloaded++
         } catch { skipped++ }
     }
-    logger.info('nfo-update', `"${gitlabTitle}" — ${downloaded} fichiers mis à jour, ${skipped} ignorés`)
+    logger.info('nfo-update', `NFO de « ${gitlabTitle} » : ${downloaded} fichier(s) mis à jour, ${skipped} échec(s)`)
 }
 
 export async function checkNfoUpdates() {
@@ -82,15 +82,15 @@ export async function checkNfoUpdates() {
         const gitlabTitle = getGitlabTitle(serieTitle)
         const latest      = await getLatestGitlabCommit(gitlabTitle)
         if (!latest || commits[gitlabTitle] === latest.sha) continue
-        logger.info('nfo-update', `MAJ NFO détectée pour "${gitlabTitle}" (${latest.sha.slice(0, 8)})`)
+        logger.info('nfo-update', `Mise à jour des NFO disponible pour « ${gitlabTitle} » (${latest.sha.slice(0, 8)})`)
         try {
             await downloadNfoFolder(gitlabTitle, path.join(mediaPath, serieTitle))
             commits[gitlabTitle] = latest.sha
             hasChanges = true
             recentNfoUpdates.unshift({ serieTitle, commitSha: latest.sha.slice(0, 8), commitMsg: latest.message, updatedAt: new Date().toISOString(), status: 'updated' })
         } catch (err) {
-            const msg = err instanceof Error ? err.message : 'Erreur inconnue'
-            logger.error('nfo-update', `Échec MAJ NFO "${gitlabTitle}" : ${msg}`)
+            const msg = err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux'
+            logger.error('nfo-update', `Échec de la mise à jour des NFO de « ${gitlabTitle} » : ${msg}`)
             recentNfoUpdates.unshift({ serieTitle, commitSha: latest.sha.slice(0, 8), commitMsg: latest.message, updatedAt: new Date().toISOString(), status: 'error', error: msg })
         }
         if (recentNfoUpdates.length > MAX_NFO_NOTIFS) recentNfoUpdates.pop()

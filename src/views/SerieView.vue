@@ -1,158 +1,126 @@
 <template>
   <div>
 
-    <!-- Loading -->
     <div v-if="store.loadingDetail" class="flex flex-col items-center justify-center gap-3 h-64 text-muted">
       <div class="w-6 h-6 border border-border border-t-accent rounded-full animate-spin" />
-      <p class="text-sm">Chargement…</p>
+      <p class="text-body">Chargement…</p>
     </div>
 
-    <!-- Error -->
     <div v-else-if="store.error" class="flex flex-col items-center justify-center gap-3 h-64">
-      <p class="text-sm text-red-400">{{ store.error }}</p>
+      <p class="text-body text-err">{{ store.error }}</p>
       <button class="btn-primary" @click="load">Réessayer</button>
     </div>
 
     <template v-else-if="data">
-      <!-- Hero — poster, titre, métadonnées, synopsis -->
-      <SerieHero :serie="data.serie" />
+      <SerieHero
+          :serie="data.serie"
+          :season-count="seasonCount"
+          :episode-count="episodeCount"
+          :organized-count="organizedCount"
+          :organized-label="auth.isAdmin ? 'importé' : 'disponible'"
+          :watched="auth.isAdmin && rssSync"
+      >
+        <template #actions>
+          <template v-if="auth.isAdmin">
+            <div v-if="hasSomethingToDownload" class="relative max-sm:flex-1 max-sm:min-w-0" @click.stop>
+              <button
+                  :disabled="downloadingAll"
+                  class="btn-primary max-sm:w-full"
+                  @click="data.torrents_integrale.length > 1 ? (downloadMenuOpen = !downloadMenuOpen) : downloadAll()"
+              >
+                <Loader v-if="downloadingAll" :size="16" class="animate-spin" />
+                <Download v-else :size="16" :stroke-width="2.25" />
+                {{ downloadingAll ? 'Envoi…' : 'Tout télécharger' }}
+                <ChevronDown v-if="data.torrents_integrale.length > 1" :size="13" :stroke-width="2.5" />
+              </button>
 
-      <!-- Barre d'actions admin -->
-      <div v-if="auth.isAdmin" class="px-4 md:px-8 py-3 flex items-center justify-between gap-3 border-b border-border flex-wrap">
+              <div v-if="downloadMenuOpen && data.torrents_integrale.length > 1" class="menu absolute left-0 top-full mt-1.5 w-80 max-w-[90vw] z-20" role="menu">
+                <button
+                    v-for="(t, i) in data.torrents_integrale"
+                    :key="i"
+                    role="menuitem"
+                    :disabled="isAlreadyQueued(t) && !hasUncoveredByIntegrale(i)"
+                    class="menu-item"
+                    :class="(isDownloaded(`integrale-${i}`) && !hasUncoveredByIntegrale(i)) ? 'opacity-40 cursor-not-allowed' : ''"
+                    :title="t.raw ?? ''"
+                    @click="downloadAll(i); downloadMenuOpen = false"
+                >
+                  <Download :size="14" class="shrink-0" />
+                  <span class="truncate">{{ integraleGroupLabels()[i] }}</span>
+                </button>
+              </div>
+            </div>
 
-        <!-- Gauche : gestion bibliothèque -->
-        <div class="flex items-center gap-2">
-          <!-- Import manuel -->
-          <button
-              @click="openManualImport"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-accent-muted text-accent border border-accent/20 hover:bg-accent/20 transition"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="17 8 12 3 7 8"/>
-              <line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
-            Import manuel
-          </button>
-
-          <!-- Supprimer série -->
-          <button
-              v-if="Object.keys(organizedByEpisode).length > 0"
-              @click="openUnimportSerieModal"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
-              <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>
-            </svg>
-            Supprimer
-          </button>
-        </div>
-
-        <!-- Droite : téléchargements -->
-        <div class="flex flex-wrap items-center gap-2">
-          <!-- Bouton RSS sync -->
-          <button
-              @click="toggleRssSync"
-              :title="rssSync ? 'Surveillance activée — cliquer pour désactiver' : 'Surveiller les nouveaux épisodes'"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition"
-              :class="rssSync
-                ? 'bg-green-500/10 text-green-400 border-green-500/20 hover:bg-green-500/20'
-                : 'bg-shell text-muted border-border hover:text-primary hover:bg-hover'"
-          >
-            <!-- Icône antenne RSS -->
-            <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none">
-              <path d="M4 11a9 9 0 0 1 9 9"/>
-              <path d="M4 4a16 16 0 0 1 16 16"/>
-              <circle cx="5" cy="19" r="1" fill="currentColor" stroke="none"/>
-            </svg>
-            {{ rssSync ? 'Surveillé' : 'Surveiller' }}
-          </button>
-
-          <!-- Bouton unique "Tout télécharger" — dropdown si plusieurs intégrales -->
-          <div v-if="hasSomethingToDownload" class="relative" @click.stop>
-            <button
-                :disabled="downloadingAll"
-                class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg bg-accent text-white hover:bg-accent-hover transition"
-                :class="downloadingAll ? 'opacity-50 cursor-not-allowed' : ''"
-                @click="data.torrents_integrale.length > 1 ? (downloadMenuOpen = !downloadMenuOpen) : downloadAll()"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" :class="downloadingAll ? 'animate-spin' : ''">
-                <path v-if="!downloadingAll" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline v-if="!downloadingAll" points="7 10 12 15 17 10"/><line v-if="!downloadingAll" x1="12" y1="15" x2="12" y2="3"/>
-                <path v-else d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.36-2.64M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.36 2.64"/>
-              </svg>
-              {{ downloadingAll ? 'Envoi…' : 'Tout télécharger' }}
-              <span v-if="data.torrents_integrale.length > 1" class="opacity-70">▾</span>
+            <button @click="openManualImport" class="btn-secondary font-medium max-sm:w-11 max-sm:px-0 max-sm:shrink-0" title="Import manuel" aria-label="Import manuel">
+              <Upload :size="15" :stroke-width="2" /> <span class="max-sm:hidden">Import manuel</span>
             </button>
 
-            <!-- Dropdown choix d'intégrale -->
-            <div v-if="downloadMenuOpen && data.torrents_integrale.length > 1"
-                 class="absolute right-0 bottom-full mb-1 bg-card border border-border rounded-xl p-1 z-20 w-56 shadow-xl flex flex-col gap-0.5">
-              <button
-                  v-for="(t, i) in data.torrents_integrale"
-                  :key="i"
-                  :disabled="isAlreadyQueued(t) && !hasUncoveredByIntegrale(i)"
-                  class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-primary hover:bg-hover transition-colors text-left"
-                  :class="(isDownloaded(`integrale-${i}`) && !hasUncoveredByIntegrale(i)) ? 'opacity-40 cursor-not-allowed' : ''"
-                  @click="downloadAll(i); downloadMenuOpen = false"
-              >
-                <svg width="11" height="11" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                {{ integraleGroupLabels()[i] }}
+            <div class="relative" @click.stop>
+              <button @click="moreMenuOpen = !moreMenuOpen" class="btn-icon" aria-label="Plus d'actions" aria-haspopup="menu" :aria-expanded="moreMenuOpen">
+                <Ellipsis :size="16" />
               </button>
+              <div v-if="moreMenuOpen" class="menu absolute right-0 sm:right-auto sm:left-0 top-full mt-1.5 w-64 z-20" role="menu">
+                <button role="menuitem" class="menu-item" @click="toggleRssSync(); moreMenuOpen = false">
+                  <Rss :size="14" class="shrink-0" />
+                  {{ rssSync ? 'Ne plus surveiller' : 'Surveiller les nouveaux épisodes' }}
+                </button>
+                <button
+                    v-if="Object.keys(organizedByEpisode).length > 0"
+                    role="menuitem"
+                    class="menu-item text-err hover:text-err"
+                    @click="openUnimportSerieModal(); moreMenuOpen = false"
+                >
+                  <Trash2 :size="14" class="shrink-0" /> Retirer de la médiathèque…
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
-      </div>
+          </template>
 
-      <!-- Série absente du scraper -->
-      <div v-if="auth.isAdmin && !data.scraper_synced" class="mx-4 md:mx-8 mt-4 flex items-start gap-3 px-4 py-3 rounded-lg border border-yellow-500/40 bg-yellow-500/5">
-        <span class="text-yellow-500 text-sm mt-0.5">⚠</span>
-        <div class="flex flex-col gap-0.5">
-          <p class="text-sm text-yellow-500 font-medium">Série absente du scraper</p>
-          <p class="text-xs text-muted">
-            Téléchargements indisponibles pour le moment. L'import manuel et le renommage s'appuient sur l'API Fankai en attendant la prochaine synchronisation.
-          </p>
-        </div>
-      </div>
+          <template v-else>
+            <button v-if="canRequestMore" @click="openRequestModal()" class="btn-primary max-sm:flex-1 max-sm:min-w-0">
+              <Clock3 :size="16" :stroke-width="2.25" />
+              {{ myRequest ? 'Demander les saisons manquantes' : 'Demander la série' }}
+            </button>
+            <span v-if="myRequest" class="min-h-10 py-2 px-4 rounded-full border border-accent/30 text-accent text-[13px] font-semibold flex items-center gap-[9px]">
+              <Clock3 :size="15" :stroke-width="2" />
+              {{ myRequest.status === 'approved' ? 'Demande approuvée · bientôt là' : 'Demande en attente' }}<template v-if="myScopeLabel"> · {{ myScopeLabel }}</template>
+            </span>
+            <span v-else-if="allOrganized" class="h-10 px-1 flex items-center gap-2 text-body font-semibold text-ok">
+              <Check :size="16" :stroke-width="2.5" /> Toute la série est disponible
+            </span>
+          </template>
+        </template>
+      </SerieHero>
 
-      <!-- Dossier série à renommer -->
-      <div v-if="auth.isAdmin && staleFolders.length > 0" class="mx-4 md:mx-8 mt-4 flex items-center justify-between gap-3 flex-wrap px-4 py-3 rounded-lg border border-yellow-500/40 bg-yellow-500/5">
-        <div class="flex items-start gap-3 min-w-0">
-          <span class="text-yellow-500 text-sm mt-0.5">⚠</span>
-          <div class="flex flex-col gap-0.5 min-w-0">
-            <p class="text-sm text-yellow-500 font-medium">Dossier différent du titre de la série</p>
-            <p class="text-xs text-muted break-all">
-              <span class="font-mono text-primary">{{ staleFolders.map(f => basename(f.path)).join(', ') }}</span>
-              → <span class="font-mono text-primary">{{ folderTarget }}</span>
+      <div class="px-4 md:px-10 pt-5 pb-16 flex flex-col gap-4">
+
+        <!-- Série absente du scraper -->
+        <div v-if="auth.isAdmin && !data.scraper_synced" class="rounded-card border border-accent/30 bg-accent/5 px-5 py-4 flex items-start gap-3.5">
+          <TriangleAlert :size="18" :stroke-width="1.75" class="text-accent shrink-0 mt-0.5" />
+          <div class="flex flex-col gap-1">
+            <p class="card-title text-accent">Torrents pas encore disponibles</p>
+            <p class="text-meta text-secondary">
+              Cette série n'est pas encore dans les données du catalogue. L'import manuel et le renommage restent possibles ; les torrents apparaîtront après la prochaine synchronisation.
             </p>
           </div>
         </div>
-        <button @click="renameFolder" :disabled="renamingFolder" class="btn-secondary text-xs shrink-0">
-          {{ renamingFolder ? 'Renommage…' : 'Renommer le dossier' }}
-        </button>
-      </div>
 
-      <!-- Barre utilisateur (mode demande) -->
-      <div v-if="!auth.isAdmin" class="px-4 md:px-8 py-3 flex items-center justify-between gap-3 border-b border-border flex-wrap">
-        <div v-if="myRequest" class="flex items-center gap-3">
-          <span class="text-xs px-2 py-1 rounded border" :class="requestStatusClass(myRequest.status)">
-            {{ requestStatusLabel(myRequest.status) }}
-          </span>
-          <span v-if="myRequest.status === 'rejected' && myRequest.rejectionMessage" class="text-xs text-muted">
-            {{ myRequest.rejectionMessage }}
-          </span>
+        <!-- Dossier série à renommer -->
+        <div v-if="auth.isAdmin && staleFolders.length > 0" class="rounded-card border border-accent/30 bg-accent/5 px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
+          <div class="flex items-start gap-3.5 min-w-0">
+            <Folder :size="18" :stroke-width="1.75" class="text-accent shrink-0 mt-0.5" />
+            <div class="flex flex-col gap-1 min-w-0">
+              <p class="card-title">Le nom du dossier ne correspond plus au titre</p>
+              <p class="text-meta text-secondary break-all">
+                Actuel : {{ staleFolders.map(f => basename(f.path)).join(', ') }} · Attendu : <span class="text-primary">{{ folderTarget }}</span>
+              </p>
+            </div>
+          </div>
+          <button @click="renameFolder" :disabled="renamingFolder" class="btn-secondary btn-sm shrink-0">
+            {{ renamingFolder ? 'Renommage…' : 'Renommer le dossier' }}
+          </button>
         </div>
-        <div v-else class="text-xs text-muted">Cliquez sur une saison ou un épisode pour faire une demande</div>
-        <button
-            v-if="!myRequest || myRequest.status === 'rejected' || myRequest.status === 'completed'"
-            @click="openRequestModal()"
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-accent text-white hover:bg-accent-hover transition"
-        >
-          Demander la série
-        </button>
-      </div>
 
-      <!-- Saisons -->
-      <div class="px-4 md:px-8 pb-16 flex flex-col gap-4 pt-4">
         <SerieSeasonCard
             v-for="season in data.seasons"
             :key="season.id"
@@ -168,6 +136,7 @@
             :request-mode="!auth.isAdmin"
             :requested-seasons="requestedSeasonNumbers"
             :requested-episodes="requestedEpisodeIds"
+            :request-status="myRequest?.status"
             @toggle="toggleSeason"
             @download="(key, url, magnet, fi, fp, ih) => download(key, url, magnet, fi, fp, ih)"
             @download-season="(s, h) => downloadSeason(s, h)"
@@ -179,36 +148,35 @@
         />
       </div>
 
-      <!-- Modal demande (utilisateurs) -->
       <Teleport to="body">
-        <div v-if="requestModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4" @click.self="requestModal = false">
-          <div class="bg-card border border-border rounded-xl w-full max-w-sm p-6 flex flex-col gap-5">
-            <div>
-              <p class="text-sm font-semibold text-primary">Demander une série</p>
-              <p class="text-xs text-muted mt-1 truncate">{{ data?.serie?.title }}</p>
+        <div v-if="requestModal" class="modal-backdrop" @click.self="requestModal = false">
+          <div class="modal max-w-sm" role="dialog" aria-modal="true" aria-labelledby="request-title">
+            <div class="flex flex-col gap-1">
+              <h2 id="request-title" class="card-title">Demander une série</h2>
+              <p class="text-meta text-muted truncate">{{ data?.serie?.title }}</p>
             </div>
-            <div class="flex flex-col gap-2">
-              <p class="text-xs text-muted font-medium">Saisons demandées</p>
+            <div class="flex flex-col gap-1">
+              <p class="tag-label mb-1.5">Saisons demandées</p>
               <label
                   v-for="season in data?.seasons"
                   :key="season.id"
-                  class="flex items-center gap-3 cursor-pointer select-none"
+                  class="flex items-center gap-3 min-h-9 cursor-pointer select-none"
               >
                 <input
                     type="checkbox"
                     :value="season.season_number"
                     v-model="requestSeasons"
-                    class="w-4 h-4 rounded border-border accent-accent"
+                    class="w-4 h-4 rounded"
                 />
-                <span class="text-sm text-primary">
+                <span class="text-body text-primary">
                   {{ season.season_number === 0 ? 'Spéciaux' : `Saison ${season.season_number}` }}
-                  <span v-if="season.title && season.title !== `Saison ${season.season_number}`" class="text-muted font-normal">— {{ season.title }}</span>
+                  <span v-if="season.title && season.title !== `Saison ${season.season_number}`" class="text-muted">· {{ season.title }}</span>
                 </span>
               </label>
             </div>
-            <div class="flex items-center justify-end gap-2">
-              <button @click="requestModal = false" class="btn-secondary text-xs">Annuler</button>
-              <button @click="submitRequest" :disabled="requestSeasons.length === 0" class="btn-primary text-xs disabled:opacity-50">
+            <div class="flex items-center justify-end gap-2.5">
+              <button @click="requestModal = false" class="btn-ghost">Annuler</button>
+              <button @click="submitRequest" :disabled="requestSeasons.length === 0" class="btn-primary">
                 Envoyer la demande
               </button>
             </div>
@@ -217,29 +185,27 @@
       </Teleport>
     </template>
 
-    <!-- Modal désimport série -->
     <Teleport to="body">
-      <div v-if="unimportSerieModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4" @click.self="unimportSerieModal = false">
-        <div class="bg-card border border-border rounded-xl w-full max-w-sm p-6 flex flex-col gap-5">
-          <div>
-            <p class="text-sm font-semibold text-primary">Supprimer la série</p>
-            <p class="text-xs text-muted mt-1 truncate">{{ data?.serie?.title }}</p>
+      <div v-if="unimportSerieModal" class="modal-backdrop" @click.self="unimportSerieModal = false">
+        <div class="modal max-w-sm" role="dialog" aria-modal="true" aria-labelledby="unimport-serie-title">
+          <div class="flex flex-col gap-1">
+            <h2 id="unimport-serie-title" class="card-title">Retirer de la médiathèque</h2>
+            <p class="text-meta text-muted truncate">{{ data?.serie?.title }}</p>
           </div>
           <label class="flex items-center gap-3 cursor-pointer select-none">
-            <input type="checkbox" v-model="deleteSerieFiles" class="w-4 h-4 rounded border-border accent-accent" />
-            <span class="text-xs text-muted">Supprimer également les fichiers physiques du disque</span>
+            <input type="checkbox" v-model="deleteSerieFiles" class="w-4 h-4 rounded" />
+            <span class="text-body text-secondary">Supprimer aussi les fichiers du disque</span>
           </label>
-          <div class="flex items-center justify-end gap-2">
-            <button @click="unimportSerieModal = false" class="btn-secondary text-xs">Annuler</button>
-            <button @click="confirmUnimportSerie" class="px-4 py-2 rounded-lg border border-red-500/30 text-red-400 bg-red-500/10 hover:bg-red-500/20 transition-colors text-xs font-medium">
-              {{ deleteSerieFiles ? 'Supprimer les fichiers' : 'Supprimer' }}
+          <div class="flex items-center justify-end gap-2.5">
+            <button @click="unimportSerieModal = false" class="btn-ghost">Annuler</button>
+            <button @click="confirmUnimportSerie" class="btn-danger">
+              {{ deleteSerieFiles ? 'Retirer et supprimer les fichiers' : 'Retirer' }}
             </button>
           </div>
         </div>
       </div>
     </Teleport>
 
-    <!-- Modal import manuel -->
     <ManualImportModal
         v-if="manualImportOpen && data"
         :serie-id="Number(route.params.id)"
@@ -260,6 +226,9 @@ import { useRoute } from 'vue-router'
 import { useSeriesStore } from '@/stores/series'
 import { useAuthStore }   from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
+import { Check, ChevronDown, Clock3, Download, Ellipsis, Folder, Loader, Rss, Trash2, TriangleAlert, Upload } from 'lucide-vue-next'
+import { seasonsLabel } from '@/utils/requests'
+import { plural } from '@/utils/format'
 import ManualImportModal from '@/components/ManualImportModal.vue'
 import SerieHero from '@/components/serie/SerieHero.vue'
 import SerieSeasonCard from '@/components/serie/SerieSeasonCard.vue'
@@ -270,17 +239,16 @@ const store  = useSeriesStore()
 const auth   = useAuthStore()
 const { add: toast } = useToast()
 
-// ── Mode demande (utilisateurs non-admin) ─────────────────────
+// ── Demandes (invités) ──
 const myRequest      = ref<any>(null)   // demande existante de l'utilisateur pour cette série
 const requestModal   = ref(false)
-const requestSeasons = ref<number[]>([]) // saisons cochées dans le modal
+const requestSeasons = ref<number[]>([])
 
 const requestedSeasonNumbers = computed<number[]>(() => {
   if (!myRequest.value) return []
   const r = myRequest.value.requesters?.find((r: any) => r.userId === auth.userId)
   if (!r) return []
-  // seasons=[] ET episodes=[] → toutes les saisons demandées
-  // seasons=[] mais episodes=[…] → seulement des épisodes ciblés, pas toute une saison
+  // Ni saison ni épisode précisés = série entière
   if (r.seasons.length === 0 && (r.episodes ?? []).length === 0) {
     return data.value?.seasons?.map((s: any) => s.season_number) ?? []
   }
@@ -308,7 +276,6 @@ async function fetchMyRequest() {
 }
 
 function openRequestModal(preselectedSeason?: number) {
-  // Pré-cocher soit la saison cliquée, soit toutes les saisons disponibles
   if (preselectedSeason !== undefined) {
     requestSeasons.value = [preselectedSeason]
   } else {
@@ -347,10 +314,10 @@ async function handleRequestEpisode(_seasonNumber: number, episodeId: number, to
     })
     if (res.ok) {
       myRequest.value = await res.json()
-      toast('Épisode demandé ✓', 'success')
+      toast('Épisode demandé', 'success')
     } else {
       const d = await res.json()
-      toast(d.error ?? 'Erreur', 'error')
+      toast(d.error ?? "Impossible d'envoyer la demande", 'error')
     }
   } catch { toast('Impossible de contacter le serveur', 'error') }
 }
@@ -371,25 +338,21 @@ async function submitRequest() {
     if (res.ok) {
       myRequest.value  = await res.json()
       requestModal.value = false
-      toast('Demande envoyée ✓', 'success')
+      toast('Demande envoyée', 'success')
     } else {
       const d = await res.json()
-      toast(d.error ?? 'Erreur', 'error')
+      toast(d.error ?? "Impossible d'envoyer la demande", 'error')
     }
   } catch { toast('Impossible de contacter le serveur', 'error') }
 }
 
-function requestStatusLabel(status: string) {
-  return { pending: 'En attente', approved: 'Approuvée', rejected: 'Refusée', completed: 'Disponible' }[status] ?? status
-}
-function requestStatusClass(status: string) {
-  return {
-    pending  : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
-    approved : 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-    rejected : 'bg-red-500/10 text-red-400 border-red-500/20',
-    completed: 'bg-green-500/10 text-green-400 border-green-500/20',
-  }[status] ?? ''
-}
+// Portée de ma demande en cours : « saisons 3 et 4 », « 2 épisodes »
+const myScopeLabel = computed(() => {
+  const r = myRequest.value?.requesters?.find((r: any) => r.userId === auth.userId)
+  if (!r) return ''
+  if ((r.episodes ?? []).length > 0) return plural(r.episodes.length, 'épisode')
+  return seasonsLabel(r.seasons).toLowerCase()
+})
 
 const collapsedSeasons   = ref<Set<number>>(new Set())
 const downloading        = ref<string[]>([])
@@ -402,6 +365,7 @@ const epActionLoading    = ref<Record<number, boolean>>({})
 const unimportSerieModal = ref(false)
 const deleteSerieFiles   = ref(false)
 const downloadMenuOpen   = ref(false)
+const moreMenuOpen       = ref(false)
 const downloadingAll     = ref(false)
 const downloadingSeason  = ref<Record<number, boolean>>({})
 const rssSync            = ref(false)
@@ -416,21 +380,31 @@ export interface ActiveTorrent { hash: string; progress: number; state: string; 
 const activeTorrents = ref<ActiveTorrent[]>([])
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
-// Suivi des états précédents pour détecter les transitions (download → seeding)
-const _prevTorrentStates  = new Map<string, string>()   // hash → state
-const _prevFileProgresses = new Map<string, number>()   // hash:index → progress
+// État au poll précédent, pour repérer les téléchargements terminés
+const _prevTorrentStates  = new Map<string, string>()
+const _prevFileProgresses = new Map<string, number>()
 const _recentlyOrganized  = new Set<string>()           // hash:fileIndex ou hash seul
 
 const data = computed(() => store.currentSerie)
 
-// ── Helpers intégrale ─────────────────────────────────────────
+const seasonCount    = computed(() => data.value?.seasons.filter(s => s.season_number > 0).length ?? 0)
+const episodeCount   = computed(() => data.value?.seasons.reduce((n, s) => n + s.episodes.length, 0) ?? 0)
+const organizedCount = computed(() => data.value?.seasons.reduce((n, s) => n + s.episodes.filter(e => e.organized).length, 0) ?? 0)
+const allOrganized   = computed(() => episodeCount.value > 0 && organizedCount.value >= episodeCount.value)
+
+const canRequestMore = computed(() => {
+  if (!data.value || allOrganized.value) return false
+  if (!myRequest.value) return true
+  return data.value.seasons.some(s => s.organized_state !== 'complete' && !requestedSeasonNumbers.value.includes(s.season_number))
+})
+
+// ── Intégrales ──
 function integraleGroupLabels(): string[] {
   const torrents = data.value?.torrents_integrale ?? []
   const names = torrents.map((t: any) => t.torrent_name ?? null)
   const allPresent = names.every((n: any) => n !== null && String(n).trim() !== '')
   const allUnique  = allPresent && new Set(names).size === names.length
   if (allUnique) return names as string[]
-  // Fallback : titre Nyaa brut
   return torrents.map((t: any, i: number) => {
     const raw = t.raw ?? ''
     if (raw) return raw.length > 65 ? raw.slice(0, 65) + '…' : raw
@@ -438,9 +412,7 @@ function integraleGroupLabels(): string[] {
   })
 }
 
-// Épisodes couverts par une intégrale donnée (hash commun)
-// Épisodes déjà présents dans la médiathèque — sert de garde-fou pour ne pas
-// redescendre une autre version (x264 / x265) de fichiers déjà importés.
+// Épisodes déjà importés : évite de retélécharger une autre version (x264/x265)
 const organizedEpisodeIds = computed(() => {
   const ids = new Set<number>()
   for (const season of data.value?.seasons ?? [])
@@ -462,7 +434,6 @@ function integraleEpisodeCoverage(integraleIndex: number): Set<number> {
   return covered
 }
 
-// Vrai s'il reste des épisodes/saisons non couverts par cette intégrale
 function hasUncoveredByIntegrale(integraleIndex: number): boolean {
   if (!data.value) return false
   const covered = integraleEpisodeCoverage(integraleIndex)
@@ -472,7 +443,7 @@ function hasUncoveredByIntegrale(integraleIndex: number): boolean {
   return false
 }
 
-// ── Helpers d'état ────────────────────────────────────────────
+// ── État local ──
 function isDownloading(key: string) { return downloading.value.includes(key) }
 function isDownloaded(key: string)  { return downloaded.value.includes(key) }
 function addDownloading(key: string) { if (!downloading.value.includes(key)) downloading.value.push(key) }
@@ -491,15 +462,14 @@ function extractHash(torrent: any): string | null {
   return m ? m[1].toLowerCase() : null
 }
 function isAlreadyQueued(torrent: any): boolean {
-  // Pour un fichier dans un pack (file_index défini), le hash seul ne suffit pas :
-  // le pack peut être actif sans que CE fichier spécifique soit en téléchargement.
+  // Fichier d'un pack : le hash ne dit pas si ce fichier précis est en cours
   if (torrent?.file_index != null) return false
   const hash = extractHash(torrent)
   if (!hash) return false
   return activeTorrents.value.some(t => t.hash.toLowerCase() === hash.toLowerCase())
 }
 
-// ── Fetch ─────────────────────────────────────────────────────
+// ── Chargement ──
 function load() { store.fetchSerieDetail(Number(route.params.id)) }
 
 async function fetchOrganized() {
@@ -518,13 +488,13 @@ async function fetchFolderStatus() {
 }
 
 async function renameFolder() {
-  if (!confirm(`Déplacer le contenu vers « ${folderTarget.value} » ? Les fichiers existants ne sont jamais écrasés.`)) return
+  if (!confirm(`Renommer le dossier en « ${folderTarget.value} » ? Les fichiers déjà présents à destination ne seront pas écrasés.`)) return
   renamingFolder.value = true
   try {
     const res = await fetch(`/api/organized/${route.params.id}/folder`, { method: 'POST', credentials: 'include' })
     const d = await res.json()
-    if (!res.ok) { toast(d.error ?? 'Erreur lors du renommage du dossier', 'error'); return }
-    toast(`Dossier renommé ✓ (${d.moved} fichier${d.moved > 1 ? 's' : ''} déplacé${d.moved > 1 ? 's' : ''})`, 'success')
+    if (!res.ok) { toast(d.error ?? 'Impossible de renommer le dossier', 'error'); return }
+    toast(`Dossier renommé (${plural(d.moved, 'fichier déplacé', 'fichiers déplacés')})`, 'success')
     await fetchOrganized()
   } catch { toast('Impossible de contacter le serveur', 'error') }
   finally { renamingFolder.value = false }
@@ -556,9 +526,9 @@ async function toggleRssSync() {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
         body: JSON.stringify({ serieName }),
       })
-      if (res.ok) { rssSync.value = true; toast('Surveillance activée — les nouveaux épisodes seront téléchargés automatiquement ✓', 'success') }
+      if (res.ok) { rssSync.value = true; toast('Surveillance activée : les nouveaux épisodes seront téléchargés automatiquement', 'success') }
     }
-  } catch { toast('Erreur lors de la mise à jour de la surveillance', 'error') }
+  } catch { toast('Impossible de mettre à jour la surveillance', 'error') }
 }
 
 async function fetchActiveDownloads() {
@@ -574,7 +544,7 @@ async function fetchActiveDownloads() {
     for (const t of list) {
       const prevState = _prevTorrentStates.get(t.hash)
 
-      // Détecter fichier individuel terminé (progression par fichier)
+      // Fichier terminé (client avec progression par fichier)
       if (t.files) {
         for (const f of t.files) {
           const key     = `${t.hash}:${f.index}`
@@ -587,7 +557,7 @@ async function fetchActiveDownloads() {
         }
       }
 
-      // Détecter torrent entier passé en seeding (épisodes standalone sans per-file data)
+      // Torrent entier terminé (client sans progression par fichier)
       if (!isFirstPoll && t.state === 'seeding' && prevState !== undefined && prevState !== 'seeding' && !_recentlyOrganized.has(t.hash)) {
         _recentlyOrganized.add(t.hash)
         toOrganize.set(t.hash, t)
@@ -621,7 +591,7 @@ async function triggerOrganize(torrent: any) {
     if (res.ok) {
       const result = await res.json()
       if (result.done > 0) {
-        toast(`${result.done} épisode(s) importé(s) automatiquement ✓`, 'success')
+        toast(`${plural(result.done, 'épisode importé', 'épisodes importés')} automatiquement`, 'success')
         await fetchOrganized()
         load()
       }
@@ -631,33 +601,29 @@ async function triggerOrganize(torrent: any) {
 
 function openManualImport() { fetchOrganized(); manualImportOpen.value = true }
 
-// ── Download ──────────────────────────────────────────────────
+// ── Téléchargement ──
 async function download(key: string, torrent_url: string | null, magnet: string | null, file_index?: number | null, file_path?: string | null, infohash?: string | null) {
   if (isDownloading(key) || isDownloaded(key)) return
   addDownloading(key)
   const result = await store.download(torrent_url, magnet, file_index, file_path, infohash)
   removeDownloading(key)
-  if (result.success) { addDownloaded(key); toast('Téléchargement lancé ✓', 'success'); fetchActiveDownloads() }
-  else toast(result.error ?? 'Erreur inconnue', 'error')
+  if (result.success) { addDownloaded(key); toast('Téléchargement lancé', 'success'); fetchActiveDownloads() }
+  else toast(result.error ?? 'Impossible de lancer le téléchargement', 'error')
 }
 
 type DlItem = { key: string; torrent_url: string | null; magnet: string | null; file_index?: number | null; file_path?: string | null; infohash?: string | null }
 
-// Construit la liste de tout ce qui doit être téléchargé.
-// integraleIndex : si défini, utilise uniquement cette intégrale (+ épisodes non couverts).
-//                 si omis, utilise toutes les intégrales disponibles.
+// Reste à envoyer : une intégrale (ou toutes), puis packs et épisodes non couverts
 function collectDownloadables(integraleIndex?: number): DlItem[] {
   if (!data.value) return []
   const result: DlItem[] = []
   const covered = new Set<number>()
 
-  // Une autre version déjà envoyée couvre déjà ses épisodes
   data.value.torrents_integrale.forEach((t: any, i: number) => {
     if (isAlreadyQueued(t) || isDownloaded(`integrale-${i}`))
       for (const id of integraleEpisodeCoverage(i)) covered.add(id)
   })
 
-  // ── 1. Intégrale(s) ───────────────────────────────────────────
   const integrales: { t: any; i: number }[] = integraleIndex !== undefined
     ? [{ t: data.value.torrents_integrale[integraleIndex], i: integraleIndex }]
     : data.value.torrents_integrale.map((t: any, i: number) => ({ t, i }))
@@ -665,7 +631,6 @@ function collectDownloadables(integraleIndex?: number): DlItem[] {
   for (const { t, i } of integrales) {
     if (!t) continue
 
-    // Épisodes apportés par CETTE intégrale
     const hash = t.infohash?.toLowerCase() ?? extractHash(t)
     const coveredByThis = new Set<number>()
     if (hash)
@@ -683,10 +648,8 @@ function collectDownloadables(integraleIndex?: number): DlItem[] {
     for (const id of coveredByThis) covered.add(id)
   }
 
-  // ── 2. Packs saison non couverts ──────────────────────────────
   for (const season of data.value.seasons) {
     if (!season.torrents?.length || season.organized_state === 'complete') continue
-    // Skiper si tous les épisodes disponibles sont déjà couverts par l'intégrale
     const hasUncovered = season.episodes.some((ep: any) => ep.available && !ep.organized && !covered.has(ep.id))
     if (!hasUncovered) continue
     const packKey = (i: number) => (i === 0 ? `season-${season.id}` : `season-${season.id}-${i}`)
@@ -696,7 +659,6 @@ function collectDownloadables(integraleIndex?: number): DlItem[] {
     for (const ep of season.episodes) covered.add(ep.id)
   }
 
-  // ── 3. Épisodes individuels non couverts ─────────────────────
   for (const season of data.value.seasons)
     for (const ep of season.episodes) {
       if (!ep.torrent || !ep.available || ep.organized || isAlreadyQueued(ep.torrent) || isDownloaded(`ep-${ep.id}`) || covered.has(ep.id)) continue
@@ -706,9 +668,7 @@ function collectDownloadables(integraleIndex?: number): DlItem[] {
   return result
 }
 
-// Le bouton "Tout télécharger" s'affiche s'il y a quoi que ce soit à lancer
-// Dérivé de collectDownloadables pour que le bouton n'apparaisse jamais alors
-// que le garde-fou versions ne laisserait passer aucun torrent.
+// Même calcul que downloadAll : jamais de bouton sans effet
 const hasSomethingToDownload = computed(() => collectDownloadables().length > 0)
 
 async function downloadAll(integraleIndex?: number) {
@@ -719,7 +679,7 @@ async function downloadAll(integraleIndex?: number) {
     try { const r = await store.download(t.torrent_url, t.magnet, t.file_index, t.file_path, t.infohash); if (r.success) { addDownloaded(t.key); sent++ } } catch {}
   }
   downloadingAll.value = false
-  if (sent > 0) { toast(`${sent} torrent(s) envoyé(s) ✓`, 'success'); fetchActiveDownloads() }
+  if (sent > 0) { toast(`${plural(sent, 'torrent envoyé', 'torrents envoyés')} au client`, 'success'); fetchActiveDownloads() }
   else toast('Aucun nouveau torrent à télécharger', 'success')
 }
 
@@ -740,7 +700,6 @@ async function downloadSeason(season: Season, packHash?: string) {
     }
   } else {
     for (const ep of seasonAny.episodes ?? []) {
-      // Si un hash de pack est précisé (choix depuis dropdown), utiliser le torrent correspondant
       const epTorrent = packHash
         ? (ep.torrents?.find((t: any) => (t.infohash ?? extractHash(t)) === packHash) ?? ep.torrent)
         : ep.torrent
@@ -753,11 +712,11 @@ async function downloadSeason(season: Season, packHash?: string) {
     try { const r = await store.download(t.torrent_url, t.magnet, t.file_index, t.file_path, t.infohash); if (r.success) { addDownloaded(t.key); sent++ } } catch {}
   }
   downloadingSeason.value[season.id] = false
-  if (sent > 0) { toast(`${sent} torrent(s) envoyé(s) ✓`, 'success'); fetchActiveDownloads() }
+  if (sent > 0) { toast(`${plural(sent, 'torrent envoyé', 'torrents envoyés')} au client`, 'success'); fetchActiveDownloads() }
   else toast('Aucun nouveau torrent à télécharger pour cette saison', 'success')
 }
 
-// ── Actions ───────────────────────────────────────────────────
+// ── Actions ──
 function toggleSeason(id: number) {
   if (collapsedSeasons.value.has(id)) collapsedSeasons.value.delete(id)
   else collapsedSeasons.value.add(id)
@@ -769,9 +728,8 @@ async function confirmUnimportSerie() { unimportSerieModal.value = false; await 
 async function unimportSeason(season: any, deleteFile: boolean) {
   try {
     const res = await fetch(`/api/organized/${route.params.id}/seasons/${season.id}?deleteFile=${deleteFile}`, { method: 'DELETE', credentials: 'include' })
-    if (!res.ok) { const d = await res.json(); toast(d.error ?? 'Erreur désimport saison', 'error'); return }
-    const d = await res.json()
-    toast(`${d.removed} épisode(s) désimporté(s) ✓`, 'success')
+    if (!res.ok) { const d = await res.json(); toast(d.error ?? 'Impossible de retirer la saison', 'error'); return }
+    toast(deleteFile ? 'Saison retirée et fichiers supprimés' : 'Saison retirée de la médiathèque', 'success')
     for (const ep of season.episodes ?? []) clearEpDownloaded(ep)
     removeDownloaded(`season-${season.id}`)
     await fetchOrganized(); load()
@@ -781,9 +739,8 @@ async function unimportSeason(season: any, deleteFile: boolean) {
 async function unimportSerie(deleteFile: boolean) {
   try {
     const res = await fetch(`/api/organized/${route.params.id}?deleteFile=${deleteFile}`, { method: 'DELETE', credentials: 'include' })
-    if (!res.ok) { const d = await res.json(); toast(d.error ?? 'Erreur désimport', 'error'); return }
-    const d = await res.json()
-    toast(`${d.removed} épisode(s) désimporté(s) ✓`, 'success')
+    if (!res.ok) { const d = await res.json(); toast(d.error ?? 'Impossible de retirer la série', 'error'); return }
+    toast(deleteFile ? 'Série retirée et fichiers supprimés' : 'Série retirée de la médiathèque', 'success')
     downloaded.value = []
     await fetchOrganized(); load()
   } catch { toast('Impossible de contacter le serveur', 'error') }
@@ -798,7 +755,7 @@ async function renameEpisode(ep: any, _season: any) {
       body: JSON.stringify({ serie_id: Number(route.params.id), episode_id: ep.id, torrent_hash: torrentHash }),
     })
     const d = await res.json()
-    if (!res.ok) { toast(d.error ?? 'Erreur rename', 'error'); return }
+    if (!res.ok) { toast(d.error ?? "Impossible de renommer l'épisode", 'error'); return }
     if (d.renamed) { toast(`Renommé : ${d.new_name}`, 'success'); await fetchOrganized() }
     else toast(d.message ?? 'Nom déjà correct', 'success')
   } catch { toast('Impossible de contacter le serveur', 'error') }
@@ -809,15 +766,15 @@ async function unimportEpisode(ep: any, _season: any, deleteFile: boolean) {
   epActionLoading.value[ep.id] = true
   try {
     const res = await fetch(`/api/organized/${route.params.id}/${ep.id}?deleteFile=${deleteFile}`, { method: 'DELETE', credentials: 'include' })
-    if (!res.ok) { const d = await res.json(); toast(d.error ?? 'Erreur désimport', 'error'); return }
-    toast(deleteFile ? 'Fichier supprimé ✓' : 'Désimporté ✓', 'success')
+    if (!res.ok) { const d = await res.json(); toast(d.error ?? (deleteFile ? 'Impossible de supprimer le fichier' : "Impossible de retirer l'épisode"), 'error'); return }
+    toast(deleteFile ? 'Fichier supprimé' : 'Épisode retiré', 'success')
     clearEpDownloaded(ep)
     await fetchOrganized(); load()
   } catch { toast('Impossible de contacter le serveur', 'error') }
   finally { epActionLoading.value[ep.id] = false }
 }
 
-const closeMenus = () => { downloadMenuOpen.value = false }
+const closeMenus = () => { downloadMenuOpen.value = false; moreMenuOpen.value = false }
 
 onMounted(() => {
   load()

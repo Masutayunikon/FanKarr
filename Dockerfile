@@ -28,6 +28,6 @@ RUN chmod +x /entrypoint.sh
 RUN mkdir -p /config
 RUN echo "$BUILD_VERSION" > /app/version.txt
 
-EXPOSE 3001
+EXPOSE 9898
 ENV NODE_ENV=production
 ENTRYPOINT ["/entrypoint.sh"]

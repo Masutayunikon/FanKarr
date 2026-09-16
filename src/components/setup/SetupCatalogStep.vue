@@ -6,37 +6,37 @@
     </div>
 
     <template v-else>
-      <section class="settings-card flex items-center gap-4">
+      <section class="card flex items-center gap-4">
         <span
-            class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
-            :class="status.empty ? 'bg-yellow-500/10 text-yellow-500' : 'bg-green-500/10 text-green-400'"
+            class="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+            :class="status.empty ? 'bg-accent-muted text-accent' : 'bg-ok/10 text-ok'"
         >
           <Library :size="17" />
         </span>
         <div class="flex-1 min-w-0">
           <p class="text-sm text-primary font-medium">
-            {{ status.empty ? 'Catalogue non téléchargé' : `${status.count} séries disponibles` }}
+            {{ status.empty ? 'Catalogue non synchronisé' : plural(status.count, 'série disponible', 'séries disponibles') }}
           </p>
-          <p class="text-xs text-muted mt-0.5">
+          <p class="text-meta text-muted mt-0.5">
             {{ status.empty
               ? 'Sans catalogue, la médiathèque reste vide.'
               : 'Le catalogue se met à jour automatiquement.' }}
           </p>
         </div>
         <button @click="update" :disabled="updating" :class="status.empty ? 'btn-primary' : 'btn-secondary'" class="shrink-0">
-          {{ updating ? 'Téléchargement…' : status.empty ? 'Télécharger' : 'Mettre à jour' }}
+          {{ updating ? 'Synchronisation…' : status.empty ? 'Synchroniser le catalogue' : 'Synchroniser' }}
         </button>
       </section>
 
-      <section class="settings-card flex items-center gap-4">
-        <span class="w-9 h-9 rounded-lg bg-accent-muted text-accent flex items-center justify-center shrink-0">
+      <section class="card flex items-center gap-4">
+        <span class="w-9 h-9 rounded-full bg-accent-muted text-accent flex items-center justify-center shrink-0">
           <ScanSearch :size="17" />
         </span>
         <div class="flex-1 min-w-0">
           <p class="text-sm text-primary font-medium">Vous avez déjà des séries Fankai ?</p>
-          <p class="text-xs text-muted mt-0.5">
-            <template v-if="scanResult">{{ scanResult.found }} fichiers analysés · {{ scanResult.added }} référencés.</template>
-            <template v-else>Analysez la médiathèque pour référencer les fichiers présents, sans les déplacer.</template>
+          <p class="text-meta text-muted mt-0.5">
+            <template v-if="scanResult">{{ plural(scanResult.found, 'fichier trouvé', 'fichiers trouvés') }}, {{ plural(scanResult.added, 'ajouté', 'ajoutés') }} à la médiathèque.</template>
+            <template v-else>Analysez la médiathèque pour reconnaître les épisodes déjà présents. Aucun fichier n'est déplacé.</template>
           </p>
         </div>
         <button @click="scan" :disabled="scanning || status.empty || !settings.mediaPath" class="btn-secondary shrink-0">
@@ -44,8 +44,8 @@
         </button>
       </section>
 
-      <p v-if="warnEmpty" class="text-sm text-yellow-500" role="alert">
-        Le catalogue est encore vide. Téléchargez-le, ou cliquez à nouveau sur « Suivant » pour continuer.
+      <p v-if="warnEmpty" class="text-body text-accent" role="alert">
+        Le catalogue est encore vide. Synchronisez-le, ou cliquez à nouveau sur « Suivant » pour continuer.
       </p>
     </template>
 
@@ -56,6 +56,7 @@
 import { ref, onMounted } from 'vue'
 import { Library, ScanSearch } from 'lucide-vue-next'
 import { useToast } from '@/composables/useToast'
+import { plural } from '@/utils/format'
 import type { SetupSettings } from './setup'
 
 defineProps<{ settings: SetupSettings; isDocker: boolean; defaultPath: string }>()
@@ -77,9 +78,9 @@ async function update() {
     if (res.ok) {
       status.value    = { exists: true, count: data.count, empty: data.count === 0 }
       warnEmpty.value = false
-      toast(`${data.count} séries chargées ✓`, 'success')
+      toast(`Catalogue synchronisé : ${plural(data.count, 'série')}`, 'success')
     } else {
-      toast(data.error ?? 'Erreur lors de la mise à jour', 'error')
+      toast(data.error ?? 'Impossible de synchroniser le catalogue', 'error')
     }
   } catch {
     toast('Impossible de contacter le serveur', 'error')
@@ -96,7 +97,7 @@ async function scan() {
       const data = await res.json()
       scanResult.value = { found: data.found, added: data.added }
     } else {
-      toast("Erreur lors de l'analyse", 'error')
+      toast("Impossible d'analyser la médiathèque", 'error')
     }
   } catch {
     toast('Impossible de contacter le serveur', 'error')

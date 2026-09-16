@@ -3,8 +3,10 @@ import { requireAuth } from '../auth.js'
 import { logger } from '../logger.js'
 import { organizeTorrent, migrateOrganizedEpisodeIds } from '../organize.js'
 import { loadCatalog } from '../lib/serie-helpers.js'
-import { recentOrganized, pushNotif } from '../lib/notifs.js'
+import { recentOrganized, pushNotif, clearNotifs } from '../lib/notifs.js'
 import { dispatchGetFiles } from '../torrent-clients/index.js'
+import { AUTO_IMPORT_INTERVAL_MS, autoImportSchedule } from '../lib/schedule.js'
+import { readSettings } from '../settings.js'
 import { DATA_DIR } from '../config.js'
 import path from 'path'
 
@@ -17,40 +19,42 @@ router.post('/organize/migrate-ids', requireAuth, async (_req, res) => {
         const result        = await migrateOrganizedEpisodeIds(organizedPath, seriesData)
         res.json({ ok: true, ...result })
     } catch (err) {
-        logger.error('api', `Migration IDs échouée : ${err instanceof Error ? err.message : err}`)
-        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
+        logger.error('api', `Échec de la migration des IDs : ${err instanceof Error ? err.message : err}`)
+        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux' })
     }
 })
 
 router.get('/organize/recent', requireAuth, (_req, res) => {
-    res.json(recentOrganized)
+    res.json(recentOrganized.slice(0, 20))
+})
+
+router.get('/organize/schedule', requireAuth, (_req, res) => {
+    res.json({ autoImport: readSettings().autoImport, intervalMs: AUTO_IMPORT_INTERVAL_MS, ...autoImportSchedule })
 })
 
 router.post('/organize/recent/clear', requireAuth, (_req, res) => {
-    recentOrganized.length = 0
+    clearNotifs()
     logger.info('api', 'Historique des imports effacé')
     res.json({ ok: true })
 })
 
 router.post('/organize', requireAuth, async (req, res) => {
     const { hash, name, save_path } = req.body
-    if (!hash || !name || !save_path) { res.status(400).json({ error: 'hash, name et save_path requis' }); return }
+    if (!hash || !name || !save_path) { res.status(400).json({ error: 'Hash, nom et dossier du torrent requis' }); return }
     try {
         const seriesData = await loadCatalog()
 
-        // Récupère la progression par fichier depuis le client torrent.
-        // Permet au worker de sauter les fichiers encore en téléchargement (EBUSY sur Windows).
-        // En cas d'échec (client injoignable, hash non trouvé), on continue sans filtre.
+        // Progression par fichier, facultative (client injoignable toléré)
         const files = await dispatchGetFiles(hash).catch(() => [])
 
         const result = await organizeTorrent(hash, name, save_path, seriesData, files)
         if (result.done > 0 || result.errors.length > 0) {
-            pushNotif({ hash, name, done: result.done, skipped: result.skipped, errors: result.errors.length, errorFiles: result.errors, at: new Date().toISOString() })
+            pushNotif({ hash, name, serieId: result.serieId ?? null, done: result.done, skipped: result.skipped, errors: result.errors.length, errorFiles: result.errors, at: new Date().toISOString() })
         }
         res.json(result)
     } catch (err) {
-        logger.error('api', `Import manuel de "${name}" échoué : ${err instanceof Error ? err.message : err}`)
-        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inconnue' })
+        logger.error('api', `Échec de l'import manuel de « ${name} » : ${err instanceof Error ? err.message : err}`)
+        res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux' })
     }
 })
 

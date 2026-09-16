@@ -11,7 +11,7 @@
 ![Bun](https://img.shields.io/badge/bun-ready-f9f1e1?style=flat-square)
 
 **Gestionnaire de téléchargements pour le catalogue [Fankai](https://fankai.fr)**  
-Inspiré de Radarr/Sonarr — interface dédiée aux éditions Kai & Yabai
+Inspiré de Radarr et Sonarr, pour les éditions Kai et Yabai
 
 ![Banner](.github/images/banner.svg)
 
@@ -21,77 +21,91 @@ Inspiré de Radarr/Sonarr — interface dédiée aux éditions Kai & Yabai
 
 ## Aperçu
 
-<!-- [img] : vue catalogue complète — grille des affiches avec les barres d'état en bas de chaque affiche (couleurs : dispo / en cours / importé), barre de recherche visible -->
-![Catalogue](.github/images/catalog.png)
+![Accueil](.github/images/dashboard.webp)
 
-> Vue catalogue : toutes les séries Fankai. Une barre en bas de chaque affiche indique l'état — disponible, en cours de téléchargement ou déjà importé dans votre médiathèque.
-
----
-
-<!-- [img] : vue série — détail des saisons et épisodes avec badges VOSTFR/MULTI + drapeaux, boutons de téléchargement avec dropdown multi-sources, barres de progression par épisode -->
-![Série](.github/images/serie.png)
-
-> Vue série : épisodes avec badge de langue (VOSTFR / MULTI), progression par fichier, et dropdown de sélection quand plusieurs sources sont disponibles.
+> Accueil : le dernier import, les séries ajoutées récemment et les chiffres de la médiathèque. L'administrateur y retrouve ce qui attend une action : demandes, imports en erreur, dossiers à renommer.
 
 ---
 
-<!-- [img] : vue téléchargements — liste des torrents actifs avec barres de progression, état d'organisation, badges erreur au hover -->
-![Téléchargements](.github/images/downloads.png)
+![Médiathèque](.github/images/catalog.webp)
 
-> Vue téléchargements : suivi en temps réel, état d'organisation par torrent et détail des erreurs au survol.
+> Médiathèque : tout le catalogue Fankai. Chaque affiche indique l'état de la série (importée, partielle, en téléchargement, dossier à renommer, nouveauté), avec des filtres, un tri et plusieurs tailles d'affiches.
+
+---
+
+![Série](.github/images/serie.webp)
+
+> Fiche d'une série : l'import saison par saison et épisode par épisode, avec le téléchargement d'un épisode, d'une saison ou de toute la série, l'import manuel et la surveillance des nouveaux épisodes.
+
+---
+
+![Activité](.github/images/downloads.webp)
+
+> Activité : un torrent par ligne, du téléchargement à l'import, avec le détail des erreurs et un bouton pour relancer l'import.
+
+---
+
+<p align="center">
+  <img src=".github/images/mobile-dashboard.webp" width="260" alt="Accueil sur mobile">
+  <img src=".github/images/mobile-serie.webp" width="260" alt="Fiche d'une série sur mobile">
+  <img src=".github/images/mobile-activity.webp" width="260" alt="Activité sur mobile">
+</p>
+
+> Sur mobile : l'interface s'adapte au téléphone, avec une barre d'onglets en bas de l'écran.
 
 ---
 
 ## Fonctionnalités
 
-### 📥 Téléchargement
-- **Catalogue complet** des séries Fankai avec affiches et état de disponibilité
-- **Téléchargement en un clic** vers votre client torrent — par épisode, par saison ou en intégrale
-- **Dropdown intelligent** sur chaque bouton quand plusieurs sources sont disponibles (qualités différentes, packs différents)
-- **"Tout télécharger"** unifié — sélectionne automatiquement les épisodes non couverts par l'intégrale choisie et complète avec les packs individuels
-- **Progression par fichier** — barre de téléchargement au niveau de l'épisode, même pour les fichiers dans un pack intégrale
-- **RSS Sync** — surveillance automatique des nouvelles sorties toutes les 6 heures pour les séries abonnées, téléchargement sans intervention
+### Téléchargement
+- Tout le catalogue Fankai, avec les affiches et l'état de chaque série
+- Envoi au client torrent par épisode, par saison ou en intégrale
+- Choix de la source quand plusieurs torrents existent (qualité, pack)
+- Bouton « Tout télécharger » : l'intégrale choisie, complétée par les packs des épisodes qu'elle ne contient pas
+- Progression par épisode, même pour un fichier contenu dans un pack (si le client torrent l'indique)
+- Surveillance : les nouveaux épisodes des séries surveillées sont envoyés au client (vérification toutes les 6 heures)
 
-### 🗂️ Organisation
-- **Import automatique** des fichiers terminés vers votre médiathèque, déclenché dès la fin d'un téléchargement ou toutes les 5 minutes en arrière-plan
-- **Scan de médiathèque** — détecte les fichiers déjà présents sur le disque et les référence sans les déplacer
-- **Mode hardlink** (recommandé), **déplacement** ou **copie** — le hardlink préserve le seeding du client torrent
-- **Désimport automatique** optionnel quand un fichier est supprimé du disque
-- **Suppression du dossier série** automatique lors d'un désimport complet avec suppression des fichiers
+### Organisation
+- Import automatique des téléchargements terminés dans la médiathèque (vérification toutes les 5 minutes)
+- Trois modes d'import : Hardlink (recommandé), Copier ou Déplacer. Avec un hardlink, le client torrent continue de partager le fichier.
+- Analyse de la médiathèque : les épisodes déjà présents sur le disque sont reconnus sans être déplacés
+- En option, les épisodes dont le fichier a disparu sont retirés de la médiathèque
+- Quand vous retirez une série de la médiathèque en supprimant ses fichiers, son dossier est effacé et ses torrents sont retirés du client
 
-### 📋 Demandes
-- **Système de demandes** — les utilisateurs peuvent demander des séries, saisons ou épisodes spécifiques depuis l'interface ou le plugin Jellyfin
-- **Workflow admin** — approbation / refus avec message / marquage disponible depuis la page dédiée
-- **Auto-téléchargement** configurable par utilisateur — les demandes sont approuvées et lancées automatiquement pour les utilisateurs autorisés
-- **Suppression en masse** pour les admins (bouton "Tout supprimer")
-- **Nettoyage automatique** — les demandes marquées "disponible" sont supprimées lors du désimport de la série concernée
+### Demandes
+- Les invités demandent une série, une saison ou des épisodes, depuis FanKarr ou depuis le plugin Jellyfin
+- Les administrateurs approuvent, refusent (avec un message) ou marquent une demande comme disponible
+- Approbation automatique, pour tous les invités ou certains seulement : la demande est approuvée et le torrent part aussitôt au client
+- Bouton « Tout supprimer » pour vider la liste
+- Une demande passe à « disponible » quand des épisodes de la série sont importés, et les demandes disponibles sont supprimées quand la série est retirée de la médiathèque
 
-### 🏷️ Métadonnées & Affichage
-- **Badges de langue** VOSTFR et MULTI avec drapeaux sur chaque épisode (détectés automatiquement)
-- **Support NFO** — nommage compatible avec les plugins Jellyfin/Plex utilisant les fichiers `.nfo`
-- **Intégration Plex** — connexion à votre serveur Plex pour déclencher le scan médiathèque après import
+### Métadonnées et affichage
+- Badges de langue VOSTFR et MULTI sur chaque épisode, détectés automatiquement
+- Fichiers NFO et images en option, pour Infuse ou les lecteurs sans agent Fankai
+- Plex : connexion au compte, installation de l'agent de métadonnées Fankai et création de la bibliothèque (Plex Media Server 1.43 ou plus récent pour l'agent)
+- Jellyfin, Emby et Kodi : métadonnées Fankai avec le [plugin Jellyfin Fankai](https://github.com/Nackophilz/fankai_jellyfin) ou l'add-on [Fankai pour Kodi](https://github.com/Nackophilz/fankai_kodi) (Kodi 20 ou plus récent)
 
-### 👥 Utilisateurs & Jellyfin
-- **Multi-utilisateurs** avec rôles (`admin` / `user`) et système d'invitations
-- **SSO Jellyfin** — les utilisateurs se connectent avec leur compte Jellyfin, aucun mot de passe FanKarr requis
-- **Synchronisation Jellyfin** — création automatique des comptes FanKarr pour les utilisateurs Jellyfin, toutes les heures en arrière-plan ou manuellement depuis les paramètres
-- **Token API personnel** — chaque utilisateur dispose d'un token pour accéder à l'API publique
+### Utilisateurs et Jellyfin
+- Plusieurs comptes, avec deux rôles (administrateur et invité) et des liens d'invitation
+- Synchronisation Jellyfin : un compte FanKarr est créé pour chaque utilisateur Jellyfin, toutes les heures ou à la demande
+- Connexion depuis le plugin Jellyfin avec le compte Jellyfin
+- Un jeton d'API personnel par utilisateur pour l'API publique
 
-### ⚙️ Système
-- **Logs centralisés** — filtre par niveau et source, rotation automatique, clear depuis l'UI
-- **Authentification** par mot de passe avec session JWT
-- **Multi-client torrent** — qBittorrent, Transmission, Synology Download Station, µTorrent, rTorrent, Real-Debrid, AllDebrid
-- **Compatible Docker / Runtipi / Binaire autonome**
+### Système
+- Journaux filtrables par niveau et par source, avec rotation automatique, que vous pouvez vider depuis l'interface
+- Authentification par mot de passe, session JWT
+- Clients torrent pris en charge : qBittorrent, Transmission, Deluge, rTorrent, uTorrent, Synology Download Station et Real-Debrid. Vous pouvez en configurer plusieurs.
+- Installation avec Docker, Runtipi ou un binaire autonome
 
 ---
 
-## Données torrent — Scraper
+## Données des torrents (scraper)
 
-Les données du catalogue sont récupérées depuis le repo [`fankarr-scraper`](https://github.com/masutayunikon/fankarr-scraper).
+Les données du catalogue viennent du dépôt [`fankarr-scraper`](https://github.com/masutayunikon/fankarr-scraper).
 
-Ce repo contient un pipeline Python qui collecte, parse et résout les torrents Fankai depuis les trackers publics, les croise avec l'API metadata de Fankai pour identifier chaque épisode, et publie le résultat automatiquement **toutes les 6 heures** via GitHub Actions. Les données sont organisées par série dans un dossier `/serie` et des fichiers d'index à la racine du repo.
+Ce dépôt récupère les torrents Fankai sur les trackers publics, les associe aux épisodes grâce à l'API Fankai et publie le résultat toutes les 6 heures avec GitHub Actions : un fichier par série dans le dossier `series/`, et des fichiers d'index à la racine (`available.json`, `infohash_map.json`).
 
-FanKarr récupère ces données au démarrage et via le bouton **Mettre à jour** dans les paramètres. Aucun scraping ne se fait en local.
+FanKarr lit ces données au démarrage et les garde une heure en cache. Pour les recharger tout de suite, utilisez **Synchroniser maintenant** dans **Paramètres › Catalogue Fankai**. Les séries qui ne sont pas encore dans le scraper sont complétées par l'API Fankai, sans torrents. La collecte des torrents ne se fait pas sur votre serveur.
 
 ---
 
@@ -99,7 +113,7 @@ FanKarr récupère ces données au démarrage et via le bouton **Mettre à jour*
 
 ### Docker Compose (recommandé)
 
-**Prérequis** : Docker + Docker Compose, un client torrent accessible en réseau.
+**Prérequis** : Docker et Docker Compose, et un client torrent joignable depuis FanKarr.
 
 ```yaml
 services:
@@ -109,10 +123,10 @@ services:
     environment:
       - PUID=1000        # UID de votre utilisateur (id -u)
       - PGID=1000        # GID de votre utilisateur (id -g)
-      - TZ=Europe/Paris  # Votre timezone
+      - TZ=Europe/Paris  # Fuseau horaire
     volumes:
-      - ./config:/config  # Config, logs, base de données
-      - /votre/chemin:/media  # Racine de votre médiathèque (voir note hardlinks)
+      - ./config:/config  # Configuration, journaux et données
+      - /votre/chemin:/media  # Dossier parent de la médiathèque et des téléchargements (nécessaire aux hardlinks)
     ports:
       - 9898:9898
     restart: unless-stopped
@@ -122,86 +136,96 @@ services:
 docker compose up -d
 ```
 
-> **⚠️ Note sur les hardlinks** : Pour que le mode `hardlink` fonctionne, vos dossiers de téléchargement complets et votre médiathèque doivent être sur le **même filesystem**. La solution recommandée est de monter un seul volume racine (ex: `/votre/chemin:/media`) et de configurer vos chemins à l'intérieur — comme Radarr et Sonarr le font.
+> **Hardlinks** : le dossier des téléchargements terminés et la médiathèque doivent être sur le même système de fichiers. Montez un seul volume parent qui contient les deux (ex. `/votre/chemin:/media`), puis choisissez vos dossiers à l'intérieur, comme avec Radarr et Sonarr.
 >
-> Plusieurs volumes sont possibles mais les hardlinks ne fonctionneront pas entre deux volumes différents — FanKarr basculera automatiquement en copie.
+> Vous pouvez monter plusieurs volumes, mais les hardlinks ne fonctionnent pas d'un volume à l'autre ; FanKarr copie alors les fichiers.
+>
+> Si le client torrent tourne dans un autre conteneur ou sur une autre machine, renseignez dans ses réglages le chemin distant (le dossier tel que le client le voit) et le chemin local (le même dossier tel que FanKarr le voit).
 
 ---
 
-### Binaire autonome (Windows / Linux / macOS)
+### Binaire autonome (Windows, Linux, macOS)
 
-Téléchargez l'archive correspondant à votre système depuis les [Releases GitHub](https://github.com/masutayunikon/fankarr/releases/latest) :
+Téléchargez l'archive de votre système depuis les [Releases GitHub](https://github.com/masutayunikon/fankarr/releases/latest) :
 
-| Système                          | Archive                          |
-| -------------------------------- | -------------------------------- |
-| Windows x64                      | `fankarr-windows-x64.zip`        |
-| Windows Legacy (anciens CPU)     | `fankarr-windows-legacy.zip`     |
-| Linux x64                        | `fankarr-linux-x64.zip`          |
-| macOS (Apple Silicon)            | `fankarr-macos.zip`              |
+| Système                                  | Archive                            |
+| ---------------------------------------- | ---------------------------------- |
+| Windows x64                              | `fankarr-windows-x64.zip`          |
+| Windows x64, anciens processeurs         | `fankarr-windows-x64-legacy.zip`   |
+| Linux x64                                | `fankarr-linux-x64.zip`            |
+| Linux ARM64                              | `fankarr-linux-arm64.zip`          |
+| macOS (Apple Silicon)                    | `fankarr-macos.zip`                |
 
-Extrayez l'archive — tous les fichiers doivent rester ensemble dans le même répertoire :
+Extrayez l'archive dans un dossier. Tous les fichiers doivent rester ensemble :
 
 ```
-fankarr-windows-x64/
-├── fankarr.exe        ← lancer ce fichier
-├── organize-worker.js ← worker d'organisation (ne pas déplacer)
-├── .env               ← configuration optionnelle (voir Variables d'environnement)
-└── public/            ← assets frontend (ne pas déplacer)
+fankarr/
+├── fankarr.exe          # à lancer (fankarr sous Linux et macOS)
+├── organize-worker.js   # tâche d'import, à garder à côté du binaire
+├── public/              # fichiers de l'interface, à garder à côté du binaire
+├── version.txt
+└── .env                 # facultatif, à créer (voir Variables d'environnement)
 ```
 
-> Le fichier `.env` permet de configurer le port, la durée des sessions, etc. sans passer par des variables d'environnement système. Il est chargé automatiquement au démarrage si présent à côté du binaire.
+> Le fichier `.env` sert à régler le port, la durée des sessions, etc. sans passer par les variables d'environnement du système. S'il est présent à côté du binaire, il est chargé au démarrage. Le fichier [`.env.example`](.env.example) du dépôt sert de modèle.
 
-**Linux / macOS** — rendre le binaire exécutable avant le premier lancement :
+**Linux et macOS** : dans l'archive, le binaire est rangé dans un sous-dossier `binaries/`. Placez-le à côté de `public/` et rendez-le exécutable avant le premier lancement :
 
 ```bash
-wget https://github.com/Masutayunikon/FanKarr/releases/download/v3.14.6/fankarr-linux-arm64.zip
-unzip fankarr-linux-arm64.zip -d fankarr
+wget https://github.com/masutayunikon/fankarr/releases/latest/download/fankarr-linux-x64.zip
+unzip fankarr-linux-x64.zip -d fankarr
 cd fankarr
-################
-# if the "fankarr" files in inside the binaries directory use this command
-# mv ./binaries/fankarr .
-##################
+# Le binaire est extrait dans binaries/ : le placer à côté de public/ et de organize-worker.js
+mv binaries/fankarr .
 chmod +x fankarr
 ./fankarr
 ```
 
-FanKarr sera accessible sur `http://localhost:9898`. La configuration, les logs et la base de données sont sauvegardés dans un dossier `config/` créé automatiquement à côté du binaire.
+Pour Linux ARM64 ou macOS, remplacez le nom de l'archive.
+
+FanKarr est alors accessible sur `http://localhost:9898`. La configuration, les journaux et les données sont enregistrés dans un dossier `config/`, créé automatiquement à côté du binaire.
 
 ---
 
 ### Variables d'environnement
 
-| Variable           | Défaut        | Description                                                                     |
-| ------------------ | ------------- | ------------------------------------------------------------------------------- |
-| `PUID`             | `1000`        | UID utilisateur pour les permissions fichiers (Docker)                          |
-| `PGID`             | `1000`        | GID utilisateur pour les permissions fichiers (Docker)                          |
-| `TZ`               | —             | Timezone (ex: `Europe/Paris`)                                                   |
-| `PORT`             | `9898`        | Port d'écoute du serveur                                                        |
-| `JWT_SECRET`       | auto-généré   | Secret JWT — généré automatiquement dans `/config/secret.key` si absent         |
-| `AUTH_TOKEN_EXPIRY`| `30d`         | Durée de validité du token de connexion (ex: `7d`, `1y`, `never`)               |
-| `DATA_DIR`         | `./config`    | Répertoire de stockage des données (binaire uniquement)                         |
-| `GITHUB_RAW_URL`   | repo scraper  | URL de base du repo scraper si vous hébergez votre propre instance              |
+| Variable            | Défaut        | Description                                                                          |
+| ------------------- | ------------- | ------------------------------------------------------------------------------------ |
+| `PUID`              | `1000`        | UID propriétaire des fichiers de `/config` (Docker)                                  |
+| `PGID`              | `1000`        | GID propriétaire des fichiers de `/config` (Docker)                                  |
+| `TZ`                | non défini    | Fuseau horaire (ex. `Europe/Paris`)                                                  |
+| `PORT`              | `9898`        | Port d'écoute du serveur                                                             |
+| `JWT_SECRET`        | généré        | Secret des sessions, généré dans `secret.key` (dossier de configuration) si absent   |
+| `AUTH_TOKEN_EXPIRY` | `30d`         | Durée de validité de la session (ex. `7d`, `1y` ; `never` ou `0` : pas d'expiration) |
+| `GITHUB_BASE`       | dépôt scraper | Adresse de base des données du scraper, si vous hébergez votre propre copie          |
+
+Par défaut, `GITHUB_BASE` vaut `https://raw.githubusercontent.com/masutayunikon/fankarr-scraper/main`.
 
 ---
 
-### Premier démarrage
+### Premier lancement
 
-1. Ouvrir `http://localhost:9898`
-2. Créer un mot de passe à la première connexion
-3. Aller dans **Paramètres** → configurer votre client torrent
-4. Renseigner le chemin vers le dossier des **torrents terminés** et celui de votre **médiathèque**
-5. Choisir le mode d'organisation : `hardlink` (recommandé), `move` ou `copy`
-6. Optionnel : lancer le **scan** pour référencer les fichiers déjà présents sur le disque
-7. Retourner au catalogue et télécharger
+1. Ouvrez `http://localhost:9898` (ou l'adresse de votre serveur).
+2. Créez le compte administrateur.
+3. Suivez l'assistant de configuration :
+   - dossiers : téléchargements terminés, médiathèque et mode d'import (Hardlink, recommandé, Copier ou Déplacer) ;
+   - client torrent ;
+   - options d'import : import automatique, nommage des dossiers, fichiers NFO ;
+   - serveur multimédia, Jellyfin ou Plex (facultatif) ;
+   - catalogue : synchronisation des séries Fankai, puis analyse de la médiathèque si elle contient déjà des épisodes.
+4. Terminez avec la visite guidée, qui présente les écrans principaux, ou passez-la.
 
-<!-- [img] : page paramètres — formulaire de configuration client torrent, chemins, mode d'organisation, toggles autoImport / NFO / désimport auto -->
-![Paramètres](.github/images/settings.png)
+![Assistant de configuration](.github/images/setup.webp)
+
+Tous ces réglages restent modifiables dans les paramètres, et l'assistant peut être relancé.
+
+![Paramètres](.github/images/settings.webp)
 
 ---
 
 ## Organisation des fichiers
 
-FanKarr organise les fichiers terminés vers la structure attendue par Jellyfin / Plex :
+FanKarr range les fichiers terminés selon la structure attendue par Jellyfin et Plex :
 
 ```
 Black Lagoon Henshū/
@@ -218,59 +242,62 @@ Black Lagoon Henshū/
     └── Black Lagoon Henshū.S03E08.MULTI.1080p.x264-FANKAI.mkv
 ```
 
-Le mode **hardlink** est recommandé si vos dossiers de téléchargement et de médiathèque sont sur le même filesystem — les fichiers ne sont pas déplacés et le client torrent continue de seeder sans interruption.
+Une option permet de nommer les dossiers de saison « Season 01 » plutôt que « Saison 1 ».
 
-L'organisation se déclenche :
-- **Automatiquement** dès la fin d'un téléchargement, et toutes les 5 minutes en arrière-plan pour les torrents déjà en seeding
-- **Manuellement** depuis le bouton **Importer** dans la vue téléchargements
+Le mode Hardlink est recommandé quand le dossier des téléchargements et la médiathèque sont sur le même système de fichiers : le fichier n'est pas copié et le client torrent continue de le partager.
 
-Le **scan médiathèque** permet de référencer des fichiers déjà présents sur le disque sans les déplacer — utile si vous avez déjà une bibliothèque existante.
+L'import se lance :
+- automatiquement, si l'import automatique est activé : FanKarr cherche les téléchargements terminés toutes les 5 minutes ;
+- à la main, avec le bouton **Importer** de la page Activité.
 
----
-
-## Logs
-
-<!-- [img] : page logs — liste des événements avec filtres niveau/source, bouton clear, affichage compact -->
-![Logs](.github/images/logs.png)
-
-> Tous les événements sont horodatés et filtrables par source (`organize`, `api`, `torrent`, …) et niveau (`info`, `warn`, `error`, `debug`).
+L'analyse de la médiathèque (**Paramètres › Gestion des médias › Analyser la médiathèque**) reconnaît les fichiers déjà présents sur le disque sans les déplacer, utile pour une médiathèque existante.
 
 ---
 
-## Plugin Jellyfin — FanKarr Search
+## Journaux
 
-Un plugin Jellyfin est disponible pour intégrer la recherche FanKarr directement dans l'interface de votre serveur. Vos utilisateurs peuvent parcourir le catalogue et demander des séries sans quitter Jellyfin.
+![Journaux](.github/images/logs.webp)
 
-👉 **[jellyfin-plugin-fankarr-search](https://github.com/Masutayunikon/jellyfin-plugin-fankarr-search)**
+> Les journaux sont dans **Paramètres › Journaux**. Chaque événement est horodaté et filtrable par niveau (`info`, `warn`, `error`, `debug`) et par source : `api`, `organize`, `rss-sync`, `requests`, `jellyfin`, `plex`, `auth`, `torrent-clients`, une source par client torrent (`qbittorrent`, `transmission`…), etc.
 
-Le plugin nécessite **[Jellyfin JavaScript Injector](https://github.com/n00bcodr/Jellyfin-JavaScript-Injector)** — consultez le README du plugin pour les instructions d'installation.
+Le fichier garde environ les 2 000 dernières lignes. Les messages `debug` ne sont pas enregistrés quand `NODE_ENV=production`, ce qui est le cas dans l'image Docker.
+
+---
+
+## Plugin Jellyfin FanKarr Search
+
+Un plugin Jellyfin intègre la recherche FanKarr à l'interface de votre serveur : vos utilisateurs parcourent le catalogue et demandent des séries sans quitter Jellyfin.
+
+**[jellyfin-plugin-fankarr-search](https://github.com/Masutayunikon/jellyfin-plugin-fankarr-search)**
+
+Le plugin nécessite **[Jellyfin JavaScript Injector](https://github.com/n00bcodr/Jellyfin-JavaScript-Injector)**. Les instructions d'installation sont dans le README du plugin.
 
 ### Synchronisation des utilisateurs
 
-FanKarr peut créer automatiquement un compte pour chaque utilisateur Jellyfin actif. La synchronisation se fait :
-- **Automatiquement** toutes les heures en arrière-plan (si Jellyfin est configuré)
-- **Manuellement** depuis **Paramètres → Jellyfin → Synchroniser**
+FanKarr crée un compte invité pour chaque utilisateur Jellyfin actif qui n'en a pas encore (même nom d'utilisateur). La synchronisation se fait :
+- automatiquement toutes les heures, si Jellyfin est configuré ;
+- à la demande, depuis **Paramètres › Jellyfin et API › Synchroniser les utilisateurs**.
 
-Les comptes créés n'ont pas de mot de passe FanKarr — l'authentification se fait uniquement via SSO Jellyfin.
+Les comptes ainsi créés reçoivent un mot de passe aléatoire. Ces utilisateurs se connectent par le plugin, qui échange leur session Jellyfin contre leur jeton FanKarr.
 
 ---
 
-## API Publique
+## API publique
 
-FanKarr expose une API publique `v1` utilisée par le plugin Jellyfin et toute intégration tierce.
+FanKarr expose une API publique, sous `/api/v1`, utilisée par le plugin Jellyfin et ouverte aux intégrations tierces.
 
-**Auth** : `Authorization: Bearer <token>` (token visible dans **Profil → Token API**)
+**Authentification** : `Authorization: Bearer <jeton>` (jeton visible dans **Paramètres › Mon profil › Jeton d'API**)
 
-| Méthode | Endpoint | Description |
-|---------|----------|-------------|
-| `POST` | `/api/v1/auth/jellyfin` | Échange un token Jellyfin contre un token FanKarr |
-| `GET` | `/api/v1/auth/me` | Informations de l'utilisateur connecté |
-| `GET` | `/api/v1/series/search?q=` | Recherche dans le catalogue (titre, note, année, description, demande en cours) |
-| `GET` | `/api/v1/series/:id` | Détail d'une série — saisons et épisodes (proxy FanKai) |
-| `POST` | `/api/v1/requests` | Créer ou mettre à jour une demande |
-| `GET` | `/api/v1/requests` | Demandes de l'utilisateur authentifié |
+| Méthode | Route | Description |
+|---------|-------|-------------|
+| `POST` | `/api/v1/auth/jellyfin` | Échange une session Jellyfin contre le jeton FanKarr de l'utilisateur |
+| `GET` | `/api/v1/auth/me` | Compte associé au jeton |
+| `GET` | `/api/v1/series/search?q=` | Recherche par titre ; renvoie note, année, description et demande en cours |
+| `GET` | `/api/v1/series/:id` | Détail d'une série : saisons et épisodes |
+| `POST` | `/api/v1/requests` | Crée une demande ou complète la demande en cours |
+| `GET` | `/api/v1/requests` | Demandes de l'utilisateur du jeton |
 
-### SSO Jellyfin
+### Connexion avec Jellyfin
 
 ```http
 POST /api/v1/auth/jellyfin
@@ -279,13 +306,13 @@ Content-Type: application/json
 { "jellyfinUserId": "...", "jellyfinToken": "..." }
 ```
 
-Retourne `{ token, username, role }`. Le `token` est ensuite utilisé comme Bearer pour tous les autres appels.
+Renvoie `{ token, username, role }`. Le `token` s'utilise ensuite en `Bearer` pour tous les autres appels. Si aucun compte FanKarr ne porte le nom de l'utilisateur Jellyfin, la réponse est une erreur 404 : lancez la synchronisation Jellyfin.
 
 ### Recherche
 
 ```http
 GET /api/v1/series/search?q=dragon+ball
-Authorization: Bearer <token>
+Authorization: Bearer <jeton>
 ```
 
 ```json
@@ -308,19 +335,23 @@ Authorization: Bearer <token>
 ]
 ```
 
-Le champ `request` est `null` si aucune demande active n'existe pour cette série.
+La recherche porte sur le titre et le titre original, sans tenir compte de la casse, parmi les séries présentes dans les données du scraper. Elle renvoie 50 résultats au maximum ; sans `q`, elle renvoie les 50 premières séries.
 
-### Détail série (saisons & épisodes)
+Le champ `request` vaut `null` si l'utilisateur n'a pas de demande en cours pour cette série.
+
+### Détail d'une série (saisons et épisodes)
 
 ```http
 GET /api/v1/series/42
-Authorization: Bearer <token>
+Authorization: Bearer <jeton>
 ```
 
 ```json
 {
   "id": 42,
   "title": "Dragon Ball Z Kai",
+  "original_title": "DRAGON BALL Z KAI",
+  "image": "https://...",
   "seasons": [
     {
       "season_number": 1,
@@ -336,45 +367,48 @@ Authorization: Bearer <token>
 
 ```http
 POST /api/v1/requests
-Authorization: Bearer <token>
+Authorization: Bearer <jeton>
 Content-Type: application/json
 
 { "serieId": 42, "serieName": "Dragon Ball Z Kai", "seasons": [1, 2] }
 ```
 
-- `seasons` : numéros de saison (`season_number`). Tableau vide = toutes les saisons.
-- `episodes` : IDs d'épisodes (`episode.id`). Prend le dessus sur `seasons` si renseigné.
-- Si une demande active existe déjà, les saisons/épisodes sont **fusionnés**.
+- `serieId` et `serieName` sont obligatoires.
+- `seasons` : numéros de saison (`season_number`). Sans saison ni épisode, la demande porte sur toute la série.
+- `episodes` : identifiants d'épisodes (`episode.id`). Prioritaires sur `seasons` s'ils sont renseignés.
+- Si une demande est déjà en cours pour cette série, les saisons et épisodes sont **fusionnés**.
+- Si l'approbation automatique est activée pour l'utilisateur, la demande est approuvée et le torrent envoyé au client.
 
 ---
 
 ## Runtipi
 
-FanKarr est disponible dans l'appstore personnalisé. Pour l'installer :
+FanKarr est disponible dans le dépôt d'applications Runtipi de Masutayunikon. Pour l'installer :
 
-1. Dans Runtipi, aller dans **Paramètres → App Stores**
-2. Ajouter l'URL : `https://github.com/Masutayunikon/runtipi-appstore`
-3. FanKarr apparaît dans le catalogue → **Installer**
+1. Dans Runtipi, ouvrez **Paramètres › App Stores**.
+2. Ajoutez l'adresse `https://github.com/Masutayunikon/runtipi-appstore`.
+3. FanKarr apparaît dans la liste des applications : cliquez sur **Installer**.
 
 ---
 
-## Stack technique
+## Technologies
 
-| Couche            | Technologie                              |
-| ----------------- | ---------------------------------------- |
-| Frontend          | Vue 3 + Vite + Tailwind CSS v4           |
-| Backend           | Express 5 + TypeScript                   |
-| Auth              | JWT + bcrypt                             |
-| Worker            | Node Worker Threads (organisation async) |
-| Packaging Docker  | `node:20-slim` + pnpm + gosu (PUID/PGID) |
-| Packaging binaire | Bun (self-contained, pas de Node requis) |
+| Partie            | Technologie                                       |
+| ----------------- | ------------------------------------------------- |
+| Interface         | Vue 3, Vite, Tailwind CSS v4                      |
+| Serveur           | Express 5, TypeScript                             |
+| Authentification  | JWT, bcrypt                                       |
+| Import            | Worker threads Node (import en arrière-plan)      |
+| Image Docker      | `node:22-slim`, pnpm, gosu (PUID/PGID)            |
+| Binaire           | Bun (exécutable autonome, sans Node)              |
 
 ---
 
 ## Liens
 
-- [fankai.fr](https://fankai.fr) — Le projet Fankai
-- [Plugin Jellyfin FanKarr Search](https://github.com/Masutayunikon/jellyfin-plugin-fankarr-search) — Recherche et demandes FanKarr dans Jellyfin
-- [Plugin Jellyfin Fankai](https://github.com/Nackophilz/fankai_jellyfin) — Reconnaissance des métadonnées dans Jellyfin
-- [fankarr-scraper](https://github.com/masutayunikon/fankarr-scraper) — Pipeline de collecte des torrents
-- [runtipi-appstore](https://github.com/Masutayunikon/runtipi-appstore) — Appstore Runtipi personnel
+- [fankai.fr](https://fankai.fr) : le projet Fankai
+- [Plugin Jellyfin FanKarr Search](https://github.com/Masutayunikon/jellyfin-plugin-fankarr-search) : recherche et demandes FanKarr dans Jellyfin
+- [Plugin Jellyfin Fankai](https://github.com/Nackophilz/fankai_jellyfin) : reconnaissance des métadonnées Fankai dans Jellyfin et Emby
+- [Fankai pour Kodi](https://github.com/Nackophilz/fankai_kodi) : fournisseur de métadonnées Fankai pour Kodi
+- [fankarr-scraper](https://github.com/masutayunikon/fankarr-scraper) : collecte des torrents
+- [runtipi-appstore](https://github.com/Masutayunikon/runtipi-appstore) : dépôt d'applications Runtipi

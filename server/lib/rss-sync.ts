@@ -1,11 +1,4 @@
-/**
- * RSS Sync — auto-téléchargement des épisodes sortis après l'activation de la surveillance.
- *
- * Toutes les 6 heures, FanKarr cherche les épisodes dont le champ `date_added`
- * (date d'ajout dans la base metadata) est postérieur à la date d'activation
- * du sync pour cette série. Si ces épisodes ont un torrent fankai et ne sont
- * pas encore organisés, ils sont envoyés automatiquement au client torrent.
- */
+/** Surveillance : envoie au client les épisodes ajoutés au catalogue après activation (toutes les 6 h). */
 
 import path from 'path'
 import fs   from 'fs'
@@ -21,7 +14,7 @@ import { readSettings }                            from '../settings.js'
 export interface SyncedSerie {
     serieId  : number
     serieName: string
-    addedAt  : string   // ISO — date d'activation de la surveillance
+    addedAt  : string   // date ISO d'activation de la surveillance
 }
 
 type SyncedMap = Record<number, SyncedSerie>
@@ -73,8 +66,7 @@ export function isSynced(serieId: number): boolean {
 const normalizeName = (name: string) =>
     name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 
-// Série recréée sous un nouvel ID avec le même nom : la surveillance suit.
-// Renvoie les surveillances dont la série n'existe plus dans le catalogue.
+// Série recréée sous un nouvel ID et même nom : la surveillance suit ; renvoie celles sans série
 export function reconcileSynced(catalog: any[]): SyncedSerie[] {
     const map     = loadSynced()
     const ids     = new Set(catalog.map(sd => sd.id))
@@ -86,7 +78,7 @@ export function reconcileSynced(catalog: any[]): SyncedSerie[] {
         if (matches.length === 1 && !map[matches[0].id]) {
             delete map[entry.serieId]
             map[matches[0].id] = { ...entry, serieId: matches[0].id, serieName: matches[0].title }
-            logger.info('rss-sync', `Surveillance de "${entry.serieName}" déplacée de la série ${entry.serieId} vers ${matches[0].id}`)
+            logger.info('rss-sync', `Surveillance de « ${entry.serieName} » déplacée de la série ${entry.serieId} vers ${matches[0].id}`)
             changed = true
         } else {
             orphans.push(entry)
@@ -96,7 +88,7 @@ export function reconcileSynced(catalog: any[]): SyncedSerie[] {
     return orphans
 }
 
-// ── Helpers ───────────────────────────────────────────────────
+// ── Épisodes déjà importés ────────────────────────────────────
 
 function readOrganized(): Record<string, Record<string, any>> {
     try {
@@ -144,7 +136,7 @@ function getOrganizedEpisodeIds(sd: any, organized: Record<string, Record<string
     return ids
 }
 
-// ── Logique de sync ───────────────────────────────────────────
+// ── Vérification des séries surveillées ───────────────────────
 
 export async function runRssSync(): Promise<{ sent: number; skipped: number; errors: number }> {
     if (Object.keys(loadSynced()).length === 0) return { sent: 0, skipped: 0, errors: 0 }
@@ -154,7 +146,7 @@ export async function runRssSync(): Promise<{ sent: number; skipped: number; err
     const synced = loadSynced()
     const ids    = Object.keys(synced).map(Number)
 
-    logger.info('rss-sync', `Démarrage sync — ${ids.length} série(s) surveillée(s)`)
+    logger.info('rss-sync', `Surveillance : vérification de ${ids.length} série(s)`)
 
     const organized  = readOrganized()
 
@@ -176,7 +168,7 @@ export async function runRssSync(): Promise<{ sent: number; skipped: number; err
         const syncedEntry = synced[serieId]
         const sd          = seriesData.find((s: any) => s.id === serieId)
         if (!sd) {
-            logger.warn('rss-sync', `Série ${serieId} ("${syncedEntry.serieName}") introuvable dans le catalogue — surveillance à retirer depuis Paramètres › Catalogue`)
+            logger.warn('rss-sync', `Série ${serieId} (« ${syncedEntry.serieName} ») absente du catalogue : retirez la surveillance dans Paramètres › Catalogue`)
             continue
         }
 
@@ -184,9 +176,8 @@ export async function runRssSync(): Promise<{ sent: number; skipped: number; err
         const activatedAt = new Date(syncedEntry.addedAt)
         const organizedIds = getOrganizedEpisodeIds(sd, organized)
 
-        logger.info('rss-sync', `Vérification : ${title} (sync activé le ${activatedAt.toLocaleDateString('fr-FR')})`)
+        logger.info('rss-sync', `Vérification de « ${title} » (surveillée depuis le ${activatedAt.toLocaleDateString('fr-FR')})`)
 
-        // Épisodes candidats : date_added > date d'activation ET pas encore organisés
         const candidateIds = new Set<number>()
         for (const season of sd.seasons ?? []) {
             for (const ep of season.episodes ?? []) {
@@ -194,7 +185,6 @@ export async function runRssSync(): Promise<{ sent: number; skipped: number; err
                 const epDate = new Date(ep.date_added)
                 if (epDate <= activatedAt) continue
                 if (organizedIds.has(ep.id)) continue
-                // Doit avoir au moins un torrent fankai
                 const hasTorrent = (ep.torrents ?? []).some((t: any) => t.fankai && (t.torrent_url || t.magnet))
                 if (!hasTorrent) continue
                 candidateIds.add(ep.id)
@@ -202,17 +192,15 @@ export async function runRssSync(): Promise<{ sent: number; skipped: number; err
         }
 
         if (candidateIds.size === 0) {
-            logger.info('rss-sync', `${title} — aucun nouvel épisode depuis l'activation`)
+            logger.info('rss-sync', `« ${title} » : aucun nouvel épisode depuis l'activation`)
             continue
         }
 
-        logger.info('rss-sync', `${title} — ${candidateIds.size} nouvel(s) épisode(s) à télécharger`)
+        logger.info('rss-sync', `« ${title} » : ${candidateIds.size} épisode(s) à télécharger`)
 
-        // Construire les téléchargements : pack saison si couvre des candidats, sinon épisode par épisode
         const toDownload: { url: string; file_index?: number | null; file_path?: string | null; infohash?: string | null; label: string }[] = []
         const coveredIds  = new Set<number>()
 
-        // 1. Packs saison couvrant au moins un candidat
         for (const season of sd.seasons ?? []) {
             for (const t of season.torrents ?? []) {
                 if (!t.fankai) continue
@@ -231,7 +219,6 @@ export async function runRssSync(): Promise<{ sent: number; skipped: number; err
             }
         }
 
-        // 2. Épisodes individuels candidats non couverts par un pack
         for (const season of sd.seasons ?? []) {
             for (const ep of season.episodes ?? []) {
                 if (!candidateIds.has(ep.id) || coveredIds.has(ep.id)) continue
@@ -265,19 +252,19 @@ export async function runRssSync(): Promise<{ sent: number; skipped: number; err
                     infohash  : dl.infohash,
                 })
                 if (results.some((r: any) => r.ok)) {
-                    logger.info('rss-sync', `Envoyé : ${dl.label}`)
+                    logger.info('rss-sync', `Envoyé au client : ${dl.label}`)
                     sent++
                 } else {
-                    logger.warn('rss-sync', `Échec envoi : ${dl.label}`)
+                    logger.warn('rss-sync', `Échec de l'envoi : ${dl.label}`)
                     errors++
                 }
             } catch (err) {
-                logger.error('rss-sync', `Erreur dispatch ${dl.label} : ${err instanceof Error ? err.message : err}`)
+                logger.error('rss-sync', `Erreur à l'envoi de ${dl.label} : ${err instanceof Error ? err.message : err}`)
                 errors++
             }
         }
     }
 
-    logger.info('rss-sync', `Sync terminé — ${sent} envoyé(s), ${skipped} ignoré(s), ${errors} erreur(s)`)
+    logger.info('rss-sync', `Surveillance terminée : ${sent} envoyé(s), ${skipped} ignoré(s), ${errors} erreur(s)`)
     return { sent, skipped, errors }
 }

@@ -18,8 +18,8 @@ router.get('/torrent-clients', requireAuth, (_req, res) => {
 
 router.post('/torrent-clients', requireAuth, (req, res) => {
     const { name, type, config } = req.body
-    if (!name || !type || !config) { res.status(400).json({ error: 'name, type et config requis' }); return }
-    if (!getDriver(type))          { res.status(400).json({ error: `Type inconnu : ${type}` }); return }
+    if (!name || !type || !config) { res.status(400).json({ error: 'Nom, type et réglages du client requis' }); return }
+    if (!getDriver(type))          { res.status(400).json({ error: `Type de client inconnu : ${type}` }); return }
     res.json(sanitizeClient(addClient(name, type, config)))
 })
 
@@ -31,8 +31,8 @@ router.delete('/torrent-clients/:uuid', requireAuth, (req, res) => {
 
 router.put('/torrent-clients/:uuid', requireAuth, (req, res) => {
     const { name, type, config } = req.body
-    if (!name || !type || !config) { res.status(400).json({ error: 'name, type et config requis' }); return }
-    if (!getDriver(type))          { res.status(400).json({ error: `Type inconnu : ${type}` }); return }
+    if (!name || !type || !config) { res.status(400).json({ error: 'Nom, type et réglages du client requis' }); return }
+    if (!getDriver(type))          { res.status(400).json({ error: `Type de client inconnu : ${type}` }); return }
     const oldClient = getClient(String(req.params.uuid))
     if (oldClient) {
         const driver = getDriver(type)
@@ -51,9 +51,9 @@ router.put('/torrent-clients/:uuid', requireAuth, (req, res) => {
 
 router.post('/torrent-clients/test-config', requireAuth, async (req, res) => {
     const { type, config, uuid } = req.body
-    if (!type || !config) { res.status(400).json({ error: 'type et config requis' }); return }
+    if (!type || !config) { res.status(400).json({ error: 'Type et réglages du client requis' }); return }
     const driver = getDriver(type)
-    if (!driver) { res.status(400).json({ error: `Type inconnu : ${type}` }); return }
+    if (!driver) { res.status(400).json({ error: `Type de client inconnu : ${type}` }); return }
     if (uuid) {
         const oldClient = getClient(uuid)
         if (oldClient) {
@@ -71,7 +71,7 @@ router.post('/torrent-clients/:uuid/test', requireAuth, async (req, res) => {
     const client = getClient(String(req.params.uuid))
     if (!client) { res.status(404).json({ error: 'Client introuvable' }); return }
     const driver = getDriver(client.type)
-    if (!driver) { res.status(400).json({ error: 'Driver introuvable' }); return }
+    if (!driver) { res.status(400).json({ error: 'Type de client non pris en charge' }); return }
     res.json(await driver.test(client.config))
 })
 
@@ -79,7 +79,7 @@ router.get('/torrent-clients/:uuid/healthcheck', requireAuth, async (req, res) =
     const client = getClient(String(req.params.uuid))
     if (!client) { res.status(404).json({ error: 'Client introuvable' }); return }
     const driver = getDriver(client.type)
-    if (!driver) { res.status(400).json({ error: 'Driver introuvable' }); return }
+    if (!driver) { res.status(400).json({ error: 'Type de client non pris en charge' }); return }
     res.json(await driver.healthcheck(client.config))
 })
 

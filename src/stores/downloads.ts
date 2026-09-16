@@ -3,17 +3,18 @@ import { ref } from 'vue'
 
 export const useDownloadsStore = defineStore('downloads', () => {
     const activeCount = ref(0)
+    const torrents    = ref<any[]>([])
 
     async function refresh() {
         try {
             const res = await fetch('/api/downloads', { credentials: 'include' })
             if (!res.ok) return
-            const torrents = await res.json()
-            activeCount.value = torrents.filter((t: any) => t.state === 'downloading').length
+            torrents.value    = await res.json()
+            activeCount.value = torrents.value.filter((t: any) => t.state === 'downloading').length
         } catch {
             activeCount.value = 0
         }
     }
 
-    return { activeCount, refresh }
+    return { activeCount, torrents, refresh }
 })

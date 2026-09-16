@@ -49,7 +49,7 @@ export function checkDirectory(input: string, { allowRoot = true } = {}): PathCh
     const result: PathCheck = { input: raw, resolved: '', exists: false, isDirectory: false, writable: false }
 
     if (!raw)                     return { ...result, error: 'Chemin vide' }
-    if (/^[A-Za-z]:$/.test(raw))  return { ...result, error: 'Chemin incomplet : ajoutez une barre après la lettre du lecteur' }
+    if (/^[A-Za-z]:$/.test(raw))  return { ...result, error: 'Chemin incomplet : ajoutez « \\ » après la lettre du lecteur (ex. C:\\)' }
     if (!path.isAbsolute(raw))    return { ...result, error: 'Le chemin doit être absolu' }
 
     result.resolved = path.resolve(raw)
@@ -72,7 +72,9 @@ export function checkDirectory(input: string, { allowRoot = true } = {}): PathCh
         result.writable = true
     } catch (err) {
         const code = (err as NodeJS.ErrnoException).code
-        result.error = `Écriture impossible${code ? ` (${code})` : ''}`
+        result.error = code === 'EACCES' || code === 'EPERM'
+            ? `Écriture impossible : permissions insuffisantes (${code})`
+            : `Écriture impossible${code ? ` (${code})` : ''}`
     } finally {
         removeQuietly(probe)
     }
@@ -134,7 +136,7 @@ export function checkPaths(mediaPath: string, completePath?: string) {
 
     let hardlink: HardlinkCheck
     if (!hasComplete) {
-        hardlink = { tested: false, ok: false, message: 'Renseignez le dossier de téléchargements pour tester le hardlink' }
+        hardlink = { tested: false, ok: false, message: 'Renseignez le dossier des téléchargements pour tester le hardlink' }
     } else if (!valid(media) || !valid(complete)) {
         hardlink = { tested: false, ok: false, message: 'Test impossible tant que les dossiers ne sont pas valides' }
     } else if (relation === 'same') {

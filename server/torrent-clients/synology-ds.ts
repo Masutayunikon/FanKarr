@@ -1,6 +1,3 @@
-/**
- * Synology Download Station Driver
- */
 
 import fs   from 'fs'
 import path from 'path'
@@ -9,18 +6,13 @@ import { clientFetch } from './index.js'
 import { logger }   from '../logger.js'
 import { DATA_DIR } from '../config.js'
 
-// ─── Cache URI → infohash ──────────────────────────────────────────────────────
-// Synology n'expose pas toujours le hash BT via l'API (ancien DSM).
-// On persiste l'association URI → infohash au moment du add() pour la réutiliser
-// dans list() via le champ additional.detail.uri de chaque tâche.
+// ─── Cache URI et infohash ─────────────────────────────────────────────────────
+// DSM anciens : pas de hash BT dans l'API, on mémorise l'URI et son infohash à l'ajout
 
 const URI_HASH_PATH = path.join(DATA_DIR, 'synology_uri_hash.json')
 
-// ─── Cache hash BT → ID Synology (en mémoire) ─────────────────────────────────
-// Synology utilise des IDs internes (dbid_X), pas des infohash BT.
-// Quand list() réussit à résoudre le vrai hash BT, on mémorise l'association
-// infohash → dbid_X pour que remove() / getFiles() puissent retrouver la tâche
-// même quand detail.hash et detail.uri sont vides.
+// ─── Cache hash BT et ID Synology (en mémoire) ────────────────────────────────
+// Hash BT vers dbid_X, pour que remove() et getFiles() retrouvent la tâche
 const _hashToSynoId = new Map<string, string>()
 
 function loadUriHashMap(): Record<string, string> {
@@ -38,7 +30,7 @@ const _uriToHash: Map<string, string> = (() => {
 
 function storeUriHash(uri: string, hash: string) {
     const key = uri.toLowerCase()
-    if (_uriToHash.get(key) === hash) return   // déjà connu, pas besoin d'écrire
+    if (_uriToHash.get(key) === hash) return
     _uriToHash.set(key, hash)
     try {
         const map = loadUriHashMap()
@@ -52,24 +44,24 @@ function resolveHash(detailHash: string, detailUri: string, taskId: string): str
     // 1. Hash direct depuis l'API Synology (DSM récent)
     if (detailHash.length > 0) return detailHash.toLowerCase()
 
-    // 2. Magnet URI dans detail.uri → extraction directe du hash (hex 40 chars)
+    // 2. Hash extrait du magnet de detail.uri
     if (detailUri.startsWith('magnet:')) {
         const m = detailUri.match(/xt=urn:btih:([a-fA-F0-9]{40})/i)
         if (m) return m[1].toLowerCase()
     }
 
-    // 3. Notre cache URI → infohash (stocké au moment du add())
+    // 3. Cache URI mémorisé à l'ajout
     if (detailUri) {
         const cached = _uriToHash.get(detailUri.toLowerCase())
         if (cached) return cached
     }
 
-    // 4. Fallback : ID Synology natif (déjà au format "dbid_X")
-    logger.debug('synology-ds', `Hash BT non résolu — fallback ID Synology : ${taskId}`)
+    // 4. À défaut : ID Synology natif (dbid_X)
+    logger.debug('synology-ds', `Hash BT non résolu, ID Synology utilisé : ${taskId}`)
     return String(taskId ?? '').toLowerCase()
 }
 
-// ─── State mapping ─────────────────────────────────────────────────────────────
+// ─── États ─────────────────────────────────────────────────────────────────────
 
 function mapState(status: string): TorrentInfo['state'] {
     if (status === 'downloading')                                 return 'downloading'
@@ -82,7 +74,31 @@ function mapState(status: string): TorrentInfo['state'] {
     return 'unknown'
 }
 
-// ─── Auth ──────────────────────────────────────────────────────────────────────
+// ─── Authentification ──────────────────────────────────────────────────────────
+
+const AUTH_ERRORS: Record<number, string> = {
+    400: 'nom d\'utilisateur ou mot de passe incorrect',
+    401: 'compte désactivé',
+    402: 'accès refusé',
+    403: 'code de validation en deux étapes requis',
+    404: 'code de validation en deux étapes refusé',
+}
+
+const TASK_ERRORS: Record<number, string> = {
+    105: 'accès refusé',
+    106: 'session expirée',
+    400: 'envoi du fichier refusé',
+    401: 'nombre maximal de tâches atteint',
+    402: 'accès au dossier de destination refusé',
+    403: 'dossier de destination introuvable',
+    406: 'aucun dossier de destination par défaut',
+    408: 'fichier introuvable',
+}
+
+function dsErrorText(error: any, table: Record<number, string>): string {
+    const code = error?.code
+    return table[code] ? `${table[code]} (code ${code})` : `code ${code ?? 'inconnu'}`
+}
 
 async function dsLogin(config: ClientConfig): Promise<string> {
     const params = new URLSearchParams({
@@ -95,9 +111,9 @@ async function dsLogin(config: ClientConfig): Promise<string> {
         format : 'sid',
     })
     const res = await clientFetch(config, `${config.url}/webapi/auth.cgi?${params}`)
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    if (!res.ok) throw new Error(`Synology a répondu HTTP ${res.status} : vérifiez l'URL de DSM`)
     const data = await res.json()
-    if (!data.success) throw new Error(`Auth échouée : ${JSON.stringify(data.error)}`)
+    if (!data.success) throw new Error(`Connexion refusée par Synology : ${dsErrorText(data.error, AUTH_ERRORS)}`)
     return data.data.sid
 }
 
@@ -111,13 +127,13 @@ async function dsRequest(
 ): Promise<any> {
     const params = new URLSearchParams({ api, version, method, _sid: sid, ...extra })
     const res = await clientFetch(config, `${config.url}/webapi/DownloadStation/task.cgi?${params}`)
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    if (!res.ok) throw new Error(`Download Station a répondu HTTP ${res.status}`)
     const data = await res.json()
-    if (!data.success) throw new Error(`DS erreur : ${JSON.stringify(data.error)}`)
+    if (!data.success) throw new Error(`Erreur Download Station : ${dsErrorText(data.error, TASK_ERRORS)}`)
     return data.data
 }
 
-// ─── Driver ────────────────────────────────────────────────────────────────────
+// ─── Client ────────────────────────────────────────────────────────────────────
 
 const DS: TorrentClientDriver = {
     definition: {
@@ -125,13 +141,13 @@ const DS: TorrentClientDriver = {
         label                : 'Synology Download Station',
         filterByManagedHashes: true,
         fields               : [
-            { key: 'url',        label: 'URL DSM',                  type: 'url',      placeholder: 'http://192.168.1.x:5000',   required: true },
-            { key: 'username',   label: 'Identifiant',              type: 'text',     placeholder: 'admin',                     required: true },
-            { key: 'password',   label: 'Mot de passe',             type: 'password', placeholder: '••••••••',                 required: true },
-            { key: 'category',   label: 'Catégorie',                type: 'text',     placeholder: 'fankai',                    required: false, default: 'fankai' },
-            { key: 'savePath',   label: 'Dossier cible',            type: 'text',     placeholder: '/volume1/downloads/fankai', required: false },
-            { key: 'remotePath', label: 'Chemin distant (client)',  type: 'text',     placeholder: '/volume1/downloads',        required: false },
-            { key: 'localPath',  label: 'Chemin local (FanKarr)',   type: 'text',     placeholder: '/mnt/nas/downloads',        required: false },
+            { key: 'url',        label: 'URL de DSM',                type: 'url',      placeholder: 'http://192.168.1.x:5000',   required: true },
+            { key: 'username',   label: 'Nom d\'utilisateur',        type: 'text',     placeholder: 'admin',                     required: true },
+            { key: 'password',   label: 'Mot de passe',              type: 'password', placeholder: '••••••••',                 required: true },
+            { key: 'category',   label: 'Catégorie',                 type: 'text',     placeholder: 'fankai',                    required: false, default: 'fankai' },
+            { key: 'savePath',   label: 'Dossier de téléchargement', type: 'text',     placeholder: '/volume1/downloads/fankai', required: false },
+            { key: 'remotePath', label: 'Dossier vu par le client',  type: 'text',     placeholder: '/volume1/downloads',        required: false },
+            { key: 'localPath',  label: 'Dossier vu par FanKarr',    type: 'text',     placeholder: '/mnt/nas/downloads',        required: false },
             { key: 'ignoreCertificateErrors', label: 'Ignorer les erreurs de certificat SSL', type: 'boolean', required: false },
         ],
     },
@@ -142,8 +158,8 @@ const DS: TorrentClientDriver = {
             logger.info('synology-ds', `Test de connexion réussi sur ${config.url}`)
             return { ok: true, message: 'Connexion réussie' }
         } catch (err) {
-            const msg = err instanceof Error ? err.message : 'Erreur inconnue'
-            logger.warn('synology-ds', `Test de connexion échoué sur ${config.url} : ${msg}`)
+            const msg = err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux'
+            logger.warn('synology-ds', `Échec du test de connexion sur ${config.url} : ${msg}`)
             return { ok: false, message: msg }
         }
     },
@@ -175,8 +191,7 @@ const DS: TorrentClientDriver = {
 
         const tasks: any[] = data?.tasks ?? []
 
-        // Filtrage par dossier cible — Synology n'a pas de système de labels/catégories.
-        // Si savePath est configuré, on ne garde que les tâches dont la destination correspond.
+        // Pas de catégories chez Synology : filtre sur le dossier de téléchargement s'il est renseigné
         const normalizedSavePath = String(config.savePath ?? '').replace(/\/+$/, '').toLowerCase()
         const filtered = normalizedSavePath
             ? tasks.filter(t => {
@@ -198,7 +213,6 @@ const DS: TorrentClientDriver = {
                 String(t.id        ?? ''),
             )
 
-            // Mémoriser l'association hash BT → ID Synology (pour remove/getFiles)
             const synoIdStr = String(t.id ?? '').toLowerCase()
             if (!hash.startsWith('dbid_') && synoIdStr) {
                 _hashToSynoId.set(hash, synoIdStr)
@@ -238,17 +252,16 @@ const DS: TorrentClientDriver = {
 
     async add(config, url, options?: DownloadOptions) {
         if (options?.file_index != null)
-            logger.warn('synology-ds', 'Sélection de fichier non supportée — téléchargement complet')
+            logger.warn('synology-ds', 'Download Station ne permet pas de choisir un fichier : torrent complet téléchargé')
 
-        // Mémoriser l'association URI → infohash AVANT l'envoi (le hash est connu côté FanKarr)
         if (options?.infohash) {
             storeUriHash(url, options.infohash)
-            logger.debug('synology-ds', `URI→hash mémorisé : ${options.infohash.slice(0, 8)}… (${url.slice(-50)})`)
+            logger.debug('synology-ds', `Hash mémorisé pour l'URI : ${options.infohash.slice(0, 8)}… (${url.slice(-50)})`)
         }
 
         const sid = await dsLogin(config)
 
-        // Snapshot des IDs existants avant l'ajout — pour identifier la nouvelle tâche Synology
+        // IDs existants avant l'ajout, pour repérer la nouvelle tâche
         const beforeIds = new Set<string>()
         try {
             const before = await dsRequest(config, 'SYNO.DownloadStation.Task', 'list', '1', {}, sid)
@@ -265,22 +278,20 @@ const DS: TorrentClientDriver = {
             })
             if (withDestination && config.savePath) params.append('destination', String(config.savePath))
             const res = await clientFetch(config, `${config.url}/webapi/DownloadStation/task.cgi?${params}`)
-            if (!res.ok) throw new Error(`HTTP ${res.status}`)
+            if (!res.ok) throw new Error(`Download Station a répondu HTTP ${res.status}`)
             return res.json()
         }
 
         let data = await doAdd(true)
 
-        // Code 403 = dossier cible introuvable sur le NAS → réessai sans destination
+        // Code 403 : dossier introuvable sur le NAS, nouvel essai sans destination
         if (!data.success && data.error?.code === 403 && config.savePath) {
-            logger.warn('synology-ds', `Dossier cible "${config.savePath}" introuvable (code 403) — ajout sans destination`)
+            logger.warn('synology-ds', `Dossier « ${config.savePath} » introuvable sur le NAS (code 403) : ajout dans le dossier par défaut`)
             data = await doAdd(false)
         }
 
-        if (!data.success) throw new Error(`Ajout échoué : ${JSON.stringify(data.error)}`)
+        if (!data.success) throw new Error(`Download Station a refusé le torrent : ${dsErrorText(data.error, TASK_ERRORS)}`)
 
-        // Snapshot après ajout — identifier l'ID natif Synology (dbid_X) de la tâche créée
-        // et le stocker dans _hashToSynoId pour remove/getFiles sans attendre le prochain list()
         if (options?.infohash) {
             try {
                 const after   = await dsRequest(config, 'SYNO.DownloadStation.Task', 'list', '1', {}, sid)
@@ -288,12 +299,12 @@ const DS: TorrentClientDriver = {
                 if (newTask) {
                     const synoId = String(newTask.id).toLowerCase()
                     _hashToSynoId.set(options.infohash.toLowerCase(), synoId)
-                    logger.debug('synology-ds', `ID Synology capturé : ${synoId} → ${options.infohash.slice(0, 8)}…`)
+                    logger.debug('synology-ds', `ID Synology ${synoId} associé à ${options.infohash.slice(0, 8)}…`)
                 }
             } catch {}
         }
 
-        logger.info('synology-ds', `Torrent ajouté avec succès${config.savePath ? ` (dossier: ${config.savePath})` : ''}`)
+        logger.info('synology-ds', `Torrent ajouté${config.savePath ? ` (dossier : ${config.savePath})` : ''}`)
     },
 
     async getFiles(config, hash) {
@@ -358,7 +369,7 @@ const DS: TorrentClientDriver = {
             _sid          : sid,
         })
         const res = await clientFetch(config, `${config.url}/webapi/DownloadStation/task.cgi?${params}`)
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        if (!res.ok) throw new Error(`Échec de la suppression (HTTP ${res.status})`)
         logger.info('synology-ds', `Torrent ${found.id} supprimé`)
     },
 }

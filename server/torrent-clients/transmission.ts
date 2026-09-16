@@ -1,15 +1,10 @@
-/**
- * Transmission Driver
- */
 
 import type { TorrentClientDriver, TorrentInfo, DownloadOptions, ClientConfig } from './index.js'
 import { clientFetch } from './index.js'
 import { logger } from '../logger.js'
 
 function mapState(status: number): TorrentInfo['state'] {
-    // Transmission status codes :
-    // 0 = stopped, 1 = check queued, 2 = checking, 3 = download queued,
-    // 4 = downloading, 5 = seed queued, 6 = seeding
+    // 0 arrêté, 1-2 vérification (attente, en cours), 3-4 téléchargement (attente, en cours), 5-6 partage (attente, en cours)
     if (status === 4 || status === 3) return 'downloading'
     if (status === 6 || status === 5) return 'seeding'
     if (status === 0)                 return 'paused'
@@ -38,17 +33,17 @@ async function trRequest(
         body   : JSON.stringify({ method, arguments: args }),
     })
 
-    // Transmission renvoie 409 avec le session ID à la première requête
+    // Première requête : 409 avec l'identifiant de session
     if (res.status === 409) {
         const newSessionId = res.headers.get('X-Transmission-Session-Id') ?? ''
-        if (!newSessionId) throw new Error('Session ID introuvable dans la réponse 409')
+        if (!newSessionId) throw new Error('Identifiant de session absent de la réponse de Transmission (HTTP 409)')
         return trRequest(config, method, args, newSessionId)
     }
 
-    if (!res.ok) throw new Error(`Transmission HTTP ${res.status}`)
+    if (!res.ok) throw new Error(`Transmission a répondu HTTP ${res.status}`)
 
     const data = await res.json()
-    if (data.result !== 'success') throw new Error(`Transmission erreur : ${data.result}`)
+    if (data.result !== 'success') throw new Error(`Erreur Transmission : ${data.result}`)
 
     return { ...data, sessionId }
 }
@@ -59,10 +54,6 @@ async function trGetIdByHash(config: ClientConfig, hash: string): Promise<number
     return torrents.find((t: any) => t.hashString?.toLowerCase() === hash.toLowerCase())?.id ?? null
 }
 
-/**
- * Attend que les métadonnées soient disponibles (polling 500 ms),
- * puis applique les priorités : fichier cible voulu, tous les autres ignorés.
- */
 async function trApplyFilePriority(
     config   : ClientConfig,
     hash     : string,
@@ -84,11 +75,11 @@ async function trApplyFilePriority(
                 'files-wanted'   : [fileIndex],
                 'files-unwanted' : unwanted,
             })
-            logger.info('transmission', `Fichier ${fileIndex} sélectionné pour ${hash.slice(0, 8)}…`)
+            logger.info('transmission', `Fichier n° ${fileIndex} sélectionné pour ${hash.slice(0, 8)}…`)
             return
         } catch {}
     }
-    throw new Error(`Timeout : métadonnées non disponibles pour ${hash.slice(0, 8)}…`)
+    throw new Error(`Délai dépassé : métadonnées du torrent ${hash.slice(0, 8)}… toujours indisponibles`)
 }
 
 const TR: TorrentClientDriver = {
@@ -97,12 +88,12 @@ const TR: TorrentClientDriver = {
         label : 'Transmission',
         fields: [
             { key: 'url',      label: 'URL',            type: 'url',      placeholder: 'http://localhost:9091', required: true },
-            { key: 'username', label: 'Identifiant',    type: 'text',     placeholder: 'transmission',         required: false },
+            { key: 'username', label: 'Nom d\'utilisateur', type: 'text', placeholder: 'transmission',         required: false },
             { key: 'password', label: 'Mot de passe',   type: 'password', placeholder: '••••••••',             required: false },
             { key: 'category', label: 'Catégorie',      type: 'text',     placeholder: 'fankai',               required: false, default: 'fankai' },
-            { key: 'savePath',   label: 'Dossier cible',          type: 'text', placeholder: '/downloads/fankai',     required: false },
-            { key: 'remotePath', label: 'Chemin distant (client)', type: 'text', placeholder: '/downloads',           required: false },
-            { key: 'localPath',  label: 'Chemin local (FanKarr)',  type: 'text', placeholder: '/mnt/nas/downloads',   required: false },
+            { key: 'savePath',   label: 'Dossier de téléchargement', type: 'text', placeholder: '/downloads/fankai',  required: false },
+            { key: 'remotePath', label: 'Dossier vu par le client',  type: 'text', placeholder: '/downloads',         required: false },
+            { key: 'localPath',  label: 'Dossier vu par FanKarr',    type: 'text', placeholder: '/mnt/nas/downloads', required: false },
             { key: 'ignoreCertificateErrors', label: 'Ignorer les erreurs de certificat SSL', type: 'boolean', required: false },
         ],
     },
@@ -113,8 +104,8 @@ const TR: TorrentClientDriver = {
             logger.info('transmission', `Test de connexion réussi sur ${config.url}`)
             return { ok: true, message: 'Connexion réussie' }
         } catch (err) {
-            const msg = err instanceof Error ? err.message : 'Erreur inconnue'
-            logger.warn('transmission', `Test de connexion échoué sur ${config.url} : ${msg}`)
+            const msg = err instanceof Error ? err.message : 'Erreur inattendue, consultez les journaux'
+            logger.warn('transmission', `Échec du test de connexion sur ${config.url} : ${msg}`)
             return { ok: false, message: msg }
         }
     },
@@ -123,10 +114,10 @@ const TR: TorrentClientDriver = {
         try {
             const data = await trRequest(config, 'session-get')
             const version = data.arguments?.version ?? 'inconnue'
-            logger.debug('transmission', `Healthcheck OK — version ${version}`)
+            logger.debug('transmission', `Client en ligne (version ${version})`)
             return { online: true, version }
         } catch (err) {
-            logger.debug('transmission', `Healthcheck échoué : ${err instanceof Error ? err.message : err}`)
+            logger.debug('transmission', `Client injoignable : ${err instanceof Error ? err.message : err}`)
             return { online: false }
         }
     },
@@ -136,7 +127,7 @@ const TR: TorrentClientDriver = {
             'hashString', 'name', 'status', 'percentDone', 'totalSize',
             'downloadedEver', 'uploadedEver', 'uploadRatio',
             'rateDownload', 'rateUpload', 'eta', 'downloadDir', 'labels',
-            'files',  // bytesCompleted + length par fichier (fileStats n'a pas 'length')
+            'files',  // bytesCompleted et length par fichier (fileStats n'a pas length)
         ]
         const data = await trRequest(config, 'torrent-get', { fields })
         const torrents: any[] = data.arguments?.torrents ?? []
@@ -184,21 +175,21 @@ const TR: TorrentClientDriver = {
         if (options?.file_index != null && hash) {
             const isDuplicate = !!res.arguments?.['torrent-duplicate']
             if (isDuplicate) {
-                logger.info('transmission', `Torrent ${hash.slice(0, 8)}… déjà présent, mise à jour priorité fichier ${options.file_index}`)
+                logger.info('transmission', `Torrent ${hash.slice(0, 8)}… déjà présent, sélection du fichier n° ${options.file_index}`)
             } else {
-                logger.info('transmission', `Torrent ajouté (sélection fichier ${options.file_index} en attente de métadonnées)`)
+                logger.info('transmission', `Torrent ajouté, fichier n° ${options.file_index} sélectionné dès réception des métadonnées`)
             }
             trApplyFilePriority(config, hash, options.file_index).catch(err =>
-                logger.warn('transmission', `Priorité fichier non appliquée : ${err instanceof Error ? err.message : err}`)
+                logger.warn('transmission', `Priorité de fichier non appliquée : ${err instanceof Error ? err.message : err}`)
             )
             return
         }
 
-        logger.info('transmission', `Torrent ajouté (catégorie: ${config.category ?? 'aucune'}${config.savePath ? `, dossier: ${config.savePath}` : ''})`)
+        logger.info('transmission', `Torrent ajouté (catégorie : ${config.category ?? 'aucune'}${config.savePath ? `, dossier : ${config.savePath}` : ''})`)
     },
 
     async remove(config, hash, deleteFiles = false) {
-        // Transmission identifie les torrents par ID numérique — on cherche via la liste
+        // Torrents identifiés par ID numérique : recherche dans la liste
         const data = await trRequest(config, 'torrent-get', { fields: ['hashString', 'id'] })
         const torrents: any[] = data.arguments?.torrents ?? []
         const found = torrents.find(t => t.hashString?.toLowerCase() === hash.toLowerCase())
