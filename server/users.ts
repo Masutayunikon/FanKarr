@@ -5,6 +5,7 @@ import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
 import { DATA_DIR } from './config.js'
 import { logger }   from './logger.js'
+import { normalizeJellyfinId } from './lib/jellyfin.js'
 
 export type UserRole = 'admin' | 'user'
 
@@ -17,6 +18,7 @@ export interface User {
     createdAt   : string
     tourSeenAt? : string | null
     lastLoginAt?: string | null
+    jellyfinId? : string | null
 }
 
 const USERS_PATH  = path.join(DATA_DIR, 'users.json')
@@ -69,15 +71,20 @@ export function hasAdmin():  boolean { return readUsers().some(u => u.role === '
 export function findById(id: string):             User | undefined { return readUsers().find(u => u.id === id) }
 export function findByUsername(username: string): User | undefined { return readUsers().find(u => u.username.toLowerCase() === username.toLowerCase()) }
 export function findByApiToken(token: string):    User | undefined { return readUsers().find(u => u.apiToken === token) }
+export function findByJellyfinId(id: string):     User | undefined {
+    const jellyfinId = normalizeJellyfinId(id)
+    return readUsers().find(u => !!u.jellyfinId && u.jellyfinId === jellyfinId)
+}
 
 export function safeUser(user: User) {
-    const { passwordHash: _, ...safe } = user
-    return safe
+    const { passwordHash, ...safe } = user
+    return { ...safe, hasPassword: !!passwordHash }
 }
 
 // ── Gestion des comptes ───────────────────────────────────────
 
-export function createUser(username: string, password: string, role: UserRole = 'user'): User {
+// Mot de passe vide : compte sans mot de passe FanKarr (import Jellyfin)
+export function createUser(username: string, password: string, role: UserRole = 'user', jellyfinId: string | null = null): User {
     const users = readUsers()
     if (users.some(u => u.username.toLowerCase() === username.toLowerCase())) {
         throw new Error(`Nom d'utilisateur « ${username} » déjà utilisé`)
@@ -85,15 +92,41 @@ export function createUser(username: string, password: string, role: UserRole = 
     const user: User = {
         id          : crypto.randomUUID(),
         username,
-        passwordHash: bcrypt.hashSync(password, SALT_ROUNDS),
+        passwordHash: password ? bcrypt.hashSync(password, SALT_ROUNDS) : '',
         role,
         apiToken    : crypto.randomBytes(32).toString('hex'),
         createdAt   : new Date().toISOString(),
         tourSeenAt  : null,
+        jellyfinId  : jellyfinId ? normalizeJellyfinId(jellyfinId) : null,
     }
     writeUsers([...users, user])
     logger.info('users', `Utilisateur « ${username} » créé (rôle : ${role})`)
     return user
+}
+
+export type JellyfinImportAction = 'existing' | 'linked' | 'created'
+
+// null : nom déjà pris par un compte lié à un autre utilisateur Jellyfin
+export function importJellyfinUser(jUser: { Id: string; Name: string }): { user: User; action: JellyfinImportAction } | null {
+    const users      = readUsers()
+    const jellyfinId = normalizeJellyfinId(jUser.Id)
+
+    const linked = users.find(u => u.jellyfinId === jellyfinId)
+    if (linked) return { user: linked, action: 'existing' }
+
+    const sameName = users.find(u => u.username.toLowerCase() === jUser.Name.toLowerCase())
+    if (sameName?.jellyfinId) {
+        logger.warn('users', `Import Jellyfin de « ${jUser.Name} » impossible : le compte FanKarr de ce nom est lié à un autre utilisateur Jellyfin`)
+        return null
+    }
+    if (sameName) {
+        sameName.jellyfinId = jellyfinId
+        writeUsers(users)
+        logger.info('users', `Compte « ${sameName.username} » lié à l'utilisateur Jellyfin « ${jUser.Name} »`)
+        return { user: sameName, action: 'linked' }
+    }
+
+    return { user: createUser(jUser.Name, '', 'user', jellyfinId), action: 'created' }
 }
 
 export function updateUser(
@@ -132,6 +165,7 @@ export function changePassword(id: string, currentPassword: string, newPassword:
     const users = readUsers()
     const user  = users.find(u => u.id === id)
     if (!user) throw new Error('Utilisateur introuvable')
+    if (!user.passwordHash) throw new Error('Ce compte se connecte avec Jellyfin : il n\'a pas de mot de passe FanKarr')
     if (!bcrypt.compareSync(currentPassword, user.passwordHash)) {
         throw new Error('Mot de passe actuel incorrect')
     }

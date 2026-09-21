@@ -1,8 +1,7 @@
 
 import { Router }                from 'express'
-import { findByApiToken }        from '../users.js'
+import { findByApiToken, findByJellyfinId, importJellyfinUser, safeUser } from '../users.js'
 import { validateJellyfinToken } from '../lib/jellyfin.js'
-import { readUsers, safeUser }   from '../users.js'
 import { upsertRequest, approveRequest, getRequestsForUser } from '../requests.js'
 import { autoDownloadRequest } from './requests.js'
 import { readSettings }        from '../settings.js'
@@ -41,12 +40,14 @@ router.post('/v1/auth/jellyfin', async (req, res) => {
         res.status(401).json({ error: info.error ?? 'Échec de l\'authentification Jellyfin' }); return
     }
 
-    const users    = readUsers()
-    const fanUser  = users.find(u => u.username.toLowerCase() === info.username!.toLowerCase())
+    let fanUser = findByJellyfinId(info.userId!)
+    if (!fanUser && readSettings().jellyfinNewUserLogin) {
+        fanUser = importJellyfinUser({ Id: info.userId!, Name: info.username! })?.user
+    }
     if (!fanUser) {
-        logger.warn('public-api', `Connexion via Jellyfin : aucun compte FanKarr pour « ${info.username} » : synchronisation Jellyfin nécessaire`)
+        logger.warn('public-api', `Connexion via Jellyfin : « ${info.username} » n'est pas encore importé dans FanKarr`)
         res.status(404).json({
-            error: `Aucun compte FanKarr pour « ${info.username} ». Demandez à l'administrateur de lancer la synchronisation Jellyfin.`,
+            error: `Aucun compte FanKarr pour « ${info.username} ». Demandez à l'administrateur de l'importer depuis Paramètres › Jellyfin et API.`,
         }); return
     }
 

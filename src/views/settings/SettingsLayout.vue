@@ -63,7 +63,7 @@ const pages: Record<string, { title: string; description: string }> = {
   '/settings/import-management': { title: 'Gestion des séries',          description: 'Renommage, métadonnées NFO et vérification des fichiers déjà importés.' },
   '/settings/catalogue'        : { title: 'Catalogue Fankai',            description: 'Sources du catalogue et surveillance des nouveaux épisodes.' },
   '/settings/download-client'  : { title: 'Clients torrent',             description: 'Les clients qui reçoivent les torrents envoyés par FanKarr.' },
-  '/settings/jellyfin'         : { title: 'Jellyfin et API',             description: 'Connexion Jellyfin, synchronisation des comptes et API pour les applications tierces.' },
+  '/settings/jellyfin'         : { title: 'Jellyfin et API',             description: 'Connexion Jellyfin, import des comptes et API pour les applications tierces.' },
   '/settings/logs'             : { title: 'Journaux',                    description: 'Événements du serveur, du plus récent au plus ancien.' },
   '/settings/advanced'         : { title: 'Avancé',                      description: 'Mises à jour, diagnostic, mode développeur, assistant et visite guidée.' },
 }

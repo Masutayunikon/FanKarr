@@ -15,8 +15,12 @@ export interface Settings {
     deleteTorrentOnMove : boolean
     requestAutoDownloadUsers: 'all' | string[]  // Utilisateurs dont les demandes sont approuvées et téléchargées automatiquement ; [] = aucun
     jellyfinUrl         : string   // URL du serveur Jellyfin (ex. http://jellyfin:8096)
-    jellyfinAdminToken  : string   // Clé API Jellyfin pour la synchronisation
-    englishDirectory    : boolean  // Dossiers de saison en anglais (« Season 01 » au lieu de « Saison 1 »)
+    jellyfinAdminToken  : string   // Clé API Jellyfin pour l'import des utilisateurs
+    jellyfinLogin       : boolean  // Connexion à l'interface web avec un compte Jellyfin importé
+    jellyfinNewUserLogin: boolean  // Connexion des comptes Jellyfin pas encore importés (compte créé à la première connexion)
+    jellyfinAutoImport  : boolean  // Import horaire de tous les utilisateurs Jellyfin actifs
+    jellyfinServerId    : string   // Identifiant du serveur Jellyfin, comparé à chaque connexion
+    englishDirectory   : boolean  // Dossiers de saison en anglais (« Season 01 » au lieu de « Saison 1 »)
     autoUnimportMissing : boolean
     onboardingStep      : string | null   // étape la plus avancée atteinte dans l'assistant
     onboardingCompletedAt: string | null
@@ -34,7 +38,11 @@ const defaults: Settings = {
     requestAutoDownloadUsers: [],
     jellyfinUrl        : '',
     jellyfinAdminToken : '',
-    englishDirectory   : false,
+    jellyfinLogin      : true,
+    jellyfinNewUserLogin: false,
+    jellyfinAutoImport : true,
+    jellyfinServerId   : '',
+    englishDirectory  : false,
     autoUnimportMissing: false,
     onboardingStep     : null,
     onboardingCompletedAt: null,

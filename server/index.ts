@@ -25,7 +25,7 @@ import { pushNotif } from './lib/notifs.js'
 import { AUTO_IMPORT_INTERVAL_MS, autoImportSchedule, planNextAutoImport } from './lib/schedule.js'
 import { readRequests, completeRequest } from './requests.js'
 import { checkNfoUpdates } from './lib/nfo.js'
-import { runJellyfinSync } from './routes/jellyfin.js'
+import { runJellyfinImport } from './routes/jellyfin.js'
 import cors from 'cors';
 
 import usersRouter         from './routes/users.js'
@@ -266,11 +266,13 @@ server.listen(PORT, async () => {
         }, 6 * 60 * 60_000)
     }, 60_000)
 
-    // Sans effet si Jellyfin n'est pas configuré
+    // Sans effet si Jellyfin n'est pas configuré ou si l'import automatique est coupé
+    const autoImportJellyfin = () => {
+        if (!readSettings().jellyfinAutoImport) return
+        runJellyfinImport().catch(err => logger.error('jellyfin', `Échec de l'import des utilisateurs Jellyfin : ${err instanceof Error ? err.message : err}`))
+    }
     setTimeout(() => {
-        runJellyfinSync().catch(err => logger.error('jellyfin', `Échec de la synchronisation Jellyfin : ${err instanceof Error ? err.message : err}`))
-        setInterval(() => {
-            runJellyfinSync().catch(err => logger.error('jellyfin', `Échec de la synchronisation Jellyfin : ${err instanceof Error ? err.message : err}`))
-        }, 60 * 60_000)
+        autoImportJellyfin()
+        setInterval(autoImportJellyfin, 60 * 60_000)
     }, 2 * 60_000)
 })

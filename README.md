@@ -87,13 +87,13 @@ Inspiré de Radarr et Sonarr, pour les éditions Kai et Yabai
 
 ### Utilisateurs et Jellyfin
 - Plusieurs comptes, avec deux rôles (administrateur et invité) et des liens d'invitation
-- Synchronisation Jellyfin : un compte FanKarr est créé pour chaque utilisateur Jellyfin, toutes les heures ou à la demande
-- Connexion depuis le plugin Jellyfin avec le compte Jellyfin
+- Import des utilisateurs Jellyfin, au choix ou automatiquement toutes les heures
+- Connexion à FanKarr avec le compte Jellyfin, depuis l'interface web ou le plugin Jellyfin
 - Un jeton d'API personnel par utilisateur pour l'API publique
 
 ### Système
 - Journaux filtrables par niveau et par source, avec rotation automatique, que vous pouvez vider depuis l'interface
-- Authentification par mot de passe, session JWT
+- Authentification par mot de passe FanKarr ou Jellyfin, session JWT, tentatives limitées
 - Clients torrent pris en charge : qBittorrent, Transmission, Deluge, rTorrent, uTorrent, Synology Download Station et Real-Debrid. Vous pouvez en configurer plusieurs.
 - Installation avec Docker, Runtipi ou un binaire autonome
 
@@ -264,6 +264,26 @@ Le fichier garde environ les 2 000 dernières lignes. Les messages `debug` ne so
 
 ---
 
+## Comptes Jellyfin
+
+Vos utilisateurs Jellyfin peuvent se connecter à FanKarr avec leurs identifiants Jellyfin. Il faut renseigner l'adresse du serveur et une clé API dans **Paramètres › Jellyfin et API**.
+
+### Import des utilisateurs
+
+Un utilisateur Jellyfin importé reçoit un compte invité, sans mot de passe FanKarr. Si un compte FanKarr porte déjà son nom, ce compte est lié à l'utilisateur Jellyfin au lieu d'être recréé. Pour importer :
+- choisissez les comptes depuis **Paramètres › Jellyfin et API › Importer des utilisateurs** ;
+- ou laissez l'import automatique, qui importe toutes les heures chaque utilisateur Jellyfin actif (activé par défaut).
+
+### Connexion
+
+Sur l'écran de connexion, un utilisateur importé saisit son nom et son mot de passe Jellyfin. FanKarr les fait vérifier par Jellyfin et ne les conserve pas. Deux réglages dans **Paramètres › Jellyfin et API** :
+- **Connexion à FanKarr avec un compte Jellyfin** (activé par défaut) ;
+- **Autoriser les comptes pas encore importés** (désactivé par défaut) : un compte invité est créé à la première connexion.
+
+Un compte FanKarr qui n'a pas été importé ou lié ne peut pas s'ouvrir avec un mot de passe Jellyfin. Après 5 échecs en 15 minutes pour un même nom d'utilisateur depuis la même adresse, FanKarr bloque les tentatives jusqu'à la fin de ces 15 minutes. Un mot de passe erroné saisi dans FanKarr compte aussi comme un échec dans Jellyfin. Si le verrouillage après plusieurs échecs est activé pour un utilisateur dans Jellyfin (désactivé par défaut), son compte y est désactivé une fois la limite atteinte.
+
+---
+
 ## Plugin Jellyfin FanKarr Search
 
 Un plugin Jellyfin intègre la recherche FanKarr à l'interface de votre serveur : vos utilisateurs parcourent le catalogue et demandent des séries sans quitter Jellyfin.
@@ -272,13 +292,7 @@ Un plugin Jellyfin intègre la recherche FanKarr à l'interface de votre serveur
 
 Le plugin nécessite **[Jellyfin JavaScript Injector](https://github.com/n00bcodr/Jellyfin-JavaScript-Injector)**. Les instructions d'installation sont dans le README du plugin.
 
-### Synchronisation des utilisateurs
-
-FanKarr crée un compte invité pour chaque utilisateur Jellyfin actif qui n'en a pas encore (même nom d'utilisateur). La synchronisation se fait :
-- automatiquement toutes les heures, si Jellyfin est configuré ;
-- à la demande, depuis **Paramètres › Jellyfin et API › Synchroniser les utilisateurs**.
-
-Les comptes ainsi créés reçoivent un mot de passe aléatoire. Ces utilisateurs se connectent par le plugin, qui échange leur session Jellyfin contre leur jeton FanKarr.
+Les utilisateurs se connectent au plugin avec leur compte Jellyfin : le plugin échange leur session Jellyfin contre leur jeton FanKarr. Le compte doit être importé (voir [Comptes Jellyfin](#comptes-jellyfin)), sauf si les comptes pas encore importés sont autorisés.
 
 ---
 
@@ -306,7 +320,7 @@ Content-Type: application/json
 { "jellyfinUserId": "...", "jellyfinToken": "..." }
 ```
 
-Renvoie `{ token, username, role }`. Le `token` s'utilise ensuite en `Bearer` pour tous les autres appels. Si aucun compte FanKarr ne porte le nom de l'utilisateur Jellyfin, la réponse est une erreur 404 : lancez la synchronisation Jellyfin.
+Renvoie `{ token, username, role }`. Le `token` s'utilise ensuite en `Bearer` pour tous les autres appels. FanKarr vérifie auprès de Jellyfin (`/Users/Me`) que le jeton appartient bien à `jellyfinUserId`. Si l'utilisateur Jellyfin n'est pas encore importé, la réponse est une erreur 404, sauf si les comptes pas encore importés sont autorisés : le compte est alors créé.
 
 ### Recherche
 

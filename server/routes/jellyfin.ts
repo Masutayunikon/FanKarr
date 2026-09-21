@@ -1,27 +1,39 @@
 import { Router }       from 'express'
-import { readSettings, writeSettings } from '../settings.js'
-import { readUsers, createUser, safeUser } from '../users.js'
-import { testJellyfinConnection, fetchJellyfinUsers } from '../lib/jellyfin.js'
+import { readSettings, writeSettings, type Settings } from '../settings.js'
+import { readUsers, importJellyfinUser } from '../users.js'
+import { testJellyfinConnection, fetchJellyfinUsers, getJellyfinServerId, normalizeJellyfinId, type JellyfinUser } from '../lib/jellyfin.js'
 import { logger } from '../logger.js'
 
 const router = Router()
 
+function settingsView(s: Settings) {
+    return {
+        jellyfinUrl         : s.jellyfinUrl,
+        hasToken            : !!s.jellyfinAdminToken,
+        jellyfinLogin       : s.jellyfinLogin,
+        jellyfinNewUserLogin: s.jellyfinNewUserLogin,
+        jellyfinAutoImport  : s.jellyfinAutoImport,
+    }
+}
+
 router.get('/jellyfin/settings', (_req, res) => {
-    const { jellyfinUrl, jellyfinAdminToken } = readSettings()
-    res.json({
-        jellyfinUrl,
-        // Clé API jamais renvoyée : seulement sa présence
-        hasToken: !!jellyfinAdminToken,
-    })
+    res.json(settingsView(readSettings()))
 })
 
 router.post('/jellyfin/settings', (req, res) => {
-    const { jellyfinUrl, jellyfinAdminToken } = req.body
-    const update: Record<string, string> = {}
+    const { jellyfinUrl, jellyfinAdminToken } = req.body ?? {}
+    const current = readSettings()
+    const update: Partial<Settings> = {}
     if (jellyfinUrl        !== undefined) update.jellyfinUrl        = String(jellyfinUrl).trim()
     if (jellyfinAdminToken !== undefined) update.jellyfinAdminToken = String(jellyfinAdminToken).trim()
-    const updated = writeSettings(update)
-    res.json({ jellyfinUrl: updated.jellyfinUrl, hasToken: !!updated.jellyfinAdminToken })
+    for (const key of ['jellyfinLogin', 'jellyfinNewUserLogin', 'jellyfinAutoImport'] as const) {
+        if (typeof req.body?.[key] === 'boolean') update[key] = req.body[key]
+    }
+    if ((update.jellyfinUrl        !== undefined && update.jellyfinUrl        !== current.jellyfinUrl) ||
+        (update.jellyfinAdminToken !== undefined && update.jellyfinAdminToken !== current.jellyfinAdminToken)) {
+        update.jellyfinServerId = ''
+    }
+    res.json(settingsView(writeSettings(update)))
 })
 
 router.post('/jellyfin/test', async (req, res) => {
@@ -45,40 +57,78 @@ router.post('/jellyfin/test', async (req, res) => {
     res.json(result)
 })
 
-export async function runJellyfinSync(): Promise<{ created: number; skipped: number; users: string[] }> {
-    const { jellyfinUrl, jellyfinAdminToken } = readSettings()
-    if (!jellyfinUrl || !jellyfinAdminToken) return { created: 0, skipped: 0, users: [] }
+// ── Import des utilisateurs ───────────────────────────────────
 
-    const jellyfinUsers = await fetchJellyfinUsers()
-    const fankarrUsers  = readUsers()
-    const results = { created: 0, skipped: 0, users: [] as string[] }
+export type JellyfinImportResult = { created: number; linked: number; skipped: number; users: string[] }
+
+function importJellyfinUsers(jellyfinUsers: JellyfinUser[]): JellyfinImportResult {
+    const results: JellyfinImportResult = { created: 0, linked: 0, skipped: 0, users: [] }
 
     for (const jUser of jellyfinUsers) {
         if (jUser.Policy?.IsDisabled) { results.skipped++; continue }
-
-        const exists = fankarrUsers.some(u =>
-            u.username.toLowerCase() === jUser.Name.toLowerCase()
-        )
-        if (exists) { results.skipped++; continue }
-
-        const randomPass = Math.random().toString(36).slice(2, 10) +
-                           Math.random().toString(36).slice(2, 10)
-        createUser(jUser.Name, randomPass, 'user')
-        results.created++
-        results.users.push(jUser.Name)
-        logger.info('jellyfin', `Compte créé pour « ${jUser.Name} » (synchronisation Jellyfin)`)
+        const imported = importJellyfinUser(jUser)
+        if (!imported || imported.action === 'existing') { results.skipped++; continue }
+        results[imported.action]++
+        results.users.push(imported.user.username)
     }
 
-    logger.info('jellyfin', `Synchronisation Jellyfin : ${results.created} compte(s) créé(s), ${results.skipped} ignoré(s) (existant ou désactivé)`)
+    logger.info('jellyfin', `Import Jellyfin : ${results.created} compte(s) créé(s), ${results.linked} lié(s), ${results.skipped} ignoré(s) (déjà importé, désactivé ou nom déjà pris)`)
     return results
 }
 
+export async function runJellyfinImport(): Promise<JellyfinImportResult> {
+    const { jellyfinUrl, jellyfinAdminToken } = readSettings()
+    if (!jellyfinUrl || !jellyfinAdminToken) return { created: 0, linked: 0, skipped: 0, users: [] }
+
+    await getJellyfinServerId()
+    return importJellyfinUsers(await fetchJellyfinUsers())
+}
+
+router.get('/jellyfin/users', async (_req, res) => {
+    try {
+        const jellyfinUsers = await fetchJellyfinUsers()
+        const users         = readUsers()
+        res.json(jellyfinUsers.map(j => {
+            const id       = normalizeJellyfinId(j.Id)
+            const linked   = users.find(u => u.jellyfinId === id)
+            const sameName = users.find(u => u.username.toLowerCase() === j.Name.toLowerCase())
+            const status   = linked               ? 'imported'
+                           : j.Policy?.IsDisabled ? 'disabled'
+                           : sameName?.jellyfinId ? 'conflict'
+                           : sameName             ? 'match'
+                           :                        'new'
+            return {
+                id,
+                name           : j.Name,
+                status,
+                fankarrUsername: (linked ?? sameName)?.username ?? null,
+            }
+        }))
+    } catch (err) {
+        res.status(502).json({ error: err instanceof Error ? err.message : 'Impossible de récupérer les utilisateurs Jellyfin' })
+    }
+})
+
+router.post('/jellyfin/import', async (req, res) => {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids.map((id: unknown) => normalizeJellyfinId(String(id))) : []
+    if (ids.length === 0) {
+        res.status(400).json({ error: 'Aucun utilisateur sélectionné' }); return
+    }
+    try {
+        await getJellyfinServerId()
+        const selected = (await fetchJellyfinUsers()).filter(j => ids.includes(normalizeJellyfinId(j.Id)))
+        res.json(importJellyfinUsers(selected))
+    } catch (err) {
+        res.status(502).json({ error: err instanceof Error ? err.message : 'Échec de l\'import des utilisateurs Jellyfin' })
+    }
+})
+
+// Import de tous les comptes actifs (assistant d'installation)
 router.post('/jellyfin/sync', async (_req, res) => {
     try {
-        const results = await runJellyfinSync()
-        res.json(results)
+        res.json(await runJellyfinImport())
     } catch (err) {
-        res.status(500).json({ error: err instanceof Error ? err.message : 'Échec de la synchronisation Jellyfin' })
+        res.status(500).json({ error: err instanceof Error ? err.message : 'Échec de l\'import des utilisateurs Jellyfin' })
     }
 })
 

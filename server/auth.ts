@@ -7,12 +7,14 @@ import { JWT_SECRET } from './secret.js'
 import { DATA_DIR }   from './config.js'
 import { logger }     from './logger.js'
 import {
-    findByUsername, findById, findByApiToken,
+    findByUsername, findById, findByApiToken, findByJellyfinId, importJellyfinUser,
     createUser, changePassword, regenerateApiToken, safeUser, hasUsers, markTourSeen, markLogin,
     type User,
 } from './users.js'
-import { readSettings } from './settings.js'
+import { readSettings, type Settings } from './settings.js'
 import { startOnboarding } from './onboarding.js'
+import { isJellyfinConfigured, authenticateJellyfinUser, getJellyfinServerId } from './lib/jellyfin.js'
+import { loginRetryAfter, recordLoginFailure, clearLoginFailures } from './lib/login-throttle.js'
 
 // ── Typage Express étendu ─────────────────────────────────────
 declare global {
@@ -42,24 +44,30 @@ function setCookieAndRespond(res: Response, user: User): void {
 
 // ── Routes ────────────────────────────────────────────────────
 
+function jellyfinLoginEnabled(s: Settings): boolean {
+    return s.jellyfinLogin && isJellyfinConfigured(s)
+}
+
 // GET /api/auth/status
 export function authStatus(req: Request, res: Response): void {
-    const setup = hasUsers()
-    const token = req.cookies?.fankarr_token
+    const settings      = readSettings()
+    const setup         = hasUsers()
+    const jellyfinLogin = jellyfinLoginEnabled(settings)
+    const token         = req.cookies?.fankarr_token
 
-    if (!token) { res.json({ setup, loggedIn: false }); return }
+    if (!token) { res.json({ setup, loggedIn: false, jellyfinLogin }); return }
 
     try {
         const payload = jwt.verify(token, JWT_SECRET) as any
         const user    = findById(payload.id)
-        if (!user) { res.json({ setup, loggedIn: false }); return }
+        if (!user) { res.json({ setup, loggedIn: false, jellyfinLogin }); return }
         res.json({
-            setup, loggedIn: true, role: user.role, username: user.username, userId: user.id,
-            onboardingDone: !!readSettings().onboardingCompletedAt,
+            setup, loggedIn: true, jellyfinLogin, role: user.role, username: user.username, userId: user.id,
+            onboardingDone: !!settings.onboardingCompletedAt,
             tourSeen      : !!user.tourSeenAt,
         })
     } catch {
-        res.json({ setup, loggedIn: false })
+        res.json({ setup, loggedIn: false, jellyfinLogin })
     }
 }
 
@@ -88,25 +96,84 @@ export function authSetup(req: Request, res: Response): void {
     }
 }
 
+// Compte FanKarr lié à l'utilisateur Jellyfin authentifié, ou undefined si refusé
+async function loginWithJellyfin(username: string, password: string, ip: string): Promise<{ user?: User; unreachable?: boolean }> {
+    const result = await authenticateJellyfinUser(username, password, ip)
+    if (!result.ok) {
+        if (result.reason === 'unreachable') {
+            logger.warn('auth', `Connexion Jellyfin de « ${username} » impossible : ${result.error}`)
+            return { unreachable: true }
+        }
+        return {}
+    }
+
+    const serverId = await getJellyfinServerId()
+    if (!serverId) {
+        logger.error('auth', `Connexion Jellyfin de « ${username} » refusée : impossible de lire l'identifiant du serveur Jellyfin avec la clé API`)
+        return {}
+    }
+    if (result.serverId !== serverId) {
+        logger.error('auth', `Connexion Jellyfin de « ${username} » refusée : la réponse vient d'un autre serveur Jellyfin que celui configuré`)
+        return {}
+    }
+
+    const linked = findByJellyfinId(result.id)
+    if (linked) return { user: linked }
+
+    if (!readSettings().jellyfinNewUserLogin) {
+        logger.warn('auth', `Connexion Jellyfin de « ${result.name} » refusée : compte pas encore importé`)
+        return {}
+    }
+    const imported = importJellyfinUser({ Id: result.id, Name: result.name })
+    if (imported?.action === 'created') logger.info('auth', `Compte créé pour « ${result.name} » à sa première connexion Jellyfin`)
+    return { user: imported?.user }
+}
+
 // POST /api/auth/login
-export function authLogin(req: Request, res: Response): void {
+export async function authLogin(req: Request, res: Response): Promise<void> {
     if (!hasUsers()) {
         res.status(400).json({ error: 'Aucun compte configuré' }); return
     }
 
-    const { username, password } = req.body
-    if (!username || !password) {
+    const { username, password } = req.body ?? {}
+    if (typeof username !== 'string' || typeof password !== 'string' || !username || !password) {
         res.status(400).json({ error: 'Nom d\'utilisateur et mot de passe requis' }); return
     }
 
-    const user = findByUsername(username)
-    if (!user || !bcrypt.compareSync(password, user.passwordHash)) {
-        logger.warn('auth', `Échec de la connexion de « ${username} »`)
-        res.status(401).json({ error: 'Identifiants incorrects' }); return
+    const ip   = req.ip ?? ''
+    const wait = loginRetryAfter(ip, username)
+    if (wait > 0) {
+        logger.warn('auth', `Connexion de « ${username} » bloquée : trop de tentatives depuis ${ip}`)
+        res.set('Retry-After', String(wait))
+        res.status(429).json({ error: `Trop de tentatives. Réessayez dans ${Math.ceil(wait / 60)} min.` }); return
     }
 
-    logger.info('auth', `Connexion de « ${username} » (rôle : ${user.role}, session : ${NO_EXPIRY ? 'sans expiration' : TOKEN_EXPIRY})`)
-    setCookieAndRespond(res, user)
+    const session = NO_EXPIRY ? 'sans expiration' : TOKEN_EXPIRY
+    const user    = findByUsername(username)
+    if (user && bcrypt.compareSync(password, user.passwordHash)) {
+        clearLoginFailures(ip, username)
+        logger.info('auth', `Connexion de « ${username} » (rôle : ${user.role}, session : ${session})`)
+        setCookieAndRespond(res, user); return
+    }
+
+    // Jellyfin n'est interrogé que pour un compte importé, ou un nouveau compte si le réglage l'autorise
+    const settings = readSettings()
+    const tryJellyfin = jellyfinLoginEnabled(settings) && (user ? !!user.jellyfinId : settings.jellyfinNewUserLogin)
+    if (tryJellyfin) {
+        const jf = await loginWithJellyfin(username, password, ip)
+        if (jf.user) {
+            clearLoginFailures(ip, username)
+            logger.info('auth', `Connexion de « ${jf.user.username} » via Jellyfin (rôle : ${jf.user.role}, session : ${session})`)
+            setCookieAndRespond(res, jf.user); return
+        }
+        if (jf.unreachable) {
+            res.status(503).json({ error: 'Connexion Jellyfin impossible : Jellyfin ne répond pas.' }); return
+        }
+    }
+
+    recordLoginFailure(ip, username)
+    logger.warn('auth', `Échec de la connexion de « ${username} »`)
+    res.status(401).json({ error: 'Identifiants incorrects' })
 }
 
 // POST /api/auth/logout

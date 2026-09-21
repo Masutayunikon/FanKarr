@@ -2,31 +2,57 @@
   <div class="flex flex-col gap-4">
 
     <Teleport defer to="#settings-actions">
-      <button @click="syncUsers" :disabled="syncing || !hasToken" class="btn-secondary pointer-fine:h-[38px]" :title="hasToken ? undefined : 'Renseignez d\'abord la clé API Jellyfin.'">
-        <RefreshCw :size="15" :class="{ 'animate-spin': syncing }" />
-        {{ syncing ? 'Synchronisation…' : 'Synchroniser les utilisateurs' }}
+      <button @click="importOpen = true" :disabled="!configured" class="btn-secondary pointer-fine:h-[38px]" :title="configured ? undefined : NOT_CONFIGURED">
+        <UserPlus :size="15" /> Importer des utilisateurs
       </button>
     </Teleport>
 
-    <SettingsSection title="Jellyfin" description="La connexion au serveur Jellyfin sert à synchroniser les comptes et à authentifier les utilisateurs du plugin FanKarr Search.">
-      <JellyfinConnectionForm @change="hasToken = $event.hasToken" />
+    <SettingsSection title="Jellyfin" description="La connexion au serveur Jellyfin sert à importer les comptes et à connecter leurs utilisateurs à FanKarr, depuis l'interface web ou le plugin FanKarr Search.">
+      <JellyfinConnectionForm @change="configured = !!$event.jellyfinUrl && $event.hasToken" />
     </SettingsSection>
 
     <SettingsSection
-        title="Synchronisation des utilisateurs"
-        description="Crée un compte FanKarr pour chaque utilisateur Jellyfin actif (les comptes existants ne sont pas modifiés). Synchronisation automatique toutes les heures."
+        title="Utilisateurs Jellyfin"
+        description="Un utilisateur importé reçoit un compte invité. Si un compte FanKarr porte déjà son nom, ce compte est lié au lieu d'être recréé."
     >
+      <template #actions>
+        <span v-if="savedSection === 'users'" class="text-meta text-ok flex items-center gap-1.5"><Check :size="14" /> Enregistré</span>
+      </template>
+
       <div class="flex items-center gap-3 flex-wrap">
-        <button @click="syncUsers" :disabled="syncing || !hasToken" class="btn-secondary pointer-fine:h-[38px]">
-          {{ syncing ? 'Synchronisation…' : 'Synchroniser les utilisateurs' }}
+        <button @click="importOpen = true" :disabled="!configured" class="btn-secondary pointer-fine:h-[38px]">
+          Importer des utilisateurs
         </button>
-        <span v-if="!hasToken" class="text-meta text-muted">Renseignez d'abord la clé API Jellyfin.</span>
-        <span v-else-if="syncError" class="text-meta text-err">{{ syncError }}</span>
-        <span v-else-if="syncResult" class="text-meta text-secondary">
-          <span class="text-ok">{{ plural(syncResult.created, 'compte créé', 'comptes créés') }}</span>
-          · {{ plural(syncResult.skipped, 'déjà existant ou désactivé', 'déjà existants ou désactivés') }}<template v-if="syncResult.users.length > 0"> · nouveaux : {{ syncResult.users.join(', ') }}</template>
-        </span>
+        <span v-if="!configured" class="text-meta text-muted">{{ NOT_CONFIGURED }}</span>
       </div>
+      <SettingsToggle
+          :model-value="options.jellyfinAutoImport"
+          @update:model-value="save('jellyfinAutoImport', $event, 'users')"
+          label="Importer automatiquement tous les utilisateurs"
+          description="Toutes les heures, chaque utilisateur Jellyfin actif sans compte FanKarr est importé."
+      />
+    </SettingsSection>
+
+    <SettingsSection title="Connexion avec Jellyfin" description="Jellyfin vérifie le mot de passe : FanKarr ne le conserve pas.">
+      <template #actions>
+        <span v-if="savedSection === 'login'" class="text-meta text-ok flex items-center gap-1.5"><Check :size="14" /> Enregistré</span>
+      </template>
+
+      <SettingsToggle
+          :model-value="options.jellyfinLogin"
+          @update:model-value="save('jellyfinLogin', $event, 'login')"
+          label="Connexion à FanKarr avec un compte Jellyfin"
+          description="Les comptes importés se connectent à l'interface web avec leurs identifiants Jellyfin."
+      />
+      <SettingsToggle
+          :model-value="options.jellyfinNewUserLogin"
+          @update:model-value="save('jellyfinNewUserLogin', $event, 'login')"
+          label="Autoriser les comptes pas encore importés"
+          description="Un compte invité est créé à la première connexion, depuis l'interface web ou le plugin FanKarr Search."
+      />
+      <p class="text-xs text-muted">
+        Un mot de passe erroné saisi dans FanKarr compte aussi comme un échec dans Jellyfin. Si le verrouillage après plusieurs échecs est activé pour un utilisateur dans Jellyfin, son compte y est désactivé une fois la limite atteinte.
+      </p>
     </SettingsSection>
 
     <section class="bg-card rounded-card">
@@ -46,20 +72,30 @@
       </div>
     </section>
 
+    <JellyfinImportModal v-if="importOpen" @close="importOpen = false" />
+
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { RefreshCw } from 'lucide-vue-next'
+import { ref, onMounted } from 'vue'
+import { Check, UserPlus } from 'lucide-vue-next'
 import JellyfinConnectionForm from '@/components/settings/JellyfinConnectionForm.vue'
+import JellyfinImportModal from '@/components/settings/JellyfinImportModal.vue'
 import SettingsSection from '@/components/settings/SettingsSection.vue'
-import { plural } from '@/utils/format'
+import SettingsToggle from '@/components/settings/SettingsToggle.vue'
+import { useToast } from '@/composables/useToast'
 
-const hasToken           = ref(false)
-const syncing            = ref(false)
-const syncResult         = ref<{ created: number; skipped: number; users: string[] } | null>(null)
-const syncError          = ref<string | null>(null)
+type Option = 'jellyfinLogin' | 'jellyfinNewUserLogin' | 'jellyfinAutoImport'
+
+const NOT_CONFIGURED = 'Renseignez d\'abord l\'adresse et la clé API Jellyfin.'
+
+const toast        = useToast()
+const configured   = ref(false)
+const importOpen   = ref(false)
+const options      = ref<Record<Option, boolean>>({ jellyfinLogin: true, jellyfinNewUserLogin: false, jellyfinAutoImport: true })
+const savedSection = ref<'users' | 'login' | null>(null)
+let   savedTimer: ReturnType<typeof setTimeout> | null = null
 
 const apiBase = `${window.location.origin}/api/v1`
 
@@ -72,14 +108,27 @@ const apiEndpoints = [
   { method: 'GET',  path: '/auth/me',          desc: 'Vérifier le jeton utilisé' },
 ]
 
-async function syncUsers() {
-  syncing.value    = true
-  syncError.value  = null
-  syncResult.value = null
-  const res = await fetch('/api/jellyfin/sync', { method: 'POST', credentials: 'include' })
-  const data = await res.json()
-  if (res.ok) syncResult.value = data
-  else syncError.value = data.error ?? 'Impossible de synchroniser les utilisateurs Jellyfin.'
-  syncing.value = false
+onMounted(async () => {
+  const res = await fetch('/api/jellyfin/settings', { credentials: 'include' }).catch(() => null)
+  if (!res?.ok) return
+  const d = await res.json()
+  options.value = { jellyfinLogin: d.jellyfinLogin, jellyfinNewUserLogin: d.jellyfinNewUserLogin, jellyfinAutoImport: d.jellyfinAutoImport }
+})
+
+async function save(key: Option, value: boolean, section: 'users' | 'login') {
+  const previous = options.value[key]
+  options.value[key] = value
+  const res = await fetch('/api/jellyfin/settings', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+    body: JSON.stringify({ [key]: value }),
+  }).catch(() => null)
+  if (!res?.ok) {
+    options.value[key] = previous
+    toast.add('Impossible d\'enregistrer le réglage.', 'error')
+    return
+  }
+  savedSection.value = section
+  if (savedTimer) clearTimeout(savedTimer)
+  savedTimer = setTimeout(() => { savedSection.value = null }, 2000)
 }
 </script>

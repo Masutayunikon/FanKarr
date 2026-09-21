@@ -35,6 +35,9 @@
           <button @click="submit" :disabled="submitting" class="btn-primary w-full h-11 mt-1">
             {{ submitting ? (isSetup ? 'Création…' : 'Connexion…') : isSetup ? 'Créer le compte' : 'Se connecter' }}
           </button>
+          <p v-if="!isSetup && auth.jellyfinLogin" class="text-meta text-muted text-center">
+            Vous pouvez aussi vous connecter avec votre compte Jellyfin.
+          </p>
         </div>
       </div>
 
