@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.25.0](https://github.com/Masutayunikon/FanKarr/compare/v3.24.2...v3.25.0) (2026-09-21)
+
+
+### Features
+
+* **auth:** connexion avec un compte Jellyfin ([bd8c233](https://github.com/Masutayunikon/FanKarr/commit/bd8c233e45147a8ed3187907f7531379e5d15d09))
+
+
+### Bug Fixes
+
+* **jellyfin:** vérifier que le jeton Jellyfin appartient à l'utilisateur annoncé ([bd8c233](https://github.com/Masutayunikon/FanKarr/commit/bd8c233e45147a8ed3187907f7531379e5d15d09))
+
 ## [3.24.2](https://github.com/Masutayunikon/FanKarr/compare/v3.24.1...v3.24.2) (2026-09-21)
 
 
