@@ -64,19 +64,28 @@ export interface JellyfinTokenInfo {
     error?  : string
 }
 
+export function normalizeJellyfinId(id: string): string {
+    return String(id).replace(/-/g, '').toLowerCase()
+}
+
 export async function validateJellyfinToken(jellyfinUserId: string, jellyfinToken: string): Promise<JellyfinTokenInfo> {
     const { jellyfinUrl } = readSettings()
     if (!jellyfinUrl) return { valid: false, error: 'Jellyfin non configuré sur ce serveur FanKarr' }
 
     try {
         const base = jellyfinUrl.replace(/\/$/, '')
-        const res  = await fetch(`${base}/Users/${jellyfinUserId}`, {
+        // /Users/{id}
+        const res  = await fetch(`${base}/Users/Me`, {
             headers: userHeaders(jellyfinToken),
         })
         if (res.status === 401 || res.status === 403) return { valid: false, error: 'Jeton Jellyfin invalide ou expiré' }
         if (!res.ok) return { valid: false, error: `Jellyfin a répondu HTTP ${res.status}` }
 
         const user: JellyfinUser = await res.json()
+        if (normalizeJellyfinId(user.Id) !== normalizeJellyfinId(jellyfinUserId)) {
+            logger.warn('jellyfin', `Jeton de « ${user.Name} » présenté pour un autre utilisateur Jellyfin (${String(jellyfinUserId).slice(0, 8)}…)`)
+            return { valid: false, error: 'Ce jeton Jellyfin appartient à un autre utilisateur' }
+        }
         if (user.Policy?.IsDisabled) return { valid: false, error: 'Compte Jellyfin désactivé' }
 
         logger.debug('jellyfin', `Jeton valide pour « ${user.Name} » (${user.Id.slice(0, 8)}…)`)
