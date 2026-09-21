@@ -20,7 +20,13 @@
       </div>
     </SettingsSection>
 
-    <SettingsSection title="Mot de passe" description="Au moins 6 caractères.">
+    <SettingsSection
+        v-if="me?.hasPassword === false"
+        title="Mot de passe"
+        description="Vous vous connectez avec votre compte Jellyfin. Le mot de passe se change dans Jellyfin."
+    />
+
+    <SettingsSection v-else title="Mot de passe" description="Au moins 6 caractères.">
       <div class="grid sm:grid-cols-3 gap-4">
         <div class="flex flex-col gap-[7px]">
           <label for="pwd-current" class="field-label">Mot de passe actuel</label>
@@ -91,7 +97,7 @@ import SettingsSection           from '@/components/settings/SettingsSection.vue
 
 const auth = useAuthStore()
 
-const me = ref<{ createdAt?: string; lastLoginAt?: string | null } | null>(null)
+const me = ref<{ createdAt?: string; lastLoginAt?: string | null; hasPassword?: boolean } | null>(null)
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -153,7 +159,7 @@ async function loadMe() {
   if (res.ok) {
     const d = await res.json()
     myToken.value = d.apiToken ?? ''
-    me.value = { createdAt: d.createdAt, lastLoginAt: d.lastLoginAt }
+    me.value = { createdAt: d.createdAt, lastLoginAt: d.lastLoginAt, hasPassword: d.hasPassword }
   }
 }
 

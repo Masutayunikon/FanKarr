@@ -11,6 +11,7 @@ export const useAuthStore = defineStore('auth', () => {
 
     const onboardingDone = ref(true)
     const tourSeen       = ref(true)
+    const jellyfinLogin  = ref(false)
 
     const isAdmin = computed(() => role.value === 'admin')
 
@@ -25,6 +26,7 @@ export const useAuthStore = defineStore('auth', () => {
             userId.value   = data.userId   ?? null
             onboardingDone.value = data.onboardingDone ?? true
             tourSeen.value       = data.tourSeen       ?? true
+            jellyfinLogin.value  = data.jellyfinLogin  ?? false
         } catch {
             loggedIn.value = false
         } finally {
@@ -94,7 +96,7 @@ export const useAuthStore = defineStore('auth', () => {
 
     return {
         loggedIn, setup, loading, role, username, userId, isAdmin,
-        onboardingDone, tourSeen,
+        onboardingDone, tourSeen, jellyfinLogin,
         checkStatus, login, setupAccount, logout, markTourSeen, completeOnboarding,
     }
 })

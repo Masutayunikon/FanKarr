@@ -12,7 +12,7 @@
             <span v-if="jellyfin?.test?.ok" class="pill pill-ok h-5 px-2 text-[10.5px]">Connecté</span>
           </p>
           <p class="text-meta text-muted mt-0.5 leading-relaxed">
-            Vos utilisateurs Jellyfin se connectent à FanKarr et font leurs demandes depuis le plugin FanKarr Search.
+            Vos utilisateurs Jellyfin se connectent à FanKarr avec leur compte Jellyfin, depuis l'interface web ou le plugin FanKarr Search.
           </p>
         </div>
         <button @click="jellyfinOpen = !jellyfinOpen" :aria-expanded="jellyfinOpen" class="btn-secondary btn-sm shrink-0">
@@ -26,15 +26,15 @@
 
         <div v-if="jellyfin?.test?.ok" class="flex flex-col gap-2">
           <div class="flex items-center gap-3 flex-wrap">
-            <button @click="syncUsers" :disabled="syncing" class="btn-secondary btn-sm">
-              {{ syncing ? 'Synchronisation…' : 'Synchroniser les utilisateurs' }}
+            <button @click="importUsers" :disabled="importing" class="btn-secondary btn-sm">
+              {{ importing ? 'Import…' : 'Importer les utilisateurs' }}
             </button>
-            <span v-if="syncResult" class="text-meta text-ok">
-              {{ plural(syncResult.created, 'créé', 'créés') }} · {{ plural(syncResult.skipped, 'déjà existant', 'déjà existants') }}
+            <span v-if="importResult" class="text-meta text-ok">
+              {{ plural(importResult.created, 'créé', 'créés') }}<template v-if="importResult.linked > 0"> · {{ plural(importResult.linked, 'lié', 'liés') }}</template> · {{ plural(importResult.skipped, 'ignoré', 'ignorés') }}
             </span>
-            <span v-if="syncError" class="text-meta text-err">{{ syncError }}</span>
+            <span v-if="importError" class="text-meta text-err">{{ importError }}</span>
           </div>
-          <p class="text-meta text-muted">Crée un compte FanKarr pour chaque utilisateur Jellyfin. La synchronisation se relance ensuite toutes les heures.</p>
+          <p class="text-meta text-muted">Crée un compte FanKarr pour chaque utilisateur Jellyfin actif. L'import se relance ensuite toutes les heures : vous pourrez choisir les comptes à la place dans Paramètres › Jellyfin et API.</p>
         </div>
       </template>
     </section>
@@ -82,9 +82,9 @@ const context = inject(setupContextKey)!
 
 const jellyfinOpen = ref(false)
 const jellyfin     = ref<{ jellyfinUrl: string; hasToken: boolean; test: { ok: boolean } | null } | null>(null)
-const syncing      = ref(false)
-const syncResult   = ref<{ created: number; skipped: number } | null>(null)
-const syncError    = ref<string | null>(null)
+const importing    = ref(false)
+const importResult = ref<{ created: number; linked: number; skipped: number } | null>(null)
+const importError  = ref<string | null>(null)
 const plexOpen     = ref(false)
 
 function openPlex() {
@@ -92,19 +92,19 @@ function openPlex() {
   context.plexOpened = true
 }
 
-async function syncUsers() {
-  syncing.value    = true
-  syncError.value  = null
-  syncResult.value = null
+async function importUsers() {
+  importing.value    = true
+  importError.value  = null
+  importResult.value = null
   try {
     const res  = await fetch('/api/jellyfin/sync', { method: 'POST', credentials: 'include' })
     const data = await res.json()
-    if (res.ok) syncResult.value = data
-    else        syncError.value  = data.error ?? 'Impossible de synchroniser les utilisateurs Jellyfin'
+    if (res.ok) importResult.value = data
+    else        importError.value  = data.error ?? 'Impossible d\'importer les utilisateurs Jellyfin'
   } catch {
-    syncError.value = 'Impossible de contacter le serveur'
+    importError.value = 'Impossible de contacter le serveur'
   } finally {
-    syncing.value = false
+    importing.value = false
   }
 }
 </script>

@@ -164,7 +164,7 @@
             <div class="flex flex-col gap-[7px]">
               <label for="user-pwd" class="field-label">{{ userModal.mode === 'create' ? 'Mot de passe' : 'Nouveau mot de passe' }}</label>
               <input id="user-pwd" v-model="userModal.password" type="password" class="field" autocomplete="new-password"
-                :placeholder="userModal.mode === 'edit' ? 'Laissez vide pour le conserver' : '••••••••'" />
+                :placeholder="userModal.mode === 'create' ? '••••••••' : userModal.hasPassword ? 'Laissez vide pour le conserver' : 'Aucun mot de passe FanKarr (connexion Jellyfin)'" />
             </div>
             <div class="flex flex-col gap-[7px]">
               <span class="field-label">Rôle</span>
@@ -241,6 +241,8 @@ interface User {
   apiToken    : string
   createdAt   : string
   lastLoginAt?: string | null
+  jellyfinId? : string | null
+  hasPassword : boolean
 }
 
 interface Invite {
@@ -275,6 +277,7 @@ const userModal = ref<{
   username: string
   password: string
   role    : 'admin' | 'user'
+  hasPassword: boolean
   error   : string | null
   loading : boolean
 } | null>(null)
@@ -358,11 +361,11 @@ onUnmounted(() => document.removeEventListener('click', closeUserMenu))
 
 // ── Utilisateurs ──
 function openCreateUser() {
-  userModal.value = { mode: 'create', username: '', password: '', role: 'user', error: null, loading: false }
+  userModal.value = { mode: 'create', username: '', password: '', role: 'user', hasPassword: true, error: null, loading: false }
 }
 
 function openEditUser(u: User) {
-  userModal.value = { mode: 'edit', id: u.id, username: u.username, password: '', role: u.role, error: null, loading: false }
+  userModal.value = { mode: 'edit', id: u.id, username: u.username, password: '', role: u.role, hasPassword: u.hasPassword, error: null, loading: false }
 }
 
 async function submitUserModal() {
@@ -399,6 +402,7 @@ function userSubtitle(u: User) {
   if (u.id === currentUserId.value) parts.push('vous')
   if (pending > 0) parts.push(`${plural(pending, 'demande')} en attente`)
   if (parts.length === 0) parts.push(`créé le ${formatDate(u.createdAt)}`)
+  if (u.jellyfinId) parts.push('Jellyfin')
   return parts.join(' · ')
 }
 
