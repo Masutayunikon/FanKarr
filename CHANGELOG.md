@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.24.2](https://github.com/Masutayunikon/FanKarr/compare/v3.24.1...v3.24.2) (2026-09-21)
+
+
+### Bug Fixes
+
+* **surveillance:** détection des nouveaux épisodes par la date ([#152](https://github.com/Masutayunikon/FanKarr/issues/152)) ([ddc6d66](https://github.com/Masutayunikon/FanKarr/commit/ddc6d665b6a0564f3a37a6fd211519381a813f5a))
+
 ## [3.24.1](https://github.com/Masutayunikon/FanKarr/compare/v3.24.0...v3.24.1) (2026-09-16)
 
 
