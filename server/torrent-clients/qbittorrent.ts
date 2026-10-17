@@ -125,6 +125,104 @@ async function qbApplyFilePriority(
     throw new Error(`Délai dépassé : métadonnées du torrent ${hash.slice(0, 8)}… toujours indisponibles`)
 }
 
+// ─── Liste des torrents ───────────────────────────────────────────────────────
+// qBittorrent traite les requêtes WebUI une par une : un appel /torrents/files par
+// torrent à chaque list() bloquait les autres clients de l'API (Sonarr, Radarr…).
+// Les fichiers sont mis en cache par torrent et relus seulement s'il a changé.
+
+const FILES_FETCH_CONCURRENCY = 4
+
+interface CachedFiles { sig: string; files: any[] }
+const filesCache    = new Map<string, CachedFiles>()
+const inflightLists = new Map<string, Promise<TorrentInfo[]>>()
+
+// Tout ce qui change la liste, la progression ou la priorité des fichiers
+function filesSignature(t: any): string {
+    return `${t.state}|${t.progress}|${t.size}|${t.amount_left ?? ''}`
+}
+
+async function mapLimit<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
+    let next = 0
+    const worker = async () => {
+        while (next < items.length) await fn(items[next++])
+    }
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+}
+
+/** Pour les tests. */
+export function _resetQbListCache(): void {
+    filesCache.clear()
+    inflightLists.clear()
+}
+
+async function qbList(config: ClientConfig, category?: string): Promise<TorrentInfo[]> {
+    const authH  = await qbAuth(config)
+    const params = new URLSearchParams()
+    if (category) params.set('category', category)
+    const res = await clientFetch(config, `${config.url}/api/v2/torrents/info?${params}`, {
+        headers: authH,
+    })
+    if (!res.ok) throw new Error(`Liste des torrents inaccessible (HTTP ${res.status})`)
+    const data: any[] = await res.json()
+
+    const cachePrefix = `${config.url}|`
+    const fileMap     = new Map<string, any[]>()
+    const stale: any[] = []
+    for (const t of data) {
+        const cached = filesCache.get(cachePrefix + t.hash)
+        if (cached && cached.sig === filesSignature(t)) fileMap.set(t.hash, cached.files)
+        else stale.push(t)
+    }
+
+    await mapLimit(stale, FILES_FETCH_CONCURRENCY, async (t: any) => {
+        try {
+            const r = await clientFetch(config, `${config.url}/api/v2/torrents/files?hash=${t.hash}`, {
+                headers: authH,
+            })
+            if (!r.ok) return
+            const files: any[] = await r.json()
+            fileMap.set(t.hash, files)
+            // Liste vide = métadonnées pas encore reçues : ne pas mettre en cache
+            if (Array.isArray(files) && files.length > 0) {
+                filesCache.set(cachePrefix + t.hash, { sig: filesSignature(t), files })
+            }
+        } catch {}
+    })
+
+    // Oublier les torrents retirés du client
+    const seen = new Set(data.map(t => cachePrefix + t.hash))
+    for (const k of filesCache.keys()) {
+        if (k.startsWith(cachePrefix) && !seen.has(k)) filesCache.delete(k)
+    }
+
+    return data.map(t => {
+        const fileInfo = fileMap.get(t.hash) ?? []
+        return {
+            hash      : t.hash,
+            name      : t.name,
+            state     : mapState(t.state),
+            progress  : Math.round(t.progress * 100),
+            size      : t.size,
+            downloaded: t.downloaded,
+            uploaded  : t.uploaded ?? 0,
+            ratio     : Math.round((t.ratio ?? 0) * 100) / 100,
+            speed     : t.dlspeed,
+            upspeed   : t.upspeed ?? 0,
+            eta       : t.eta ?? -1,
+            save_path : t.save_path,
+            category  : t.category ?? '',
+            files     : fileInfo.length > 0
+                ? fileInfo.map((f: any, i: number) => ({
+                    index   : i,
+                    name    : String(f.name ?? ''),
+                    progress: f.progress ?? 0,   // 0–1
+                    priority: f.priority ?? 1,
+                }))
+                : undefined,
+        } satisfies TorrentInfo
+    })
+}
+
 const QB: TorrentClientDriver = {
     definition: {
         id    : 'qbittorrent',
@@ -173,52 +271,14 @@ const QB: TorrentClientDriver = {
         }
     },
 
-    async list(config, category) {
-        const authH  = await qbAuth(config)
-        const params = new URLSearchParams()
-        if (category) params.set('category', category)
-        const res = await clientFetch(config, `${config.url}/api/v2/torrents/info?${params}`, {
-            headers: authH,
-        })
-        if (!res.ok) throw new Error(`Liste des torrents inaccessible (HTTP ${res.status})`)
-        const data: any[] = await res.json()
-
-        const fileMap = new Map<string, any[]>()
-        await Promise.all(data.map(async (t: any) => {
-            try {
-                const r = await clientFetch(config, `${config.url}/api/v2/torrents/files?hash=${t.hash}`, {
-                    headers: authH,
-                })
-                if (r.ok) fileMap.set(t.hash, await r.json())
-            } catch {}
-        }))
-
-        return data.map(t => {
-            const fileInfo = fileMap.get(t.hash) ?? []
-            return {
-                hash      : t.hash,
-                name      : t.name,
-                state     : mapState(t.state),
-                progress  : Math.round(t.progress * 100),
-                size      : t.size,
-                downloaded: t.downloaded,
-                uploaded  : t.uploaded ?? 0,
-                ratio     : Math.round((t.ratio ?? 0) * 100) / 100,
-                speed     : t.dlspeed,
-                upspeed   : t.upspeed ?? 0,
-                eta       : t.eta ?? -1,
-                save_path : t.save_path,
-                category  : t.category ?? '',
-                files     : fileInfo.length > 0
-                    ? fileInfo.map((f: any, i: number) => ({
-                        index   : i,
-                        name    : String(f.name ?? ''),
-                        progress: f.progress ?? 0,   // 0–1
-                        priority: f.priority ?? 1,
-                    }))
-                    : undefined,
-            } satisfies TorrentInfo
-        })
+    list(config, category) {
+        // Appels simultanés (pages, import auto, RSS) : une seule requête en vol
+        const key = `${config.url}|${category ?? ''}`
+        const pending = inflightLists.get(key)
+        if (pending) return pending
+        const p = qbList(config, category).finally(() => inflightLists.delete(key))
+        inflightLists.set(key, p)
+        return p
     },
 
     async getFiles(config, hash) {
