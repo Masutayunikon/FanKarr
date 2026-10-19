@@ -115,6 +115,7 @@ async function qbApplyFilePriority(
                 }
             }
 
+            filesCache.delete(`${config.url}|${hash}`)
             logger.info('qbittorrent', `Fichier n° ${fileIndex} sélectionné pour ${hash.slice(0, 8)}…`)
             return
         } catch (err) {
@@ -136,7 +137,7 @@ interface CachedFiles { sig: string; files: any[] }
 const filesCache    = new Map<string, CachedFiles>()
 const inflightLists = new Map<string, Promise<TorrentInfo[]>>()
 
-// Tout ce qui change la liste, la progression ou la priorité des fichiers
+// Inchangée si on modifie une priorité sur un torrent complet (cf. qbApplyFilePriority)
 function filesSignature(t: any): string {
     return `${t.state}|${t.progress}|${t.size}|${t.amount_left ?? ''}`
 }
@@ -147,12 +148,6 @@ async function mapLimit<T>(items: T[], limit: number, fn: (item: T) => Promise<v
         while (next < items.length) await fn(items[next++])
     }
     await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
-}
-
-/** Pour les tests. */
-export function _resetQbListCache(): void {
-    filesCache.clear()
-    inflightLists.clear()
 }
 
 async function qbList(config: ClientConfig, category?: string): Promise<TorrentInfo[]> {
