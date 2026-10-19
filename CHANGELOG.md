@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.25.1](https://github.com/Masutayunikon/FanKarr/compare/v3.25.0...v3.25.1) (2026-10-19)
+
+
+### Bug Fixes
+
+* **jellyfin:** test de connexion toujours en échec depuis la 3.24.1 ([#157](https://github.com/Masutayunikon/FanKarr/issues/157)) ([33360fe](https://github.com/Masutayunikon/FanKarr/commit/33360fea3ee283dd20317f19161bf4c5bda0c031))
+
+
+### Performance Improvements
+
+* **qbittorrent:** cache des listes de fichiers et requêtes /files limitées ([#156](https://github.com/Masutayunikon/FanKarr/issues/156)) ([6702b97](https://github.com/Masutayunikon/FanKarr/commit/6702b976e456abc2a3398f6f1510806f8cedfd16))
+
 ## [3.25.0](https://github.com/Masutayunikon/FanKarr/compare/v3.24.2...v3.25.0) (2026-09-21)
 
 
