@@ -96,12 +96,8 @@ async function testConnection() {
   testResult.value = null
   try {
     const res = await fetch('/api/jellyfin/test', {
-      method: 'POST',
-      credentials: 'include',
-      body: JSON.stringify({
-        jellyfinUrl,
-        jellyfinAdminToken
-      })
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ jellyfinUrl: jellyfinUrl.value, jellyfinAdminToken: jellyfinAdminToken.value }),
     })
     testResult.value = await res.json()
   } catch {
