@@ -5,6 +5,7 @@ import path from 'path'
 import { Agent, fetch as undiciFetch } from 'undici'
 import { DATA_DIR } from '../config.js'
 import { logger } from '../logger.js'
+import { addTorrentSerie } from '../lib/torrent-series.js'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -64,6 +65,7 @@ export interface DownloadOptions {
     file_path ?: string | null
     infohash  ?: string | null   // hash issu du catalogue (plus fiable que le magnet)
     magnet    ?: string | null
+    serie_id  ?: number | null   // série d'origine (torrent partagé entre plusieurs séries)
 }
 
 export interface TorrentClientDriver {
@@ -317,6 +319,7 @@ export async function dispatchDownload(url: string, options?: DownloadOptions): 
     }
 
     const results = []
+    addTorrentSerie(options?.infohash, options?.serie_id)
 
     for (const client of clients) {
         const driver = getDriver(client.type)

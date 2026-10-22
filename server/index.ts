@@ -15,6 +15,7 @@ import utorrentDriver     from './torrent-clients/utorrent.js'
 import rtorrentDriver     from './torrent-clients/rtorrent.js'
 import realDebridDriver   from './torrent-clients/real-debrid.js'
 import delugeDriver       from './torrent-clients/deluge.js'
+import rdtClientDriver    from './torrent-clients/rdt-client.js'
 import { autoOrganizeAll, scanMediaPath, syncFilenameChanges, migrateOrganizedEpisodeIds, dedupeOrganizedEpisodes } from './organize.js'
 import { logger } from './logger.js'
 import { DATA_DIR, BASE_DIR } from './config.js'
@@ -52,6 +53,7 @@ registerDriver(utorrentDriver)
 registerDriver(rtorrentDriver)
 registerDriver(realDebridDriver)
 registerDriver(delugeDriver)
+registerDriver(rdtClientDriver)
 
 const app  = express()
 const PORT = Number(process.env.PORT) || 9898

@@ -119,12 +119,12 @@ export const useSeriesStore = defineStore('series', () => {
         }
     }
 
-    async function download(torrent_url: string | null, magnet: string | null, file_index?: number | null, file_path?: string | null, infohash?: string | null): Promise<{ success: boolean; error?: string }> {
+    async function download(torrent_url: string | null, magnet: string | null, file_index?: number | null, file_path?: string | null, infohash?: string | null, serie_id?: number | null): Promise<{ success: boolean; error?: string }> {
         try {
             const res = await fetch('/api/download', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ torrent_url, magnet, file_index: file_index ?? null, file_path: file_path ?? null, infohash: infohash ?? null })
+                body: JSON.stringify({ torrent_url, magnet, file_index: file_index ?? null, file_path: file_path ?? null, infohash: infohash ?? null, serie_id: serie_id ?? null })
             })
             const data = await res.json()
             if (res.ok) return { success: true }

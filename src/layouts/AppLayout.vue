@@ -20,6 +20,7 @@
     </div>
 
     <TourOverlay />
+    <NfoCleanupModal v-if="auth.isAdmin && !tour.active" />
   </div>
 </template>
 
@@ -32,6 +33,7 @@ import SidebarNav from '@/components/nav/SidebarNav.vue'
 import MobileHeader from '@/components/nav/MobileHeader.vue'
 import MobileTabBar from '@/components/nav/MobileTabBar.vue'
 import TourOverlay from '@/components/tour/TourOverlay.vue'
+import NfoCleanupModal from '@/components/NfoCleanupModal.vue'
 import { useDownloadsStore } from '@/stores/downloads'
 import { useRequestsStore }  from '@/stores/requests'
 import { useAuthStore }      from '@/stores/auth'

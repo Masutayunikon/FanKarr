@@ -3,7 +3,7 @@ import path from 'path'
 import { DATA_DIR } from '../config.js'
 import { readSettings } from '../settings.js'
 import { logger } from '../logger.js'
-import { getGitlabTitle } from '../gitlab-map.js'
+import { getGitlabTitle, localizeNfoPath } from '../gitlab-map.js'
 import { loadEnrichedSeriesData, loadOrganized } from './github-cache.js'
 
 export const GITLAB_API_NFO = 'https://gitlab.com/api/v4/projects/ElPouki%2Ffankai_pack/repository'
@@ -45,10 +45,11 @@ export async function downloadNfoFolder(gitlabTitle: string, destRoot: string): 
         if (!Array.isArray(batch) || batch.length === 0) break
         files.push(...batch); if (batch.length < 100) break; page++
     }
+    const { englishDirectory } = readSettings()
     let downloaded = 0, skipped = 0
     for (const entry of files.filter((f: any) => f.type === 'blob')) {
         const relativePath = entry.path.replace(`pack/${gitlabTitle}/`, '')
-        const destPath     = path.join(destRoot, relativePath)
+        const destPath     = path.join(destRoot, localizeNfoPath(relativePath, !!englishDirectory))
         try {
             const res = await fetch(`${GITLAB_RAW_NFO}/${encodeURIComponent(gitlabTitle)}/${relativePath.split('/').map(encodeURIComponent).join('/')}`, { headers: { 'User-Agent': 'fankarr' } })
             if (!res.ok) { skipped++; continue }
@@ -96,4 +97,88 @@ export async function checkNfoUpdates() {
         if (recentNfoUpdates.length > MAX_NFO_NOTIFS) recentNfoUpdates.pop()
     }
     if (hasChanges) saveNfoCommits(commits)
+}
+
+// ─── NFO mal placés ───────────────────────────────────────────
+// Avant la prise en compte des dossiers en anglais, les NFO et images du pack GitLab
+// étaient écrits dans « Saison N » alors que les vidéos allaient dans « Season NN ».
+// Seuls les dossiers « Saison N » sans vidéo sont concernés.
+
+const NFO_SIDE_EXTS = new Set(['.nfo', '.png', '.jpg', '.jpeg', '.webp', '.tbn'])
+
+export interface MisplacedNfoFolder {
+    serie : string
+    folder: string   // « Saison 1 »
+    target: string   // « Season 01 »
+    files : number
+}
+
+function listMisplacedFiles(dir: string): string[] {
+    try {
+        const files = fs.readdirSync(dir, { withFileTypes: true })
+            .filter(e => e.isFile() && !e.name.startsWith('.') && !/^(desktop\.ini|thumbs\.db)$/i.test(e.name))
+        // Dossier avec des vidéos : rangé en français avant l'activation de l'anglais, les NFO vont avec
+        if (files.some(e => !NFO_SIDE_EXTS.has(path.extname(e.name).toLowerCase()))) return []
+        return files.map(e => e.name)
+    } catch { return [] }
+}
+
+export function findMisplacedNfo(): MisplacedNfoFolder[] {
+    const { mediaPath, englishDirectory } = readSettings()
+    if (!englishDirectory || !mediaPath?.trim() || !fs.existsSync(mediaPath)) return []
+    const result: MisplacedNfoFolder[] = []
+    let series: fs.Dirent[] = []
+    try { series = fs.readdirSync(mediaPath, { withFileTypes: true }).filter(e => e.isDirectory()) } catch { return [] }
+    for (const serie of series) {
+        let subs: fs.Dirent[] = []
+        try { subs = fs.readdirSync(path.join(mediaPath, serie.name), { withFileTypes: true }).filter(e => e.isDirectory()) } catch { continue }
+        for (const sub of subs) {
+            const m = sub.name.match(/^Saison\s+(\d+)$/i)
+            if (!m) continue
+            const files = listMisplacedFiles(path.join(mediaPath, serie.name, sub.name))
+            if (files.length === 0) continue
+            const target = localizeNfoPath(`${sub.name}/x`, true).split('/')[0]!
+            result.push({ serie: serie.name, folder: sub.name, target, files: files.length })
+        }
+    }
+    return result
+}
+
+/** Déplace les NFO et images de « Saison N » vers « Season NN » ; les vidéos ne sont pas touchées. */
+export function cleanupMisplacedNfo(): { moved: number; removed: number; foldersRemoved: number; errors: number } {
+    const { mediaPath } = readSettings()
+    const stats = { moved: 0, removed: 0, foldersRemoved: 0, errors: 0 }
+    for (const f of findMisplacedNfo()) {
+        const srcDir  = path.join(mediaPath, f.serie, f.folder)
+        const destDir = path.join(mediaPath, f.serie, f.target)
+        for (const name of listMisplacedFiles(srcDir)) {
+            const src  = path.join(srcDir, name)
+            const dest = path.join(destDir, name)
+            try {
+                if (fs.existsSync(dest)) {
+                    fs.unlinkSync(src)          // déjà présent au bon endroit : doublon
+                    stats.removed++
+                } else {
+                    fs.mkdirSync(destDir, { recursive: true })
+                    try { fs.renameSync(src, dest) }
+                    catch { fs.copyFileSync(src, dest); fs.unlinkSync(src) }
+                    stats.moved++
+                }
+            } catch (err) {
+                stats.errors++
+                logger.warn('nfo-update', `Nettoyage NFO : échec sur « ${src} » : ${err instanceof Error ? err.message : err}`)
+            }
+        }
+        try {
+            // Dossier vide (hors desktop.ini, Thumbs.db, fichiers cachés) : supprimé
+            const rest = fs.readdirSync(srcDir)
+            if (rest.every(n => n.startsWith('.') || /^(desktop\.ini|thumbs\.db)$/i.test(n))) {
+                for (const n of rest) fs.rmSync(path.join(srcDir, n), { force: true })
+                fs.rmdirSync(srcDir)
+                stats.foldersRemoved++
+            }
+        } catch {}
+    }
+    logger.info('nfo-update', `Nettoyage NFO : ${stats.moved} déplacé(s), ${stats.removed} doublon(s) supprimé(s), ${stats.foldersRemoved} dossier(s) supprimé(s)${stats.errors ? `, ${stats.errors} échec(s)` : ''}`)
+    return stats
 }

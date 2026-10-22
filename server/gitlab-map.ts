@@ -15,3 +15,14 @@ export const SERIE_TITLE_GITLAB_MAP: Record<string, string> = {
 export function getGitlabTitle(title: string): string {
     return SERIE_TITLE_GITLAB_MAP[title] ?? title
 }
+
+/** Dossier « Saison N » du dépôt GitLab vers « Season NN » si les dossiers en anglais sont activés. */
+export function localizeNfoPath(relativePath: string, englishDirectory: boolean): string {
+    if (!englishDirectory) return relativePath
+    const parts = relativePath.split('/')
+    const m     = parts.length > 1 ? parts[0]!.match(/^Saison\s+(\d+)$/i) : null
+    if (!m) return relativePath
+    const n = Number(m[1])
+    parts[0] = n === 0 ? 'Specials' : `Season ${String(n).padStart(2, '0')}`
+    return parts.join('/')
+}

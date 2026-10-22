@@ -605,7 +605,7 @@ function openManualImport() { fetchOrganized(); manualImportOpen.value = true }
 async function download(key: string, torrent_url: string | null, magnet: string | null, file_index?: number | null, file_path?: string | null, infohash?: string | null) {
   if (isDownloading(key) || isDownloaded(key)) return
   addDownloading(key)
-  const result = await store.download(torrent_url, magnet, file_index, file_path, infohash)
+  const result = await store.download(torrent_url, magnet, file_index, file_path, infohash, Number(route.params.id))
   removeDownloading(key)
   if (result.success) { addDownloaded(key); toast('Téléchargement lancé', 'success'); fetchActiveDownloads() }
   else toast(result.error ?? 'Impossible de lancer le téléchargement', 'error')
@@ -676,7 +676,7 @@ async function downloadAll(integraleIndex?: number) {
   const torrents = collectDownloadables(integraleIndex)
   let sent = 0
   for (const t of torrents) {
-    try { const r = await store.download(t.torrent_url, t.magnet, t.file_index, t.file_path, t.infohash); if (r.success) { addDownloaded(t.key); sent++ } } catch {}
+    try { const r = await store.download(t.torrent_url, t.magnet, t.file_index, t.file_path, t.infohash, Number(route.params.id)); if (r.success) { addDownloaded(t.key); sent++ } } catch {}
   }
   downloadingAll.value = false
   if (sent > 0) { toast(`${plural(sent, 'torrent envoyé', 'torrents envoyés')} au client`, 'success'); fetchActiveDownloads() }
@@ -709,7 +709,7 @@ async function downloadSeason(season: Season, packHash?: string) {
   }
   let sent = 0
   for (const t of torrents) {
-    try { const r = await store.download(t.torrent_url, t.magnet, t.file_index, t.file_path, t.infohash); if (r.success) { addDownloaded(t.key); sent++ } } catch {}
+    try { const r = await store.download(t.torrent_url, t.magnet, t.file_index, t.file_path, t.infohash, Number(route.params.id)); if (r.success) { addDownloaded(t.key); sent++ } } catch {}
   }
   downloadingSeason.value[season.id] = false
   if (sent > 0) { toast(`${plural(sent, 'torrent envoyé', 'torrents envoyés')} au client`, 'success'); fetchActiveDownloads() }

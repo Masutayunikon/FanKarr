@@ -72,6 +72,7 @@ router.post('/requests', (req, res) => {
             if (torrentOverride?.torrent_url || torrentOverride?.magnet) {
                 const url = torrentOverride.torrent_url ?? torrentOverride.magnet
                 dispatchDownload(url, {
+                    serie_id  : request.serieId,
                     infohash  : torrentOverride.infohash   ?? null,
                     magnet    : torrentOverride.magnet     ?? null,
                     file_index: torrentOverride.file_index ?? null,
@@ -135,7 +136,7 @@ export async function autoDownloadRequest(req: SerieRequest, override?: { season
         const url = t.url ?? t.magnet
         if (!url) continue
         try {
-            const results = await dispatchDownload(url, { infohash: t.infohash ?? undefined, magnet: t.magnet ?? undefined, file_index: t.file_index ?? null, file_path: t.file_path ?? null })
+            const results = await dispatchDownload(url, { serie_id: req.serieId, infohash: t.infohash ?? undefined, magnet: t.magnet ?? undefined, file_index: t.file_index ?? null, file_path: t.file_path ?? null })
             if (results.some(r => r.ok)) sent++
         } catch (err) {
             logger.warn('requests', `Téléchargement automatique : erreur à l'envoi d'un torrent : ${err instanceof Error ? err.message : err}`)

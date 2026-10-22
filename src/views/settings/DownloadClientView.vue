@@ -178,6 +178,10 @@ const clientMatrix = [
     id: 'deluge',       label: 'Deluge',                   version: 'Interface web',
     auth: 'Mot de passe',     fileSelect: true,  fileProgress: true,  torrentUpload: 'proxy', categories: true,  deleteFiles: true,
   },
+  {
+    id: 'rdt-client',   label: 'RDT-Client',               version: '2.x',
+    auth: "Nom d'utilisateur et mot de passe (facultatifs)", fileSelect: false, fileProgress: false, torrentUpload: 'proxy', categories: true,  deleteFiles: true,
+  },
 ]
 
 const modal = ref({ open: false, key: 0, client: null as SavedTorrentClient | null })

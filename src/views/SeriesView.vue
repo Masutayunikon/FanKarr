@@ -204,6 +204,7 @@ const predicates: Record<string, (s: Serie) => boolean> = {
   'available'  : s => s.has_torrents,
   'untracked'  : s => !s.in_client && !s.has_files,
   'watched'    : s => s.rss_synced,
+  'ended'      : s => s.status?.toLowerCase() === 'ended',
 }
 
 const countOf = (value: string) => store.series.filter(predicates[value]!).length
@@ -227,13 +228,17 @@ const filters = computed<LibraryFilter[]>(() => (auth.isAdmin
     ]
 ).map(f => ({ ...f, count: countOf(f.value) })))
 
-const moreFilters = computed<LibraryFilter[]>(() => auth.isAdmin
+const moreFilters = computed<LibraryFilter[]>(() => (auth.isAdmin
   ? [
       { value: 'available', label: 'Avec torrent' },
       { value: 'watched',   label: 'Surveillées' },
       { value: 'untracked', label: 'Absentes du client et du disque' },
-    ].map(f => ({ ...f, count: countOf(f.value) }))
-  : [])
+      { value: 'ended',     label: 'Terminées' },
+    ]
+  : [
+      { value: 'ended',     label: 'Terminées' },
+    ]
+).map(f => ({ ...f, count: countOf(f.value) })))
 
 const filtered = computed(() => {
   let list = store.series.filter(predicates[activeFilter.value] ?? predicates.all!)

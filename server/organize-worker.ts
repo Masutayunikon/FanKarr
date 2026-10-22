@@ -4,7 +4,7 @@ import fsp  from 'fs/promises'
 import path from 'path'
 import { parentPort } from 'worker_threads'
 import { DATA_DIR } from './config.js'
-import { getGitlabTitle } from './gitlab-map.js'
+import { getGitlabTitle, localizeNfoPath } from './gitlab-map.js'
 import { readOrganized } from './lib/organized-store.js'
 
 // ─── Journal ──────────────────────────────────────────────────
@@ -84,6 +84,24 @@ function findTorrentByHash(hash: string, seriesData: any[]): { torrent: any; ser
         }
     }
     return null
+}
+
+/**
+ * Séries à importer pour ce hash. Un torrent peut appartenir à plusieurs séries
+ * (ex. One Piece Kaï et One Piece Yabai) : on suit les séries d'où il a été envoyé,
+ * sinon la première série du catalogue qui le contient.
+ */
+function findTorrentTargets(hash: string, seriesData: any[], hintedIds: number[]): { torrent: any; serieData: any }[] {
+    const targets: { torrent: any; serieData: any }[] = []
+    for (const id of hintedIds) {
+        const sd = seriesData.find((s: any) => s.id === id)
+        if (!sd) continue
+        const found = findTorrentByHash(hash, [sd])
+        if (found) targets.push(found)
+    }
+    if (targets.length > 0) return targets
+    const found = findTorrentByHash(hash, seriesData)
+    return found ? [found] : []
 }
 
 /** Hash non résolu (ex. dbid_X Synology) : recherche par torrent_name ou title, renvoie le vrai infohash. */
@@ -248,10 +266,11 @@ async function downloadGitlabFolder(serieTitle: string, destRoot: string): Promi
     const fileEntries = files.filter((f: any) => f.type === 'blob')
     log(`${fileEntries.length} fichier(s) NFO et images à télécharger pour « ${gitlabTitle} »`)
 
+    const { englishDirectory } = readSettings()
     let downloaded = 0, skipped = 0, failed = 0
     for (const entry of fileEntries) {
         const relativePath = entry.path.replace(`pack/${gitlabTitle}/`, '')
-        const destPath     = path.join(destRoot, relativePath)
+        const destPath     = path.join(destRoot, localizeNfoPath(relativePath, englishDirectory))
         if (fs.existsSync(destPath)) { skipped++; continue }
         try {
             fs.mkdirSync(path.dirname(destPath), { recursive: true })
@@ -517,7 +536,9 @@ parentPort?.on('message', async (msg: any) => {
 
     const torrents: any[]   = msg.torrents
     const seriesData: any[] = msg.seriesData ?? []
+    const torrentSeries: Record<string, number[]> = msg.torrentSeries ?? {}
     const { nfoSupport }    = readSettings()
+    const hintsFor = (h: string) => torrentSeries[h.toLowerCase()] ?? []
 
     let organized: Organized
     try { organized = readOrganized() as Organized }
@@ -530,59 +551,61 @@ parentPort?.on('message', async (msg: any) => {
     for (const t of torrents) {
         if (t.state !== 'seeding') continue
 
-        let found = findTorrentByHash(t.hash, seriesData)
         let effectiveHash = t.hash
+        let targets       = findTorrentTargets(t.hash, seriesData, hintsFor(t.hash))
 
         // Hash non résolu (ex. dbid_X Synology) : recherche par nom de dossier
-        if (!found && t.name) {
+        if (targets.length === 0 && t.name) {
             const byName = findTorrentByName(t.name, seriesData)
             if (byName) {
-                found         = byName
                 effectiveHash = byName.infohash
+                targets       = findTorrentTargets(effectiveHash, seriesData, hintsFor(effectiveHash))
                 debug(`Hash résolu par nom de torrent : « ${t.name} » (${effectiveHash.slice(0, 8)}…)`)
             }
         }
 
-        if (!found) {
+        if (targets.length === 0) {
             debug(`Torrent « ${t.name} » (${t.hash.slice(0, 8)}…) absent du catalogue (pas encore à jour ?)`)
             continue
         }
 
-        const { torrent, serieData } = found
-        const seasonFilter = torrent._season?.season_number
-        const fileMap      = buildFileMap(serieData, effectiveHash, nfoSupport, seasonFilter)
-        const orgHash      = organized[effectiveHash] ?? {}
-        const allDone      = fileMap.size > 0
-            ? [...fileMap.values()].every(f => orgHash[String(f.episode_id)])
-            : Object.keys(orgHash).length > 0
-
-        if (allDone) {
-            debug(`« ${t.name} » déjà entièrement importé`)
-            continue
+        // Fichiers terminés (nom seul) ; null si le client ne donne pas les noms
+        let completedFileNames: Set<string> | null = null
+        if (Array.isArray(t.files) && t.files.length > 0) {
+            const hasNames = t.files.some((f: any) => f.name && String(f.name).trim())
+            if (hasNames) {
+                completedFileNames = new Set(
+                    t.files
+                        .filter((f: any) => (f.progress ?? 0) >= 1 && f.name && String(f.name).trim())
+                        .map((f: any) => {
+                            const parts = String(f.name).replace(/\\/g, '/').split('/')
+                            return (parts[parts.length - 1] ?? '').toLowerCase()
+                        })
+                        .filter(Boolean)
+                )
+            }
         }
 
-        try {
-            // Fichiers terminés (nom seul) ; null si le client ne donne pas les noms
-            let completedFileNames: Set<string> | null = null
-            if (Array.isArray(t.files) && t.files.length > 0) {
-                const hasNames = t.files.some((f: any) => f.name && String(f.name).trim())
-                if (hasNames) {
-                    completedFileNames = new Set(
-                        t.files
-                            .filter((f: any) => (f.progress ?? 0) >= 1 && f.name && String(f.name).trim())
-                            .map((f: any) => {
-                                const parts = String(f.name).replace(/\\/g, '/').split('/')
-                                return (parts[parts.length - 1] ?? '').toLowerCase()
-                            })
-                            .filter(Boolean)
-                    )
-                }
+        for (const { torrent, serieData } of targets) {
+            const seasonFilter = torrent._season?.season_number
+            const fileMap      = buildFileMap(serieData, effectiveHash, nfoSupport, seasonFilter)
+            const orgHash      = organized[effectiveHash] ?? {}
+            const allDone      = fileMap.size > 0
+                ? [...fileMap.values()].every(f => orgHash[String(f.episode_id)])
+                : Object.keys(orgHash).length > 0
+
+            if (allDone) {
+                debug(`« ${t.name} » déjà entièrement importé${targets.length > 1 ? ` dans « ${serieData.title ?? serieData.id} »` : ''}`)
+                continue
             }
 
-            const result = await organizeTorrent(effectiveHash, t.name, t.save_path, seriesData, completedFileNames)
-            parentPort?.postMessage({ type: 'result', hash: effectiveHash, name: t.name, serieId: serieData.id ?? null, ...result })
-        } catch (err) {
-            error(`Échec de l'import de « ${t.name} » :${err instanceof Error ? err.message : err}`)
+            try {
+                // Catalogue limité à la série visée : le torrent peut appartenir à plusieurs séries
+                const result = await organizeTorrent(effectiveHash, t.name, t.save_path, [serieData], completedFileNames)
+                parentPort?.postMessage({ type: 'result', hash: effectiveHash, name: t.name, serieId: serieData.id ?? null, ...result })
+            } catch (err) {
+                error(`Échec de l'import de « ${t.name} » :${err instanceof Error ? err.message : err}`)
+            }
         }
     }
 

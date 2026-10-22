@@ -5,6 +5,7 @@ import { Worker } from 'worker_threads'
 import { logger } from './logger.js'
 import { readSettings } from './settings.js'
 import { readOrganized, writeOrganized, updateOrganized, retargetEntries, type Organized } from './lib/organized-store.js'
+import { loadTorrentSeries } from './lib/torrent-series.js'
 
 export let workerRunning = false
 const _prevStates = new Map<string, string>()
@@ -69,7 +70,7 @@ function runWorker(torrents: any[], seriesData: any[], onResult: (r: WorkerResul
         worker.on('error', err => finish(err))
         worker.on('exit', code => finish(code > 1 ? new Error(`Arrêt inattendu du worker (code ${code})`) : undefined))
 
-        worker.postMessage({ type: 'run', torrents, seriesData })
+        worker.postMessage({ type: 'run', torrents, seriesData, torrentSeries: loadTorrentSeries() })
     })
 }
 
@@ -616,10 +617,10 @@ export async function organizeTorrent(
         try {
             await runWorker([fakeTorrent], seriesData, msg => {
                 result.serieId = msg.serieId ?? null
-                result.total   = msg.total
-                result.skipped = msg.skipped
-                result.done    = msg.done
-                result.errors  = msg.errors
+                result.total   += msg.total
+                result.skipped += msg.skipped
+                result.done    += msg.done
+                result.errors  = [...result.errors, ...msg.errors]
                 if (msg.errors.length > 0) {
                     logger.warn('organize', `Import de « ${name} » : ${msg.done} importé(s), ${msg.errors.length} erreur(s)`)
                     for (const e of msg.errors) {

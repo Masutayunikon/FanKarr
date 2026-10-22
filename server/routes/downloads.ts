@@ -9,6 +9,7 @@ import { dispatchDownload, dispatchList, dispatchRemove } from '../torrent-clien
 import { readAvailable, readInfohashMap, readSerieData } from '../lib/github-cache.js'
 import { extractTorrentsFromSerieData, buildResolvedEpisodes } from '../lib/serie-helpers.js'
 import { recentOrganized } from '../lib/notifs.js'
+import { loadTorrentSeries } from '../lib/torrent-series.js'
 
 const router = Router()
 
@@ -21,8 +22,9 @@ router.post('/download', requireAuth, async (req, res) => {
     const file_index: number | null = req.body.file_index != null ? Number(req.body.file_index) : null
     const file_path : string | null = req.body.file_path  ?? null
     const infohash  : string | null = req.body.infohash   ?? null
+    const serie_id  : number | null = req.body.serie_id != null ? Number(req.body.serie_id) : null
     logger.info('api', `Téléchargement demandé via ${torrent_url ? '.torrent' : 'magnet'}${file_path ? ` (${file_path})` : ''}`)
-    const results = await dispatchDownload(url, { file_index, file_path, infohash, magnet })
+    const results = await dispatchDownload(url, { file_index, file_path, infohash, magnet, serie_id })
     res.status(results.every((r: any) => r.ok) ? 200 : 207).json({ results })
 })
 
@@ -46,6 +48,7 @@ router.get('/downloads', requireAuth, async (_req, res) => {
         const torrents = await dispatchList(category ?? 'fankai', infohashMap)
         let organized: Record<string, Record<string, any>> = {}
         try { const p = path.join(DATA_DIR, 'organized.json'); if (fs.existsSync(p)) organized = JSON.parse(fs.readFileSync(p, 'utf-8')) } catch {}
+        const torrentSeries = loadTorrentSeries()
         const enriched = await Promise.all(torrents.map(async (t: any) => {
             const orgFiles = organized[t.hash] ?? {}
             let totalFiles = 1
@@ -53,7 +56,9 @@ router.get('/downloads', requireAuth, async (_req, res) => {
             let serieId: number | undefined
             let episodes: any[] = []
             try {
-                const availableIds = await readAvailable()
+                // Séries d'origine du torrent en premier (torrent partagé entre plusieurs séries)
+                const hinted       = torrentSeries[t.hash?.toLowerCase()] ?? []
+                const availableIds = [...hinted, ...(await readAvailable()).filter(id => !hinted.includes(id))]
                 for (const id of availableIds) {
                     const sd = await readSerieData(id)
                     if (!sd) continue

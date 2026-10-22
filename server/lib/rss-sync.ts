@@ -265,6 +265,7 @@ export async function runRssSync(): Promise<{ sent: number; skipped: number; err
         for (const dl of toDownload) {
             try {
                 const results = await dispatchDownload(dl.url, {
+                    serie_id  : serieId,
                     file_index: dl.file_index,
                     file_path : dl.file_path,
                     infohash  : dl.infohash,
