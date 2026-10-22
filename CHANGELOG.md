@@ -1,5 +1,20 @@
 # Changelog
 
+## [3.26.0](https://github.com/Masutayunikon/FanKarr/compare/v3.25.1...v3.26.0) (2026-10-22)
+
+
+### Features
+
+* **series:** ajouter le filtre « Terminées » dans le menu Plus ([36db14d](https://github.com/Masutayunikon/FanKarr/commit/36db14dd2b528ee24fea031d353d1a552a662809))
+
+
+### Bug Fixes
+
+* **nfo:** détecter les NFO restés dans « Saison N » et proposer un nettoyage par popup ([36db14d](https://github.com/Masutayunikon/FanKarr/commit/36db14dd2b528ee24fea031d353d1a552a662809))
+* **nfo:** ranger les NFO et images dans « Season NN » quand les dossiers en anglais sont activés ([36db14d](https://github.com/Masutayunikon/FanKarr/commit/36db14dd2b528ee24fea031d353d1a552a662809))
+* **organize:** importer un torrent partagé entre plusieurs séries dans la série d'où il a été envoyé (One Piece Kaï / Yabai) ([36db14d](https://github.com/Masutayunikon/FanKarr/commit/36db14dd2b528ee24fea031d353d1a552a662809))
+* **torrent-clients:** ajouter un client RDT-Client dédié (réponse vide à l'ajout, état pausedUP, import basé sur les fichiers présents, connexion sans cookie) ([36db14d](https://github.com/Masutayunikon/FanKarr/commit/36db14dd2b528ee24fea031d353d1a552a662809))
+
 ## [3.25.1](https://github.com/Masutayunikon/FanKarr/compare/v3.25.0...v3.25.1) (2026-10-19)
 
 
