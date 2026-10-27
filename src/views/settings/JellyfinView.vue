@@ -85,6 +85,7 @@ import JellyfinImportModal from '@/components/settings/JellyfinImportModal.vue'
 import SettingsSection from '@/components/settings/SettingsSection.vue'
 import SettingsToggle from '@/components/settings/SettingsToggle.vue'
 import { useToast } from '@/composables/useToast'
+import { BASE_PATH } from '@/utils/base'
 
 type Option = 'jellyfinLogin' | 'jellyfinNewUserLogin' | 'jellyfinAutoImport'
 
@@ -97,7 +98,7 @@ const options      = ref<Record<Option, boolean>>({ jellyfinLogin: true, jellyfi
 const savedSection = ref<'users' | 'login' | null>(null)
 let   savedTimer: ReturnType<typeof setTimeout> | null = null
 
-const apiBase = `${window.location.origin}/api/v1`
+const apiBase = `${window.location.origin}${BASE_PATH}/api/v1`
 
 const apiEndpoints = [
   { method: 'GET',  path: '/series/search?q=', desc: 'Chercher une série dans le catalogue' },

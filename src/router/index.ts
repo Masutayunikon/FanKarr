@@ -8,9 +8,10 @@ declare module 'vue-router' {
 }
 import { useAuthStore } from '@/stores/auth'
 import AppLayout from '@/layouts/AppLayout.vue'
+import { BASE_PATH } from '@/utils/base'
 
 const router = createRouter({
-    history: createWebHistory(),
+    history: createWebHistory(BASE_PATH + '/'),
     routes: [
         // ── Pages hors layout (connexion, invitation, assistant) ──
         {

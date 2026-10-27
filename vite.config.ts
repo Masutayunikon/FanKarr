@@ -4,6 +4,8 @@ import tailwindcss from '@tailwindcss/vite'
 import { fileURLToPath, URL } from 'node:url'
 
 export default defineConfig({
+  // Chemins relatifs : le serveur fixe le sous-dossier via <base href> (BASE_PATH)
+  base: './',
   plugins: [vue(), tailwindcss()],
   resolve: {
     alias: {

@@ -31,6 +31,12 @@ export const _isBunBinary = typeof (globalThis as any).Bun !== 'undefined'
     }
 })()
 
+// Préfixe d'URL quand FanKarr est servi dans un sous-dossier (ex. « /fankarr ») ; vide à la racine
+export const BASE_PATH = (() => {
+    const raw = (process.env.BASE_PATH ?? '').trim().replace(/^\/+|\/+$/g, '')
+    return raw ? `/${raw}` : ''
+})()
+
 export const BASE_DIR = _isBunBinary
     ? path.dirname((process as any).execPath)
     : process.cwd()

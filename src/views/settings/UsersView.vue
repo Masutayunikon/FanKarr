@@ -231,6 +231,7 @@ import { Check, Copy, Ellipsis, Link2, Pencil, Plus, Trash2, UserPlus } from 'lu
 import { useAuthStore }    from '@/stores/auth'
 import { copyToClipboard } from '@/composables/useClipboard'
 import { formatRelative, plural } from '@/utils/format'
+import { BASE_PATH } from '@/utils/base'
 import SettingsSection from '@/components/settings/SettingsSection.vue'
 import SettingsToggle  from '@/components/settings/SettingsToggle.vue'
 
@@ -449,7 +450,7 @@ async function deleteInvite(code: string) {
 }
 
 function inviteUrl(code: string) {
-  return `${window.location.origin}/invite/${code}`
+  return `${window.location.origin}${BASE_PATH}/invite/${code}`
 }
 
 async function copyInvite(code: string) {

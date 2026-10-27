@@ -18,7 +18,7 @@ import delugeDriver       from './torrent-clients/deluge.js'
 import rdtClientDriver    from './torrent-clients/rdt-client.js'
 import { autoOrganizeAll, scanMediaPath, syncFilenameChanges, migrateOrganizedEpisodeIds, dedupeOrganizedEpisodes } from './organize.js'
 import { logger } from './logger.js'
-import { DATA_DIR, BASE_DIR } from './config.js'
+import { DATA_DIR, BASE_DIR, BASE_PATH } from './config.js'
 import { readAvailable, readInfohashMap } from './lib/github-cache.js'
 import { loadCatalog } from './lib/serie-helpers.js'
 import { ORGANIZED_PATH, readOrganized, writeOrganized } from './lib/organized-store.js'
@@ -58,6 +58,18 @@ registerDriver(rdtClientDriver)
 const app  = express()
 const PORT = Number(process.env.PORT) || 9898
 
+// Sous-dossier (BASE_PATH) : on retire le préfixe pour que les routes restent identiques.
+// Les requêtes sans préfixe (proxy qui le retire déjà) passent telles quelles.
+if (BASE_PATH) {
+    app.use((req, _res, next) => {
+        if (req.url === BASE_PATH || req.url.startsWith(BASE_PATH + '/') || req.url.startsWith(BASE_PATH + '?')) {
+            req.url = req.url.slice(BASE_PATH.length) || '/'
+            if (req.url.startsWith('?')) req.url = '/' + req.url
+        }
+        next()
+    })
+}
+
 app.use(express.json())
 app.use(cookieParser())
 
@@ -70,7 +82,18 @@ app.use(cors({
 
 const PUBLIC_PATH = path.join(BASE_DIR, 'public')
 if (fs.existsSync(PUBLIC_PATH)) {
-    app.use(express.static(PUBLIC_PATH))
+    // index.html est servi plus bas, avec le <base> du sous-dossier
+    app.use(express.static(PUBLIC_PATH, { index: false }))
+}
+
+// index.html avec <base href> : le front en déduit le préfixe des URL (assets, routeur, API)
+let indexHtml: string | null = null
+function renderIndex(): string {
+    if (indexHtml === null) {
+        const raw = fs.readFileSync(path.join(PUBLIC_PATH, 'index.html'), 'utf-8')
+        indexHtml = raw.replace(/<head>/i, `<head>\n    <base href="${BASE_PATH}/">`)
+    }
+    return indexHtml
 }
 
 // ── Migration vers le multi-utilisateur ───────────────────────
@@ -125,14 +148,14 @@ app.use('/api', requireAuth, requestsRouter)
 
 // ── Application web (toutes les autres routes) ─────────────────
 if (fs.existsSync(PUBLIC_PATH)) {
-    app.get('*path', (_req, res) => { res.sendFile(path.join(PUBLIC_PATH, 'index.html')) })
+    app.get('*path', (_req, res) => { res.type('html').send(renderIndex()) })
 }
 
 // ── Démarrage ──────────────────────────────────────────────────
 const server = http.createServer({ maxHeaderSize: 32768 }, app)
 
 server.listen(PORT, async () => {
-    const url = `http://localhost:${PORT}`
+    const url = `http://localhost:${PORT}${BASE_PATH}/`
     console.log(`\n  FanKarr  \x1b]8;;${url}\x1b\\${url}\x1b]8;;\x1b\\\n`)
     logger.info('api', `Serveur démarré sur ${url}`)
     try {

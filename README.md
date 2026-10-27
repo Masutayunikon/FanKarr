@@ -195,11 +195,14 @@ FanKarr est alors accessible sur `http://localhost:9898`. La configuration, les 
 | `PGID`              | `1000`        | GID propriétaire des fichiers de `/config` (Docker)                                  |
 | `TZ`                | non défini    | Fuseau horaire (ex. `Europe/Paris`)                                                  |
 | `PORT`              | `9898`        | Port d'écoute du serveur                                                             |
+| `BASE_PATH`         | non défini    | Sous-dossier derrière un reverse proxy (ex. `/fankarr` pour `https://exemple.fr/fankarr`) |
 | `JWT_SECRET`        | généré        | Secret des sessions, généré dans `secret.key` (dossier de configuration) si absent   |
 | `AUTH_TOKEN_EXPIRY` | `30d`         | Durée de validité de la session (ex. `7d`, `1y` ; `never` ou `0` : pas d'expiration) |
 | `GITHUB_BASE`       | dépôt scraper | Adresse de base des données du scraper, si vous hébergez votre propre copie          |
 
 Par défaut, `GITHUB_BASE` vaut `https://raw.githubusercontent.com/masutayunikon/fankarr-scraper/main`.
+
+Avec `BASE_PATH`, le proxy peut transmettre les requêtes avec ou sans le préfixe ; par exemple avec nginx : `location /fankarr { proxy_pass http://127.0.0.1:9898; }`.
 
 ---
 
