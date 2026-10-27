@@ -109,6 +109,11 @@
         <!-- Étape 3 : Bibliothèque -->
         <div v-else-if="plexStep === 'library'" class="flex flex-col gap-4 px-6 py-5">
           <div>
+            <label class="field-label mb-1 block">Adresse du serveur Plex</label>
+            <p class="text-xs text-muted mb-1.5">L'adresse à laquelle FanKarr peut joindre Plex.</p>
+            <input v-model="plexServerUrl" type="text" class="field w-full" placeholder="http://127.0.0.1:32400" />
+          </div>
+          <div>
             <label class="field-label mb-1 block">Nom de la bibliothèque</label>
             <input v-model="plexForm.libraryName" type="text" class="field w-full" placeholder="Fankai" />
           </div>
@@ -119,7 +124,7 @@
           </div>
           <p v-if="plexError" class="text-meta text-err">{{ plexError }}</p>
           <div class="flex gap-2">
-            <button @click="plexSetup" :disabled="plexLoading || !plexForm.libraryName || !plexForm.libraryPath" class="btn-primary">
+            <button @click="plexSetup" :disabled="plexLoading || !plexServerUrl || !plexForm.libraryName || !plexForm.libraryPath" class="btn-primary">
               {{ plexLoading ? 'Création…' : 'Créer la bibliothèque' }}
             </button>
             <button @click="plexStep = 'server'" class="btn-secondary">Retour</button>
@@ -261,15 +266,19 @@ async function plexConnectServer() {
   plexError.value   = ''
   plexLoading.value = true
   try {
-    const conns = plexSelectedServer.value.connections ?? []
-    const conn  = conns.find((c: any) => c.local && !c.relay) ?? conns.find((c: any) => !c.local && !c.relay) ?? conns.find((c: any) => c.relay)
-    plexServerUrl.value = conn?.uri ?? ''
-    if (!plexServerUrl.value) throw new Error('Ce serveur Plex ne propose aucune adresse de connexion.')
+    const res  = await fetch('/api/plex/server', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ token: plexToken.value, connections: plexSelectedServer.value.connections ?? [] }),
+    })
+    const data = await res.json()
+    plexServerUrl.value = data.serverUrl ?? ''
+    if (!res.ok) plexError.value = data.error ?? 'Impossible de joindre ce serveur Plex. Saisissez son adresse manuellement.'
+  } catch {
+    plexServerUrl.value = ''
+    plexError.value     = 'Impossible de contacter le serveur.'
+  } finally {
     plexForm.value.libraryPath = props.mediaPath
     plexStep.value = 'library'
-  } catch (err) {
-    plexError.value = err instanceof Error ? err.message : 'Impossible de se connecter à ce serveur.'
-  } finally {
     plexLoading.value = false
   }
 }
