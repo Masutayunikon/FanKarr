@@ -1,5 +1,27 @@
 # Changelog
 
+## [3.27.0](https://github.com/Masutayunikon/FanKarr/compare/v3.26.0...v3.27.0) (2026-11-18)
+
+
+### Features
+
+* servir FanKarr dans un sous-dossier derrière un reverse proxy (BASE_PATH) ([4948cc2](https://github.com/Masutayunikon/FanKarr/commit/4948cc28b5895b347f7d98dfcefa64a286c1f3dc))
+* servir FanKarr dans un sous-dossier derrière un reverse proxy (BASE_PATH) ([df25b0e](https://github.com/Masutayunikon/FanKarr/commit/df25b0e3ed813e74f3bf9358e5f005a054a80da0))
+
+
+### Bug Fixes
+
+* **organize:** corriger l'import EISDIR avec RDT-Client pour les torrents mono-fichier ([b306114](https://github.com/Masutayunikon/FanKarr/commit/b306114aa85f50db17041db315121fdd9f89704b)), closes [#163](https://github.com/Masutayunikon/FanKarr/issues/163)
+* **plex:** trouver une adresse joignable du serveur Plex ([a511977](https://github.com/Masutayunikon/FanKarr/commit/a511977986d158ea57a27e6903f174bb204a7da6))
+* **plex:** trouver une adresse joignable du serveur Plex ([5837bef](https://github.com/Masutayunikon/FanKarr/commit/5837bef6df30a71a222f418b4588be311523dbec))
+* **torrent-clients:** appliquer la sélection d'épisode sur rTorrent ([b69175b](https://github.com/Masutayunikon/FanKarr/commit/b69175b9b43e9ddadd4dc33d695f51c51ab28ce0))
+* **torrent-clients:** corriger le client rTorrent (réponses XML-RPC, sélection d'épisodes, suppression des données) ([28cc6c6](https://github.com/Masutayunikon/FanKarr/commit/28cc6c6aef0c5e1576d6bcf7bee6dbce671bd673))
+* **torrent-clients:** import manuel et reprise d'un torrent rTorrent partiel ([42cc984](https://github.com/Masutayunikon/FanKarr/commit/42cc9844611c230af4eaaf51796e9096b5eac135))
+* **torrent-clients:** importer un torrent rTorrent terminé même s'il est arrêté ([2172fdf](https://github.com/Masutayunikon/FanKarr/commit/2172fdffcca76fca265a9de4bb6ef08dbbaf0395))
+* **torrent-clients:** lire correctement les réponses XML-RPC imbriquées de rTorrent ([10adbd2](https://github.com/Masutayunikon/FanKarr/commit/10adbd2ac9125218390945339b746905844507af))
+* **torrent-clients:** supprimer réellement les données d'un torrent rTorrent ([2ef6c53](https://github.com/Masutayunikon/FanKarr/commit/2ef6c53f10c28bf6c0a3979abe7aab40e49f61ab))
+* **torrent-clients:** terminer un torrent rTorrent dont seuls certains fichiers sont sélectionnés ([eaddc20](https://github.com/Masutayunikon/FanKarr/commit/eaddc201e6c37ff8cda050d049c7274dd47ad2b5))
+
 ## [3.26.0](https://github.com/Masutayunikon/FanKarr/compare/v3.25.1...v3.26.0) (2026-10-22)
 
 
