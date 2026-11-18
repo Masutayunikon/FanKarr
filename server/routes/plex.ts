@@ -41,8 +41,43 @@ function mapServers(resources: any[]) {
         .map((r: any) => ({
             name       : r.name,
             owned      : r.owned,
-            connections: (r.connections ?? []).map((c: any) => ({ uri: c.uri, local: c.local, relay: c.relay })),
+            connections: (r.connections ?? []).map((c: any) => ({
+                uri: c.uri, local: c.local, relay: c.relay, protocol: c.protocol, address: c.address, port: c.port,
+            })),
         }))
+}
+
+// Ordre de préférence : local direct, distant direct, relais. Chaque adresse *.plex.direct est
+// doublée de son IP brute : certains résolveurs DNS (ultra.cc, protection anti-rebinding)
+// refusent de résoudre plex.direct, et le certificat n'est de toute façon pas vérifié.
+function candidateUris(connections: any[]): string[] {
+    const ordered = [
+        ...connections.filter(c => c.local && !c.relay),
+        ...connections.filter(c => !c.local && !c.relay),
+        ...connections.filter(c => c.relay),
+    ]
+    const uris: string[] = []
+    for (const c of ordered) {
+        if (c?.uri) uris.push(String(c.uri).replace(/\/+$/, ''))
+        if (c?.address && c?.port) {
+            const host = String(c.address).includes(':') ? `[${c.address}]` : c.address
+            uris.push(`${c.protocol ?? 'https'}://${host}:${c.port}`)
+        }
+    }
+    return [...new Set(uris)]
+}
+
+async function probeServer(uri: string, token: string): Promise<boolean> {
+    try {
+        const r = await getServerFetch(uri)(`${uri}/identity`, {
+            headers: { 'X-Plex-Token': token, 'Accept': 'application/json' },
+            signal : AbortSignal.timeout(5000),
+        })
+        return r.ok
+    } catch (err) {
+        logger.debug('plex', `${uri} injoignable : ${err instanceof Error ? (err.cause as any)?.code ?? err.message : err}`)
+        return false
+    }
 }
 
 router.post('/plex/connect', requireAuth, async (req, res) => {
@@ -109,8 +144,24 @@ router.get('/plex/oauth/poll/:pinId', requireAuth, async (req, res) => {
     }
 })
 
+router.post('/plex/server', requireAuth, async (req, res) => {
+    const { token, connections } = req.body
+    if (!token || !Array.isArray(connections)) { res.status(400).json({ error: 'Jeton Plex et adresses du serveur requis' }); return }
+    const uris    = candidateUris(connections)
+    const results = await Promise.all(uris.map(uri => probeServer(uri, token)))
+    const found   = uris.find((_, i) => results[i])
+    if (!found) {
+        logger.warn('plex', `Aucune adresse du serveur Plex n'est joignable (${uris.join(', ')})`)
+        res.status(502).json({ error: 'Aucune adresse de ce serveur Plex n\'est joignable depuis FanKarr. Saisissez-la manuellement.' })
+        return
+    }
+    logger.info('plex', `Serveur Plex joignable via ${found}`)
+    res.json({ ok: true, serverUrl: found })
+})
+
 router.post('/plex/setup', requireAuth, async (req, res) => {
-    const { token, serverUrl, libraryName, libraryPath } = req.body
+    const { token, libraryName, libraryPath } = req.body
+    const serverUrl = String(req.body.serverUrl ?? '').trim().replace(/\/+$/, '')
     if (!token || !serverUrl || !libraryName || !libraryPath) {
         res.status(400).json({ error: 'Jeton Plex, serveur, nom et dossier de la bibliothèque requis' }); return
     }
