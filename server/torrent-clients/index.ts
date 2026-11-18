@@ -300,7 +300,7 @@ export function getClientCooldowns(): Record<string, { failCount: number; nextRe
 // ─── Correspondance des chemins ───────────────────────────────────────────────
 
 // Remplace le préfixe remotePath par localPath (ex. /downloads/x devient /mnt/nas/downloads/x)
-function remapSavePath(savePath: string, remotePath: string, localPath: string): string {
+export function remapSavePath(savePath: string, remotePath: string, localPath: string): string {
     const remote = remotePath.replace(/\/+$/, '')
     const local  = localPath.replace(/\/+$/, '')
     if (!remote || !local) return savePath
