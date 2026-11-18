@@ -403,13 +403,17 @@ async function organizeTorrent(
             path.join(completePath, filePath),
             path.join(savePath, filename),
             path.join(completePath, filename),
+            path.join(savePath, filename, filename),
+            path.join(completePath, filename, filename),
         ] : [
             path.join(savePath, filename),
             path.join(completePath, filename),
+            path.join(savePath, filename, filename),
+            path.join(completePath, filename, filename),
         ]
 
         let src: string | null = null
-        for (const c of candidates) { if (fs.existsSync(c)) { src = c; break } }
+        for (const c of candidates) { if (fs.existsSync(c) && fs.statSync(c).isFile()) { src = c; break } }
 
         if (!src) {
             error(`Fichier source introuvable : ${filename}\n  Chemins essayés :\n${candidates.map(c => `    - ${c}`).join('\n')}`)
@@ -469,9 +473,11 @@ async function organizeTorrent(
             path.join(completePath, fullPath),
             path.join(savePath, filename),
             path.join(completePath, filename),
+            path.join(savePath, filename, filename),
+            path.join(completePath, filename, filename),
         ]
         let src: string | null = null
-        for (const c of candidates) { if (fs.existsSync(c)) { src = c; break } }
+        for (const c of candidates) { if (fs.existsSync(c) && fs.statSync(c).isFile()) { src = c; break } }
 
         if (!src) {
             // Pas encore téléchargé ou hors sélection (priorité 0)
